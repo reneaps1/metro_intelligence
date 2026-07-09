@@ -69,6 +69,7 @@ Metro Intelligence Platform is the first product of OnKaizen's **Manufacturing I
 - Branch naming: `feat/<task-slug>`, `fix/<task-slug>`, `docs/<task-slug>`, `chore/<task-slug>`.
 - Conventional Commits: `feat:`, `fix:`, `docs:`, `test:`, `chore:`, `refactor:`, `ci:`.
 - Reference the Notion task ID in the PR description.
+- After completing each Notion task, demo phase, or implementation phase, commit the intended changes and push the current branch before moving to the next phase unless the user explicitly says not to. Stage only related files; never use `git add .` in a dirty worktree.
 - Never force-push `main`. Never skip CI or hooks.
 
 ## 9. Code conventions
