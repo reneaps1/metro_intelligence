@@ -1,0 +1,62 @@
+# Secrets & environment — NEVER commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+secrets/
+credentials*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+htmlcov/
+.coverage
+
+# Node / frontend
+node_modules/
+frontend/dist/
+.vite/
+*.tsbuildinfo
+
+# Databases & data (real data never lives in the repo)
+*.db
+*.sqlite*
+pgdata/
+minio-data/
+data/raw/
+data/imports/
+*.bak
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# ML artifacts
+ml/models/*.pkl
+ml/models/*.joblib
+ml/models/*.onnx
+mlruns/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Docker
+docker-compose.override.yml
