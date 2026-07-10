@@ -1,0 +1,9 @@
+# Pinned for reproducible builds. Full dependency set lands with F1.2 (CI: pip-audit)
+# and F4.1 (backend skeleton) — this is the minimal set needed to boot and migrate.
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+sqlalchemy==2.0.35
+alembic==1.13.2
+psycopg[binary]==3.2.1
+pydantic==2.9.2
+pydantic-settings==2.5.2

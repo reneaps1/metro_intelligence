@@ -1,0 +1,16 @@
+# Local development convenience: publish db/MinIO ports to the loopback interface
+# for direct psql / mc access. Never use this topology in production — it breaks
+# the net_data isolation documented in docs/security/network-segmentation.md.
+#
+# Usage: cp docker-compose.override.yml.example docker-compose.override.yml
+# (docker-compose.override.yml is gitignored and merged automatically by Compose)
+
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  minio:
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
