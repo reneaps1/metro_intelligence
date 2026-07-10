@@ -4,6 +4,16 @@ This file governs how Claude Code, Codex, and any other development agent works 
 
 ---
 
+## 0. Current phase priority — demo-first frontend (temporary, remove when it no longer applies)
+
+As of 2026-07-09 the near-term priority is a **navigable, visual demo**, not strict phase/sprint order. Concretely:
+
+- Build the frontend golden path (login → catalog → measurements/trend → risk → recommendations → dashboards, light+dark — see `docs/roadmap.md` "Demo definition") against **static/mocked fixture data** in `frontend/src/lib/mock/`, not a live API. This intentionally runs ahead of F4 (Backend MVP) and F3 (real seed generators).
+- This does **not** relax any other rule in this file: fixtures must still be fictitious `MI-DEMO-*` data (§20), the design system tokens still apply in full (§9 here, `docs/design/design-system.md`), no scope drift.
+- Treat the mock data layer as a placeholder for the real API contract (F4) and real seed generators (F3): keep it behind a single interface (e.g. a `lib/data/` boundary) so swapping mock calls for real API calls later doesn't require rewriting screens.
+- Backend/database work (F2.4, F3, F4) is not abandoned — it continues in parallel on its own branches — but is no longer the blocking path for what gets built next.
+- Once the visual golden path exists end-to-end, resume standard phase order and wire the frontend to the real API per `docs/roadmap.md`. Delete this section at that point.
+
 ## 1. Product vision
 
 Metro Intelligence Platform is the first product of OnKaizen's **Manufacturing Intelligence Platform**. First use case: dimensional metrology intelligence for a high-end automotive customer (initially BMW). The platform turns measurement data + industrial context into **decision support**: compliance, SPC, dimensional risk, and adaptive inspection frequency recommendations. The strategic goal is to **optimize inspection strategy — reduce unnecessary inspections without increasing quality risk**, not merely to speed up reporting.
