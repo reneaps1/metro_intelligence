@@ -49,6 +49,15 @@ Metro Intelligence Platform is the first product of OnKaizen's **Manufacturing I
 - Dependency scanning (pip-audit / npm audit) must pass in CI.
 - Containers run as non-root; images pinned by version.
 
+## 5b. Network & infrastructure security (defense in depth)
+
+- **Segmentación por capas (layered firewall / network segmentation).** Defensa en profundidad: capa de perímetro (firewall / WAF) → red de aplicación → red de datos. Cada capa con política **deny-by-default**; la base de datos (PostgreSQL) y el almacenamiento de objetos (MinIO) solo son alcanzables desde la red de la aplicación, **nunca expuestos** al perímetro ni a internet.
+- **Red de gestión separada.** Acceso administrativo (bastion / zero-trust) por una red distinta de la de producción; no se gestiona el sistema desde la red de aplicación.
+- **Principio fail-closed.** Si un control de red o de seguridad falla, el servicio no queda expuesto: se cierra la conexión antes que abrirla.
+- **IDS/IPS y logging de red.** Requeridos en despliegues `FULL_PLATFORM`; recomendados (no bloqueantes) en `DEMO`. Todo acceso de red anómalo se registra en el audit log.
+- **Gestión de secretos.** En producción los secretos se entregan vía gestor del cliente (HashiCorp Vault / KMS on-premise), no solo mediante variables de entorno. `.env.example` sigue documentando los placeholders.
+- **Confianza cero intra-clúster.** El tráfico este-a-este (east-west) entre servicios se autentica y, cuando el despliegue lo permita, se cifra (mTLS).
+
 ## 6. Data handling rules
 
 - Measurement data is immutable once ingested: corrections create new versions, never destructive updates.
