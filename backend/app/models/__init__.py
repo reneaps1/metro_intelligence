@@ -11,6 +11,14 @@ from app.models.catalog import (
     ProductFamily,
     Specification,
 )
+from app.models.context import ProcessEvent
+from app.models.intelligence import (
+    ActionTaken,
+    Alert,
+    Decision,
+    Recommendation,
+    RiskAssessment,
+)
 from app.models.measurement import (
     Connector,
     DataSource,
@@ -30,6 +38,8 @@ from app.models.security import (
 )
 
 __all__ = [
+    "ActionTaken",
+    "Alert",
     "Area",
     "AuditLog",
     "Base",
@@ -38,6 +48,7 @@ __all__ = [
     "CharacteristicClassification",
     "Connector",
     "DataSource",
+    "Decision",
     "ImportedFile",
     "InspectionFrequency",
     "InspectionPlan",
@@ -50,7 +61,10 @@ __all__ = [
     "Organization",
     "PartNumber",
     "Permission",
+    "ProcessEvent",
     "ProductFamily",
+    "Recommendation",
+    "RiskAssessment",
     "Role",
     "RolePermission",
     "Site",
