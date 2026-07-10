@@ -11,6 +11,14 @@ from app.models.catalog import (
     ProductFamily,
     Specification,
 )
+from app.models.measurement import (
+    Connector,
+    DataSource,
+    ImportedFile,
+    MeasurementResult,
+    MeasurementRun,
+    MeasurementSample,
+)
 from app.models.org import Area, Cell, Line, Machine, Organization, Site
 from app.models.security import (
     AuditLog,
@@ -28,11 +36,17 @@ __all__ = [
     "Cell",
     "Characteristic",
     "CharacteristicClassification",
+    "Connector",
+    "DataSource",
+    "ImportedFile",
     "InspectionFrequency",
     "InspectionPlan",
     "Line",
     "Machine",
     "MeasurementProgram",
+    "MeasurementResult",
+    "MeasurementRun",
+    "MeasurementSample",
     "Organization",
     "PartNumber",
     "Permission",
