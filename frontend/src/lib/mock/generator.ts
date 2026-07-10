@@ -42,3 +42,35 @@ export function cpk(values: number[], nominal: number, lowerTol: number | null, 
   const lower = lowerTol === null ? Infinity : (m - (nominal + lowerTol)) / (3 * sd);
   return Math.min(upper, lower);
 }
+
+/** Simulates newly-imported samples continuing a characteristic's recent local
+ * behavior (not the full lifetime pattern) — good enough for "an import just
+ * landed a few new points" without re-deriving the original generator seed. */
+export function simulateNewPoints(
+  spec: { nominal: number; lowerTol: number | null; upperTol: number | null },
+  existingPoints: { value: number; sampleIndex: number }[],
+  count: number,
+  fromDate: Date,
+  seed: number
+) {
+  const recent = existingPoints.slice(-8).map((p) => p.value);
+  const localMean = recent.length ? mean(recent) : spec.nominal;
+  const tolSpan = Math.abs(spec.upperTol ?? spec.lowerTol ?? 0.1) + Math.abs(spec.lowerTol ?? spec.upperTol ?? 0.1);
+  const localStd = recent.length > 1 ? stdDev(recent) || tolSpan / 12 : tolSpan / 12;
+  const rng = makeRng(seed);
+  const lastIndex = existingPoints.at(-1)?.sampleIndex ?? 0;
+
+  return Array.from({ length: count }, (_, i) => {
+    const value = rng.gaussian(localMean, localStd);
+    const deviation = value - spec.nominal;
+    const isOk =
+      (spec.lowerTol === null || deviation >= spec.lowerTol) && (spec.upperTol === null || deviation <= spec.upperTol);
+    return {
+      measuredAt: new Date(fromDate.getTime() + i * 60_000).toISOString(),
+      value: Math.round(value * 1e6) / 1e6,
+      deviation: Math.round(deviation * 1e6) / 1e6,
+      isOk,
+      sampleIndex: lastIndex + i + 1,
+    };
+  });
+}

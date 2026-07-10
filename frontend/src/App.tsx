@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./layouts/AppShell";
 import { LoginPage } from "./features/auth/LoginPage";
+import { ImportPage } from "./features/imports/ImportPage";
 import { CatalogListPage } from "./features/catalog/CatalogListPage";
 import { PartDetailPage } from "./features/catalog/PartDetailPage";
 import { MeasurementsListPage } from "./features/measurements/MeasurementsListPage";
@@ -28,6 +29,7 @@ export function App() {
       >
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/imports" element={<ImportPage />} />
         <Route path="/catalog" element={<CatalogListPage />} />
         <Route path="/catalog/:partId" element={<PartDetailPage />} />
         <Route path="/measurements" element={<MeasurementsListPage />} />

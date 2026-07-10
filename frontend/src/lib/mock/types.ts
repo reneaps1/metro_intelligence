@@ -100,3 +100,27 @@ export interface MeasurementRunSummary {
   sampleCount: number;
   nokCount: number;
 }
+
+export type ParseStatus = "pending" | "parsing" | "parsed" | "quarantined" | "error";
+
+export interface ImportScenario {
+  id: string;
+  filename: string;
+  description: string;
+  partId: string | null; // null => scenario always fails validation
+  sampleCount: number;
+  willQuarantine: boolean;
+  quarantineReason?: string;
+}
+
+export interface ImportedFileRecord {
+  id: string;
+  scenarioId: string;
+  filename: string;
+  partId: string | null;
+  status: ParseStatus;
+  uploadedAt: string;
+  sha256: string;
+  errorDetail?: string;
+  runId?: string;
+}

@@ -7,11 +7,13 @@ import {
   ChevronRight,
   LayoutDashboard,
   ShieldAlert,
+  UploadCloud,
 } from "lucide-react";
 import clsx from "clsx";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/imports", label: "Import File", icon: UploadCloud },
   { to: "/catalog", label: "Parts & Catalog", icon: Box },
   { to: "/measurements", label: "Measurements", icon: Activity },
   { to: "/risk", label: "Risk & Recommendations", icon: ShieldAlert },

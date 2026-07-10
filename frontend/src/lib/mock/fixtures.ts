@@ -2,6 +2,7 @@ import { makeRng } from "./generator";
 import type {
   Characteristic,
   DemoUser,
+  ImportScenario,
   MeasurementPoint,
   MeasurementRunSummary,
   PartNumber,
@@ -275,3 +276,35 @@ export const MEASUREMENT_RUNS: MeasurementRunSummary[] = PARTS.map((part, index)
     nokCount,
   };
 });
+
+// Sample files for the live import demo (docs/seed-data-strategy.md: "sample
+// CSV/Excel files ... to demo the import flow live"). Content is simulated —
+// no real files are parsed — but the validation/quarantine outcome is honest
+// about what F4.5's real pipeline checks (CLAUDE.md §5: validate every upload).
+export const IMPORT_SCENARIOS: ImportScenario[] = [
+  {
+    id: "scenario-1001-batch",
+    filename: "CMM-01_2026-07-09_batch014.csv",
+    description: "5 new samples for Bracket Front Left (Demo) — all characteristics",
+    partId: "part-1001",
+    sampleCount: 5,
+    willQuarantine: false,
+  },
+  {
+    id: "scenario-1003-batch",
+    filename: "SCAN-01_2026-07-09_batch009.csv",
+    description: "5 new samples for Control Arm (Demo) — all characteristics",
+    partId: "part-1003",
+    sampleCount: 5,
+    willQuarantine: false,
+  },
+  {
+    id: "scenario-bad-header",
+    filename: "CMM-02_2026-07-08_export_corrupt.csv",
+    description: "Malformed export — column headers don't match the measurement program mapping",
+    partId: null,
+    sampleCount: 0,
+    willQuarantine: true,
+    quarantineReason: "Column 'BALLOON_NO' not found — expected header mapping from measurement_program output_mapping.",
+  },
+];

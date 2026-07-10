@@ -7,6 +7,7 @@ import { useDemoData } from "../../lib/mock/DataProvider";
 
 const SECTION_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
+  imports: "Import File",
   catalog: "Parts & Catalog",
   measurements: "Measurements",
   risk: "Risk & Recommendations",
