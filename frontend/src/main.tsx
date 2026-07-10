@@ -1,0 +1,22 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { App } from "./App";
+import { ThemeProvider } from "./lib/theme/ThemeProvider";
+import { AuthProvider } from "./lib/auth/AuthProvider";
+import { DemoDataProvider } from "./lib/mock/DataProvider";
+import "./index.css";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <ThemeProvider>
+      <AuthProvider>
+        <DemoDataProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </DemoDataProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  </StrictMode>
+);
