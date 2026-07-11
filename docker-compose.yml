@@ -1,6 +1,12 @@
 # Metro Intelligence Platform — demo / development stack (on-premise)
 # Usage: cp .env.example .env  &&  docker compose up -d
-# Services are implemented across Phases 1–5; this file defines the target demo topology.
+# Emulates the security zones in docs/security/network-segmentation.md: only the
+# reverse proxy is published to the host; PostgreSQL and MinIO live on net_data,
+# an internal-only network unreachable from the frontend or the host.
+#
+# Local dev needing direct DB/MinIO console access: cp docker-compose.override.yml.example
+# docker-compose.override.yml (gitignored) — Compose merges it automatically.
+# TLS: generate a dev cert first — see infra/nginx/certs/README.md.
 
 services:
   db:
@@ -12,8 +18,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
+    networks:
+      - net_data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -21,7 +27,7 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -29,9 +35,13 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     volumes:
       - minio-data:/data
-    ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+    networks:
+      - net_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
@@ -40,16 +50,46 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:8000:8000"
+    networks:
+      - net_app
+      - net_data
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     depends_on:
       - backend
+    networks:
+      - net_app
+
+  proxy:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - net_app
     ports:
-      - "127.0.0.1:5173:80"
+      - "80:8080"
+      - "443:8443"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  net_dmz:
+    driver: bridge
+  net_app:
+    driver: bridge
+  net_data:
+    driver: bridge
+    internal: true
 
 volumes:
   pgdata:
