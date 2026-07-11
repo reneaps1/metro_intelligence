@@ -155,3 +155,8 @@ def generate_measurement_series(context: SeedContext) -> None:
 
     context.artifacts["scenario_by_characteristic_id"] = scenario_by_characteristic_id
     context.artifacts["measurement_result_count"] = len(result_rows)
+    # F3.4's process-event generator needs the exact same reference day this
+    # run used, so its shift_after_event-correlated events land on the real
+    # jump day (start_day + event_day_offset) instead of a second, slightly
+    # different `datetime.now()` call.
+    context.artifacts["history_start_day"] = start_day
