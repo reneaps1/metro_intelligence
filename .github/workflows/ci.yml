@@ -60,7 +60,7 @@ jobs:
           python-version: "3.12"
       - name: Install seed + backend dependencies
         run: |
-          pip install -r seed/requirements.txt -r backend/requirements.txt
+          pip install pytest -r seed/requirements.txt -r backend/requirements.txt
       - name: Run seed validation suite
         run: python -m pytest tests/seed_validation seed/tests -q
 
