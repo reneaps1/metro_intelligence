@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import numpy as np
 from numpy.random import Generator
@@ -20,11 +20,16 @@ def make_rng(seed: int) -> Generator:
 
 @dataclass
 class SeedContext:
-    """Shared state passed to every registered generator."""
+    """Shared state passed to every registered generator, in registration
+    order. `artifacts` is how a generator hands its output to the next one
+    (e.g. F3.2's catalog generator stashes the created characteristics under
+    "characteristics" for F3.3's measurement-series generator to read) —
+    generators don't return values, since __main__.py just calls each in turn."""
 
     session: Session
     rng: Generator
     config: SeedConfig
+    artifacts: dict[str, Any] = field(default_factory=dict)
 
 
 GeneratorFn = Callable[[SeedContext], None]
