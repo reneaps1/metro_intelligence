@@ -62,7 +62,16 @@ jobs:
         run: |
           pip install pytest -r seed/requirements.txt -r backend/requirements.txt
       - name: Run seed validation suite
-        run: python -m pytest tests/seed_validation seed/tests -q
+        # Two separate pytest invocations, not one combined run: each of
+        # these modules independently runs `alembic upgrade head` / `... downgrade
+        # base` against the *same* Postgres service container, and
+        # tests/seed_validation's session-scoped fixture only tears down at
+        # the end of its own process -- combined into one pytest run, seed/tests'
+        # per-test generators would insert into tables tests/seed_validation
+        # already populated (duplicate-key errors on roles/parts/etc).
+        run: |
+          python -m pytest tests/seed_validation -q
+          python -m pytest seed/tests -q
 
   # backend-ci: (Phase 4) ruff + mypy + pytest (with postgres service) + pip-audit
   # frontend-ci: (Phase 5) eslint + tsc + vitest + npm audit
