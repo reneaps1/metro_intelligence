@@ -1,0 +1,6 @@
+# Pinned for reproducible seed runs. Kept separate from backend/requirements.txt
+# since seed/ is a standalone CLI, not part of the FastAPI app.
+numpy==2.1.1
+PyYAML==6.0.2
+SQLAlchemy==2.0.35
+psycopg[binary]==3.2.1

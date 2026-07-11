@@ -1,0 +1,39 @@
+# Deterministic measurement-pattern scenarios (docs/seed-data-strategy.md).
+# This file only declares generator *parameters* — the characteristic/part
+# datasets that consume them are built by F3.2-F3.4, not here (F3.1 is the
+# framework only).
+seed:
+  default_seed: 20260709 # today's date at authoring time — fixed so the demo narrative is stable
+  history_days: 90
+  point_interval_days: 2
+
+scenarios:
+  stable_capable:
+    description: "Well-controlled process, Cpk > 1.67 — candidate for inspection frequency reduction."
+    noise_std_fraction_of_tolerance: 0.083 # ~1/12 of the full tolerance band
+    drift_fraction: 0.0
+    nok_outlier_probability: 0.0
+
+  slow_drift:
+    description: "Sustained drift toward a tolerance limit over the history window — trend/risk alert."
+    noise_std_fraction_of_tolerance: 0.071
+    drift_fraction: 0.9 # fraction of the tolerance limit reached by the end of the window
+    nok_outlier_probability: 0.0
+
+  shift_after_event:
+    description: "Mean shifts after a process event (e.g. a tool change) — event correlation + post-event validation."
+    noise_std_fraction_of_tolerance: 0.071
+    shift_fraction: 0.65 # fraction of the tolerance limit the new mean shifts to
+    event_day_offset: 45 # days into the history window when the event occurs
+
+  high_variance:
+    description: "High variance near the limits, Cpk < 1.0 — frequency increase / immediate inspection."
+    noise_std_fraction_of_tolerance: 0.2
+    drift_fraction: 0.0
+    nok_outlier_probability: 0.0
+
+  outlier_nok:
+    description: "Otherwise stable, with occasional NOK outliers — compliance evaluation + alert flow."
+    noise_std_fraction_of_tolerance: 0.083
+    nok_outlier_probability: 0.08
+    nok_outlier_magnitude_fraction: 1.5 # multiple of the tolerance limit an outlier reaches
