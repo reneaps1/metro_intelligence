@@ -4,10 +4,18 @@ Password hashing is F4.2's job, not implemented yet — SEED_DEMO_USER_PASSWORD
 only exists so seeding fails loudly if nobody has set an intended demo
 password (CLAUDE.md §5: no hardcoded credentials), not so this generator can
 roll its own hashing. Until F4.2 lands, password_hash stays None rather than
-storing an ad-hoc/placeholder hash."""
+storing an ad-hoc/placeholder hash.
+
+The five system roles themselves are *not* created here — migration 0001
+(backend/alembic/versions/0001_org_security_migration.py) already
+bulk_inserts them along with their permissions, since RBAC is static schema
+data (docs/security/rbac.md), not something a demo dataset should own. This
+generator only looks them up by name and attaches a demo user to each."""
 from __future__ import annotations
 
 import os
+
+from sqlalchemy import select
 
 from app.models import Role, User, UserRole
 
@@ -56,11 +64,16 @@ def generate_demo_users(context: SeedContext) -> None:
         )
 
     users_by_role: dict[str, User] = {}
-    for role_code, description, email, display_name in ROLE_DEFINITIONS:
-        role = Role(name=role_code, description=description, is_system=True)
+    for role_code, _description, email, display_name in ROLE_DEFINITIONS:
+        role = session.execute(select(Role).where(Role.name == role_code)).scalar_one_or_none()
+        if role is None:
+            raise RuntimeError(
+                f"Role {role_code!r} not found — expected migration 0001 to have seeded it. "
+                "Run `alembic upgrade head` before seeding demo users."
+            )
         user = User(email=email, display_name=display_name, password_hash=None)
         user.roles.append(UserRole(role=role))
-        session.add_all([role, user])
+        session.add(user)
         users_by_role[role_code] = user
 
     session.flush()  # populate ids for F3.4's decision-history generator
