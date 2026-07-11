@@ -13,8 +13,6 @@ from sqlalchemy import insert
 
 from app.models import (
     Characteristic,
-    Connector,
-    DataSource,
     Machine,
     MeasurementResult,
     MeasurementRun,
@@ -92,10 +90,6 @@ def generate_measurement_series(context: SeedContext) -> None:
         for i, characteristic in enumerate(part_characteristics):
             scenario_by_characteristic_id[characteristic.id] = SCENARIO_CYCLE[i % len(SCENARIO_CYCLE)]
 
-    connector = Connector(code="seed-manual-upload", name="Seed Manual Upload (Demo)", connector_type="manual_upload")
-    data_source = DataSource(code="seed-cmm-line", name="Seed CMM/Scanner Line (Demo)", connector=connector)
-    session.add_all([connector, data_source])
-
     now = datetime.now(timezone.utc)
     start_day = now - timedelta(days=settings.history_days)
 
@@ -112,21 +106,20 @@ def generate_measurement_series(context: SeedContext) -> None:
 
             run_date = start_day + timedelta(days=day_offset)
             run = MeasurementRun(
-                part_number=part,
-                measurement_program=program,
-                data_source=data_source,
-                machine=machine,
-                started_at=run_date,
-                batch_code=f"BATCH-{run_date:%Y%m%d}",
+                measurement_program_id=program.id,
+                machine_id=machine.id,
+                operator_identifier="SEED-OPERATOR",
+                batch_lot=f"BATCH-{run_date:%Y%m%d}",
+                run_at=run_date,
             )
             session.add(run)
 
-            samples = [MeasurementSample(sample_index=i) for i in range(1, SAMPLES_PER_RUN + 1)]
+            samples = [MeasurementSample(sample_sequence=i) for i in range(1, SAMPLES_PER_RUN + 1)]
             run.samples.extend(samples)
             session.flush()  # one flush per run populates every sample's id
 
             for sample in samples:
-                measured_at = run_date + timedelta(minutes=sample.sample_index)
+                measured_at = run_date + timedelta(minutes=sample.sample_sequence)
                 for characteristic in part_characteristics:
                     scenario = context.config.scenario(scenario_by_characteristic_id[characteristic.id])
                     spec = _active_spec(characteristic)
