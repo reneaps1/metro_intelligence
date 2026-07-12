@@ -37,6 +37,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # again next time someone runs it repo-wide.
 "app/models/*.py" = ["ALL"]
 "tests/test_000*.py" = ["ALL"]
+# F4.2 FastAPI endpoints: B008 (function call in default) is standard FastAPI
+# pattern for Depends, Body, etc. -- not a real bug.
+"app/api/v1/*.py" = ["B008"]
+"app/core/security.py" = ["B008"]
+"tests/conftest.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

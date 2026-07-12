@@ -7,3 +7,9 @@ alembic==1.13.2
 psycopg[binary]==3.2.1
 pydantic==2.9.2
 pydantic-settings==2.5.2
+# F4.2 (MI-22) auth/RBAC/rate-limiting dependencies
+PyJWT==2.9.0
+argon2-cffi==23.1.0
+slowapi==0.1.9
+python-multipart==0.0.12
+email-validator==2.2.0
