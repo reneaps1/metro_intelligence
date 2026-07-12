@@ -1,0 +1,53 @@
+[project]
+name = "metro-intelligence-backend"
+version = "0.1.0"
+description = "Metro Intelligence Platform — FastAPI backend (modular monolith)."
+requires-python = ">=3.12"
+# requirements.txt is the source of truth for pinned runtime dependencies
+# (what backend/Dockerfile and CI install into the app image). This section
+# is intentionally not a duplicate dependency list -- it only pins
+# dev/test-only tooling that never ships in the container.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.3",
+    "httpx==0.27.2",
+    "ruff==0.6.9",
+    "mypy==1.11.2",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["app", "tests"]
+# alembic/versions/ is generated/frozen migration history (F2.x, predates
+# this config) -- not touched by F4.1 and not worth retroactively
+# reformatting (CLAUDE.md: migrations are a serialization point).
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# app/models/* and the F2.x migration tests predate this pyproject.toml and
+# are explicitly out of scope for F4.1 ("modelos de dominio ... no los
+# toques aquí") -- not retroactively reformatted here, so every rule is
+# silenced for them rather than picking codes and having `--fix` touch them
+# again next time someone runs it repo-wide.
+"app/models/*.py" = ["ALL"]
+"tests/test_000*.py" = ["ALL"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["app"]
+# models/ predates F4.1 (F2.x migrations) and is SQLAlchemy 2.0 Mapped[]-typed
+# already, but isn't held to strict mode by this task -- CLAUDE.md §9 requires
+# strict mypy on *new* code, which for F4.1 is everything except models/.
+[[tool.mypy.overrides]]
+module = "app.models.*"
+strict = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
