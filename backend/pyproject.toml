@@ -42,6 +42,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "app/api/v1/*.py" = ["B008"]
 "app/core/security.py" = ["B008"]
 "tests/conftest.py" = ["B008"]
+# F4.3 (MI-23): get_audit_context is a FastAPI dependency (same B008
+# rationale as above); test files build small inline FastAPI apps that
+# depend on it the same way.
+"app/services/audit_service.py" = ["B008"]
+"tests/test_audit_service.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

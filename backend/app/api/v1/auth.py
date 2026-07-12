@@ -32,10 +32,10 @@ from app.core.security import (
     is_token_revoked,
     revoke_token,
     verify_password,
-    write_audit_log,
 )
 from app.models.security import User
 from app.schemas.auth import RefreshRequest, TokenResponse, UserMe
+from app.services.audit_service import write_audit_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
