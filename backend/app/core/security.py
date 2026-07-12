@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.security import AuditLog, Permission, RolePermission, User, UserRole
+from app.models.security import Permission, RolePermission, User, UserRole
 
 settings = get_settings()
 
@@ -155,34 +155,9 @@ def _reset_login_attempts_for_tests() -> None:
     _login_attempts.clear()
 
 
-# --- Audit logging ------------------------------------------------------------
-def write_audit_log(
-    db: Session,
-    *,
-    action: str,
-    entity_type: str,
-    actor_user_id: uuid.UUID | None = None,
-    actor_identifier: str | None = None,
-    entity_id: uuid.UUID | None = None,
-    before_state: dict[str, Any] | None = None,
-    after_state: dict[str, Any] | None = None,
-    ip_address: str | None = None,
-) -> AuditLog:
-    entry = AuditLog(
-        actor_user_id=actor_user_id,
-        actor_identifier=actor_identifier,
-        action=action,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        before_state=before_state,
-        after_state=after_state,
-        ip_address=ip_address,
-    )
-    db.add(entry)
-    return entry
-
-
 # --- Auth dependencies --------------------------------------------------------
+# Audit logging (write_audit_log, record_event, record_change) lives in
+# app.services.audit_service (F4.3 / MI-23) -- import from there.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
