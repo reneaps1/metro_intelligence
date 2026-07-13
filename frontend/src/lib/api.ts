@@ -74,6 +74,18 @@ async function readErrorMessage(response: Response, allowAuthDetail: boolean): P
       if (typeof body.detail === "string" && body.detail.length > 0) {
         return body.detail;
       }
+      // A handful of endpoints (e.g. duplicate-import 409) return a structured
+      // detail (`{message, ...}`) instead of a plain string so the caller can
+      // also read the extra fields -- the message itself is still
+      // backend-authored, user-safe text.
+      if (
+        body.detail &&
+        typeof body.detail === "object" &&
+        "message" in body.detail &&
+        typeof (body.detail as { message: unknown }).message === "string"
+      ) {
+        return (body.detail as { message: string }).message;
+      }
     } catch {
       // fall through to the generic message below
     }
@@ -120,7 +132,10 @@ async function request<T>(path: string, options: FetchOptions = {}, isRetry = fa
   if (!skipAuth && accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  // FormData bodies (file uploads) must NOT get an explicit Content-Type --
+  // the browser sets `multipart/form-data; boundary=...` itself, and
+  // overriding it here would drop the boundary and break parsing server-side.
+  if (init.body !== undefined && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
