@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, uuid7
+from app.models.catalog import MeasurementProgram
 
 
 class DataSource(Base):
@@ -155,6 +156,7 @@ class MeasurementRun(Base):
 
     imported_file: Mapped[ImportedFile | None] = relationship(back_populates="runs")
     samples: Mapped[list[MeasurementSample]] = relationship(back_populates="measurement_run")
+    measurement_program: Mapped[MeasurementProgram] = relationship()
 
 
 class MeasurementSample(Base):
@@ -180,6 +182,7 @@ class MeasurementSample(Base):
     )
 
     measurement_run: Mapped[MeasurementRun] = relationship(back_populates="samples")
+    results: Mapped[list[MeasurementResult]] = relationship(back_populates="measurement_sample")
 
 
 class MeasurementResult(Base):
@@ -216,3 +219,5 @@ class MeasurementResult(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    measurement_sample: Mapped[MeasurementSample] = relationship(back_populates="results")
