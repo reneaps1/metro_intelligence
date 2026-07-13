@@ -29,6 +29,50 @@ jobs:
             echo "::error::.env file committed"; exit 1
           fi
 
+  # Confidentiality lint (CLAUDE.md §7/§11/§20 -- release blocker) + the seed
+  # dataset's schema/statistical sanity checks (docs/tasks/F3.5.md). Only the
+  # constraints/statistics tests need Postgres; the confidentiality lint runs
+  # against the generators' own constants and seed/sample_files/*, so it's
+  # the fast gate even before Phase 4's backend-ci exists.
+  seed-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: metro_seed_validation
+          POSTGRES_USER: metro
+          POSTGRES_PASSWORD: metro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U metro -d metro_seed_validation"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      METRO_TEST_DATABASE_URL: postgresql+psycopg://metro:metro@localhost:5432/metro_seed_validation
+      SEED_DEMO_USER_PASSWORD: ci-seed-validation-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install seed + backend dependencies
+        run: |
+          pip install pytest -r seed/requirements.txt -r backend/requirements.txt
+      - name: Run seed validation suite
+        # Two separate pytest invocations, not one combined run: each of
+        # these modules independently runs `alembic upgrade head` / `... downgrade
+        # base` against the *same* Postgres service container, and
+        # tests/seed_validation's session-scoped fixture only tears down at
+        # the end of its own process -- combined into one pytest run, seed/tests'
+        # per-test generators would insert into tables tests/seed_validation
+        # already populated (duplicate-key errors on roles/parts/etc).
+        run: |
+          python -m pytest tests/seed_validation -q
+          python -m pytest seed/tests -q
+
   # backend-ci: (Phase 4) ruff + mypy + pytest (with postgres service) + pip-audit
   # frontend-ci: (Phase 5) eslint + tsc + vitest + npm audit
   # container-scan: (Phase 4+) trivy on built images
