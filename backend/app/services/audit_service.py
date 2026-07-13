@@ -16,6 +16,8 @@ available.
 
 from __future__ import annotations
 
+import datetime
+import decimal
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -34,10 +36,30 @@ _SENSITIVE_KEYS = frozenset(
 )
 
 
+def _json_safe(value: Any) -> Any:
+    """Recursively coerce values into what the ``before_state``/``after_state``
+    JSONB columns can actually store. Callers routinely pass ORM column values
+    straight through (UUID foreign keys, Decimal tolerances, datetime
+    timestamps) -- none of those are JSON-serializable as-is, so without this
+    conversion the write raises deep inside the DB driver instead of at a
+    call site that's easy to debug."""
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, decimal.Decimal):
+        return str(value)
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def _strip_sensitive(state: dict[str, Any] | None) -> dict[str, Any] | None:
     if state is None:
         return None
-    cleaned = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS}
+    cleaned = {k: _json_safe(v) for k, v in state.items() if k not in _SENSITIVE_KEYS}
     return cleaned or None
 
 
