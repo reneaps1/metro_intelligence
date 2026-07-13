@@ -13,3 +13,6 @@ argon2-cffi==23.1.0
 slowapi==0.1.9
 python-multipart==0.0.12
 email-validator==2.2.0
+# F4.5 (MI-25) file import pipeline
+minio==7.2.9
+openpyxl==3.1.5
