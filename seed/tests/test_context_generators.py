@@ -19,6 +19,10 @@ from seed.generators.events import generate_process_events  # noqa: E402
 from seed.generators.measurements import generate_measurement_series  # noqa: E402
 from seed.generators.users import generate_demo_users  # noqa: E402
 
+# seed.db (imported above) inserts backend/ onto sys.path as a side effect,
+# the same way seed/generators/users.py reaches app.core.security.
+from app.core.security import verify_password  # noqa: E402
+
 TEST_DATABASE_URL = os.getenv("METRO_TEST_DATABASE_URL")
 BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
 
@@ -72,9 +76,12 @@ def test_context_generators_satisfy_acceptance_criteria(monkeypatch: pytest.Monk
             }
             emails = connection.execute(sa.text("SELECT email FROM security_users")).scalars().all()
             assert all(email.endswith("@demo.local") for email in emails)
-            # F4.2 owns hashing; the seed generator must not roll its own.
+            # Every demo user can sign in with SEED_DEMO_USER_PASSWORD through
+            # the real F4.2 /auth/login flow (argon2id, via app.core.security).
             password_hashes = connection.execute(sa.text("SELECT password_hash FROM security_users")).scalars().all()
-            assert all(value is None for value in password_hashes)
+            assert all(value is not None for value in password_hashes)
+            assert all(verify_password("demo-password-for-tests-only", value) for value in password_hashes)
+            assert not verify_password("wrong-password", password_hashes[0])
 
             # ~20 process events over the 90-day window.
             event_count = connection.execute(sa.text("SELECT count(*) FROM context_process_events")).scalar_one()
