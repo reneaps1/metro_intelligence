@@ -52,9 +52,7 @@ class DataSource(Base):
 class Connector(Base):
     __tablename__ = "measurement_connectors"
     __table_args__ = (
-        UniqueConstraint(
-            "data_source_id", "name", name="uq_measurement_connectors_data_source_id_name"
-        ),
+        UniqueConstraint("data_source_id", "name", name="uq_measurement_connectors_data_source_id_name"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -109,6 +107,28 @@ class ImportedFile(Base):
     data_source: Mapped[DataSource] = relationship(back_populates="imported_files")
     connector: Mapped[Connector | None] = relationship(back_populates="imported_files")
     runs: Mapped[list[MeasurementRun]] = relationship(back_populates="imported_file")
+    quarantined_rows: Mapped[list[QuarantinedRow]] = relationship(back_populates="imported_file")
+
+
+class QuarantinedRow(Base):
+    """One rejected row from an import: kept with its raw data and the reason
+    it was rejected so a metrologist can inspect and fix the source file,
+    rather than the row being silently dropped (CLAUDE.md §6)."""
+
+    __tablename__ = "measurement_quarantined_rows"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    imported_file_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("measurement_imported_files.id", ondelete="RESTRICT"), nullable=False
+    )
+    row_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    raw_row: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    imported_file: Mapped[ImportedFile] = relationship(back_populates="quarantined_rows")
 
 
 class MeasurementRun(Base):
