@@ -59,6 +59,10 @@ export function listCharacteristics(partNumberId: string): Promise<Page<Characte
   return apiFetch(`/catalog/characteristics${query({ part_number_id: partNumberId, page_size: 200 })}`);
 }
 
+export function getCharacteristic(id: string): Promise<Characteristic> {
+  return apiFetch(`/catalog/characteristics/${id}`);
+}
+
 export function createCharacteristic(payload: CharacteristicCreateInput): Promise<Characteristic> {
   return apiFetch("/catalog/characteristics", { method: "POST", body: JSON.stringify(payload) });
 }

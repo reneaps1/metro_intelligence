@@ -1,35 +1,15 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { useDemoData } from "../../lib/mock/DataProvider";
-import { useAuth } from "../../lib/auth/AuthProvider";
 import { Card, CardHeader } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
 import { StatusChip, riskLevelToChipStatus } from "../../components/ui/StatusChip";
 import { RiskHeatmap } from "../../components/charts/RiskHeatmap";
-import { formatDateTime } from "../../lib/format";
-import type { RecommendationState } from "../../lib/mock/types";
-
-const RECOMMENDATION_LABELS: Record<string, string> = {
-  frequency_increase: "Increase inspection frequency",
-  frequency_decrease: "Decrease inspection frequency",
-  immediate_inspection: "Immediate inspection",
-  investigate_cause: "Investigate cause",
-  post_event_validation: "Post-event validation",
-};
-
-const STATE_CHIP: Record<RecommendationState, { status: "ok" | "nok" | "info" | "warning" | "neutral"; label: string }> = {
-  pending: { status: "warning", label: "Pending" },
-  accepted: { status: "ok", label: "Accepted" },
-  rejected: { status: "nok", label: "Rejected" },
-  superseded: { status: "neutral", label: "Superseded" },
-  expired: { status: "neutral", label: "Expired" },
-};
 
 export function RiskPage() {
-  const { characteristics, parts, riskAssessments, recommendations, getSeries, decideRecommendation } = useDemoData();
-  const { user } = useAuth();
-  const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
-  const canDecide = user?.role === "quality_engineer" || user?.role === "admin";
+  // Risk scoring itself is still F5.M mock data -- the Risk Engine (F9) isn't
+  // built yet. Recommendations (F5.9 / MI-38) are wired to the real F4.8 API
+  // in their own screen at /recommendations, not duplicated here.
+  const { characteristics, parts, riskAssessments, getSeries } = useDemoData();
 
   const heatmapRows = characteristics.map((characteristic) => ({
     characteristic,
@@ -39,8 +19,8 @@ export function RiskPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold text-text-primary">Risk &amp; Recommendations</h1>
-        <p className="text-sm text-text-secondary">Composite risk per characteristic and pending inspection-strategy recommendations.</p>
+        <h1 className="text-xl font-semibold text-text-primary">Risk</h1>
+        <p className="text-sm text-text-secondary">Composite risk per characteristic (proxy data).</p>
       </div>
 
       <Card>
@@ -88,73 +68,13 @@ export function RiskPage() {
       </Card>
 
       <Card>
-        <CardHeader title="Recommendations inbox" />
-        <div className="space-y-3">
-          {recommendations.map((rec) => {
-            const characteristic = characteristics.find((c) => c.id === rec.characteristicId)!;
-            const part = parts.find((p) => p.id === characteristic.partId);
-            const chip = STATE_CHIP[rec.state];
-            return (
-              <div key={rec.id} className="rounded border border-border p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs text-text-secondary">
-                      {part?.code} · {characteristic.name} · risk {rec.riskScore}
-                    </p>
-                    <p className="font-medium text-text-primary">{RECOMMENDATION_LABELS[rec.type]}</p>
-                  </div>
-                  <StatusChip status={chip.status} label={chip.label} />
-                </div>
-                <p className="mt-2 text-sm text-text-secondary">{rec.rationale}</p>
-                <p className="mt-1 text-xs text-text-disabled">
-                  {rec.ruleVersion} · created {formatDateTime(rec.createdAt)}
-                </p>
-
-                {rec.state !== "pending" ? (
-                  <p className="mt-2 text-xs text-text-secondary">
-                    {chip.label} by {rec.decidedBy} on {rec.decidedAt && formatDateTime(rec.decidedAt)} — “{rec.decisionComment}”
-                  </p>
-                ) : canDecide ? (
-                  <div className="mt-3 space-y-2">
-                    <label className="block text-xs font-medium text-text-secondary" htmlFor={`comment-${rec.id}`}>
-                      Decision comment
-                    </label>
-                    <input
-                      id={`comment-${rec.id}`}
-                      type="text"
-                      className="w-full rounded border border-border bg-surface px-3 py-2 text-sm text-text-primary"
-                      placeholder="Why are you accepting or rejecting this?"
-                      value={commentDraft[rec.id] ?? ""}
-                      onChange={(e) => setCommentDraft((prev) => ({ ...prev, [rec.id]: e.target.value }))}
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        variant="primary"
-                        onClick={() =>
-                          decideRecommendation(rec.id, "accepted", user!.email, commentDraft[rec.id] || "Accepted.")
-                        }
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() =>
-                          decideRecommendation(rec.id, "rejected", user!.email, commentDraft[rec.id] || "Rejected.")
-                        }
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-text-disabled">
-                    Only Quality Engineer or Admin roles can accept/reject recommendations.
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <CardHeader title="Recommendations" />
+        <Link
+          to="/recommendations"
+          className="inline-flex items-center gap-1 text-sm font-medium text-brand-primary hover:underline"
+        >
+          Open the recommendations inbox <ArrowRight size={16} />
+        </Link>
       </Card>
     </div>
   );

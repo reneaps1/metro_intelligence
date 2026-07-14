@@ -175,9 +175,111 @@ export const catalogHandlers = [
   http.get(`${API_BASE_URL}/catalog/characteristics`, () =>
     HttpResponse.json({ items: [CHARACTERISTIC_FIXTURE], total: 1, page: 1, page_size: 200 }),
   ),
+  http.get(`${API_BASE_URL}/catalog/characteristics/:id`, ({ params }) => {
+    if (params.id !== CHARACTERISTIC_FIXTURE.id) {
+      return HttpResponse.json({ detail: "Characteristic not found." }, { status: 404 });
+    }
+    return HttpResponse.json(CHARACTERISTIC_FIXTURE);
+  }),
   http.get(`${API_BASE_URL}/catalog/characteristics/:id/specifications`, () =>
     HttpResponse.json([ACTIVE_SPEC_FIXTURE, CLOSED_SPEC_FIXTURE]),
   ),
 ];
 
-export const server = setupServer(...handlers, ...catalogHandlers);
+// F5.9 (MI-38): fixtures mirroring F4.8's /recommendations and /decisions
+// contract shape (backend/app/schemas/intelligence.py).
+export const RISK_ASSESSMENT_FIXTURE = {
+  id: "77777777-7777-7777-7777-777777777777",
+  score: 62,
+  level: "high",
+  factors: { trend: "drifting", nok_rate: "0.08" },
+  engine_name: "risk_engine",
+  engine_version: "v0.1",
+  computed_at: "2026-07-01T00:00:00Z",
+};
+
+export const REC_PENDING_FIXTURE = {
+  id: "88888888-8888-8888-8888-888888888888",
+  characteristic_id: CHARACTERISTIC_FIXTURE.id,
+  recommendation_type: "frequency_increase",
+  rationale: "Trend approaching upper tolerance with rising variance.",
+  evidence: { run_ids: ["r1", "r2"] },
+  engine_name: "adaptive_inspection_engine",
+  engine_version: "v0.1",
+  state: "pending",
+  created_at: "2026-07-02T00:00:00Z",
+  updated_at: "2026-07-02T00:00:00Z",
+};
+
+export const REC_ACCEPTED_FIXTURE = {
+  ...REC_PENDING_FIXTURE,
+  id: "99999999-9999-9999-9999-999999999999",
+  recommendation_type: "frequency_decrease",
+  rationale: "Process has stabilized; variance dropped for six consecutive runs.",
+  state: "accepted",
+};
+
+export const recommendationsHandlers = [
+  http.get(`${API_BASE_URL}/recommendations`, ({ request }) => {
+    const url = new URL(request.url);
+    const state = url.searchParams.get("state");
+    const items = [REC_PENDING_FIXTURE, REC_ACCEPTED_FIXTURE].filter(
+      (item) => !state || item.state === state,
+    );
+    return HttpResponse.json({ items, total: items.length, page: 1, page_size: 100 });
+  }),
+  http.get(`${API_BASE_URL}/recommendations/:id`, ({ params }) => {
+    const base = [REC_PENDING_FIXTURE, REC_ACCEPTED_FIXTURE].find((item) => item.id === params.id);
+    if (!base) {
+      return HttpResponse.json({ detail: "Recommendation not found." }, { status: 404 });
+    }
+    return HttpResponse.json({
+      ...base,
+      risk_assessment: RISK_ASSESSMENT_FIXTURE,
+      decision:
+        base.state === "accepted"
+          ? {
+              id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+              recommendation_id: base.id,
+              decided_by_user_id: ME_FIXTURE.id,
+              action: "accepted",
+              comment: "Matches the observed drift.",
+              decided_at: "2026-07-03T00:00:00Z",
+              actions_taken: [],
+            }
+          : null,
+    });
+  }),
+  http.post(`${API_BASE_URL}/recommendations/:id/decision`, async ({ request, params }) => {
+    const body = (await request.json()) as { action: "accepted" | "rejected"; comment: string };
+    return HttpResponse.json({
+      decision: {
+        id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        recommendation_id: params.id,
+        decided_by_user_id: ME_FIXTURE.id,
+        action: body.action,
+        comment: body.comment,
+        decided_at: "2026-07-04T00:00:00Z",
+        actions_taken: [],
+      },
+      recommendation: { ...REC_PENDING_FIXTURE, id: params.id, state: body.action },
+      superseded_recommendation_ids: [],
+      inspection_frequency_id: null,
+    });
+  }),
+  http.post(`${API_BASE_URL}/decisions/:id/actions`, async ({ request }) => {
+    const body = (await request.json()) as { description: string; outcome_status: string };
+    return HttpResponse.json(
+      {
+        id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        description: body.description,
+        outcome_status: body.outcome_status,
+        observed_at: null,
+        created_at: "2026-07-05T00:00:00Z",
+      },
+      { status: 201 },
+    );
+  }),
+];
+
+export const server = setupServer(...handlers, ...catalogHandlers, ...recommendationsHandlers);

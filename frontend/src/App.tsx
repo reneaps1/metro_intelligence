@@ -8,6 +8,7 @@ import { MeasurementsListPage } from "./features/measurements/MeasurementsListPa
 import { CharacteristicTrendPage } from "./features/measurements/CharacteristicTrendPage";
 import { RiskPage } from "./features/risk/RiskPage";
 import { DashboardPage } from "./features/dashboards/DashboardPage";
+import { RecommendationsInboxPage } from "./features/recommendations/RecommendationsInboxPage";
 import { RequireAuth } from "./lib/auth/guards";
 
 export function App() {
@@ -29,6 +30,7 @@ export function App() {
         <Route path="/measurements" element={<MeasurementsListPage />} />
         <Route path="/measurements/:characteristicId" element={<CharacteristicTrendPage />} />
         <Route path="/risk" element={<RiskPage />} />
+        <Route path="/recommendations" element={<RecommendationsInboxPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
