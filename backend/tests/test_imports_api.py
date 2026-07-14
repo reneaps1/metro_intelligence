@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import io
 import uuid
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
+import sqlalchemy as sa
 from app.api.v1.auth import router as auth_router
 from app.api.v1.imports import router as imports_router
 from app.core.database import SessionLocal
@@ -34,6 +36,7 @@ from app.models.catalog import (
     ProductFamily,
     Specification,
 )
+from app.models.measurement import MeasurementResult, MeasurementRun, MeasurementSample
 from app.services.storage_service import get_object_storage
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -238,6 +241,47 @@ def test_non_numeric_value_quarantines_only_that_row(
     assert body["quarantined_rows"][0]["row_number"] == 2
     assert "Non-numeric value" in body["quarantined_rows"][0]["reason"]
     assert "COL_1" in body["quarantined_rows"][0]["reason"]
+
+
+def test_imported_results_are_evaluated_against_the_spec(
+    imports_client: TestClient, as_role, mi_demo_1001: str
+) -> None:
+    """F7.D wiring: the compliance engine runs on every imported result --
+    mi_demo_1001's spec is nominal=10, lower_tol=-1, upper_tol=1 (see the
+    fixture above), so COL_1=10.5 (deviation 0.5) is OK and COL_2=12
+    (deviation 2, past the +1 upper limit) is NOK."""
+    content = (
+        f"part_number,batch_lot,run_at,machine_code,operator_identifier,sample_sequence,COL_1,COL_2\n"
+        f"{mi_demo_1001},B,2026-07-13T00:00:00+00:00,CMM-01,OP,1,10.5,12\n"
+    ).encode()
+    response = imports_client.post(
+        "/api/v1/imports",
+        headers=as_role("metrologist"),
+        files={"file": ("compliance.csv", content, "text/csv")},
+    )
+    assert response.status_code == 201, response.text
+    imported_file_id = response.json()["id"]
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            sa.select(MeasurementResult.value, MeasurementResult.deviation, MeasurementResult.is_ok)
+            .join(MeasurementSample)
+            .join(MeasurementRun)
+            .where(MeasurementRun.imported_file_id == uuid.UUID(imported_file_id))
+            .order_by(MeasurementResult.value)
+        ).all()
+    finally:
+        db.close()
+
+    by_value = {row.value: row for row in rows}
+    ok_row = by_value[Decimal("10.5")]
+    assert ok_row.deviation == Decimal("0.5")
+    assert ok_row.is_ok is True
+
+    nok_row = by_value[Decimal("12")]
+    assert nok_row.deviation == Decimal("2")
+    assert nok_row.is_ok is False
 
 
 def test_unknown_part_number_quarantines_with_clear_reason(imports_client: TestClient, as_role) -> None:
