@@ -10,6 +10,8 @@ export const VALID_EMAIL = "sofia.mendez@demo.local";
 export const VALID_PASSWORD = "correct-horse-battery-staple";
 export const ADMIN_EMAIL = "luis.torres@demo.local";
 export const ADMIN_PASSWORD = "admin-password-for-tests-only";
+export const METROLOGIST_EMAIL = "ana.garcia@demo.local";
+export const METROLOGIST_PASSWORD = "metrologist-password-for-tests-only";
 
 export const ME_FIXTURE = {
   id: "8f14e45f-ceea-467e-adde-3fb5c8a5f3ba",
@@ -27,15 +29,25 @@ export const ME_ADMIN_FIXTURE = {
   roles: ["admin"],
 };
 
+export const ME_METROLOGIST_FIXTURE = {
+  id: "af14e45f-ceea-467e-adde-3fb5c8a5f3bc",
+  email: METROLOGIST_EMAIL,
+  display_name: "Ana García",
+  is_active: true,
+  roles: ["metrologist"],
+};
+
 const CREDENTIALS: Record<string, { password: string; accessToken: string }> = {
   [VALID_EMAIL]: { password: VALID_PASSWORD, accessToken: "access-token-1" },
   [ADMIN_EMAIL]: { password: ADMIN_PASSWORD, accessToken: "access-token-admin" },
+  [METROLOGIST_EMAIL]: { password: METROLOGIST_PASSWORD, accessToken: "access-token-metrologist" },
 };
 
 const ME_BY_TOKEN: Record<string, typeof ME_FIXTURE> = {
   "access-token-1": ME_FIXTURE,
   "access-token-2": ME_FIXTURE,
   "access-token-admin": ME_ADMIN_FIXTURE,
+  "access-token-metrologist": ME_METROLOGIST_FIXTURE,
 };
 
 export const handlers = [
