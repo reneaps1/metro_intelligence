@@ -9,9 +9,10 @@ quarantined with a reason, never silently dropped (CLAUDE.md §6); the
 corrected re-import would insert new rows, it does not exist yet as a
 feature (out of F4.5's scope per docs/tasks/F4.5.md).
 
-This function does not evaluate compliance (OK/NOK) -- `deviation` and
-`is_ok` are left NULL here on purpose; that's F7.D's (Compliance engine)
-job once it exists, not this pipeline's.
+Each result's `deviation`/`is_ok` are computed by the compliance engine
+(F7.D, `app.engines.compliance.evaluate`) against the specification version
+active when the row was measured (CLAUDE.md §6) -- this pipeline calls the
+engine, it does not reimplement the evaluation rule itself.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ from sqlalchemy.orm import Session
 from app.connectors.base import FileValidationError, ParsedRow
 from app.connectors.manual_upload import connector_for_filename
 from app.core.config import get_settings
+from app.engines.compliance.evaluate import SpecificationSnapshot
+from app.engines.compliance.evaluate import evaluate as evaluate_compliance
 from app.models.catalog import Characteristic, MeasurementProgram, PartNumber, Specification
 from app.models.measurement import (
     DataSource,
@@ -275,6 +278,15 @@ class _RowProcessor:
             if value is None:
                 self._quarantine(row, f"Non-numeric value '{raw_value}' in column '{column}'.")
                 continue
+            compliance = evaluate_compliance(
+                value,
+                SpecificationSnapshot(
+                    nominal=specification.nominal,
+                    lower_tol=specification.lower_tol,
+                    upper_tol=specification.upper_tol,
+                    unit=specification.unit,
+                ),
+            )
             self.db.add(
                 MeasurementResult(
                     measured_at=run_at,
@@ -282,6 +294,8 @@ class _RowProcessor:
                     characteristic_id=characteristic.id,
                     specification_id=specification.id,
                     value=value,
+                    deviation=compliance.deviation,
+                    is_ok=compliance.is_ok,
                 )
             )
             self.results_created += 1
