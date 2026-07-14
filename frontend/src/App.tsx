@@ -8,13 +8,7 @@ import { MeasurementsListPage } from "./features/measurements/MeasurementsListPa
 import { CharacteristicTrendPage } from "./features/measurements/CharacteristicTrendPage";
 import { RiskPage } from "./features/risk/RiskPage";
 import { DashboardPage } from "./features/dashboards/DashboardPage";
-import { useAuth } from "./lib/auth/AuthProvider";
-
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
-}
+import { RequireAuth } from "./lib/auth/guards";
 
 export function App() {
   return (

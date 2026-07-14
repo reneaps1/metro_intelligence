@@ -1,39 +1,78 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
-import { DEMO_USERS } from "../mock/fixtures";
-import type { DemoUser } from "../mock/types";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { loginRequest, logoutRequest, meRequest, onSessionExpired, setTokens, type MeResponse } from "../api";
 
-// Mocked auth: a role selector, not a real credential check. Real JWT auth
-// lands in F4.2/F5.4; this stands in so the golden path is navigable
-// role-aware (CLAUDE.md §0).
-const STORAGE_KEY = "metro-intelligence.user";
+// F5.4 (MI-33): real JWT session, replacing F5.M's role-selector mock. The
+// public shape of useAuth() (user/login/logout) is unchanged so the rest of
+// the app (Topbar, RiskPage, ImportPage) didn't need to change.
+export interface SessionUser {
+  id: string;
+  email: string;
+  displayName: string;
+  roles: string[];
+  /** Primary role for the existing single-role UI checks (every demo user has exactly one role). */
+  role: string;
+}
+
+export type AuthStatus = "anonymous" | "authenticating" | "authenticated";
 
 interface AuthContextValue {
-  user: DemoUser | null;
-  login: (userId: string) => void;
-  logout: () => void;
+  user: SessionUser | null;
+  status: AuthStatus;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function toSessionUser(me: MeResponse): SessionUser {
+  return {
+    id: me.id,
+    email: me.email,
+    displayName: me.display_name,
+    roles: me.roles,
+    role: me.roles[0] ?? "viewer",
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<DemoUser | null>(() => {
-    const storedId = localStorage.getItem(STORAGE_KEY);
-    return DEMO_USERS.find((u) => u.id === storedId) ?? null;
-  });
+  // No persisted session to restore on mount: tokens live only in memory
+  // (see lib/api.ts), so every fresh page load starts anonymous by
+  // construction -- there is no stale/zombie session state to reconcile.
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [status, setStatus] = useState<AuthStatus>("anonymous");
 
-  const login = (userId: string) => {
-    const found = DEMO_USERS.find((u) => u.id === userId);
-    if (!found) return;
-    setUser(found);
-    localStorage.setItem(STORAGE_KEY, found.id);
-  };
-
-  const logout = () => {
+  const clearSession = useCallback(() => {
+    setTokens(null);
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
-  };
+    setStatus("anonymous");
+  }, []);
 
-  return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
+  useEffect(() => {
+    onSessionExpired(clearSession);
+    return () => onSessionExpired(null);
+  }, [clearSession]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    setStatus("authenticating");
+    try {
+      const tokens = await loginRequest(email, password);
+      setTokens(tokens);
+      const me = await meRequest();
+      setUser(toSessionUser(me));
+      setStatus("authenticated");
+    } catch (err) {
+      setTokens(null);
+      setStatus("anonymous");
+      throw err;
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    await logoutRequest();
+    clearSession();
+  }, [clearSession]);
+
+  return <AuthContext.Provider value={{ user, status, login, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

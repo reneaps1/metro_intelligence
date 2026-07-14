@@ -1,10 +1,11 @@
 """F3.4 (MI-19): one demo user per RBAC role (docs/security/rbac.md), all on
 the deliberately artificial `.local` domain (docs/seed-data-strategy.md).
-Password hashing is F4.2's job, not implemented yet — SEED_DEMO_USER_PASSWORD
-only exists so seeding fails loudly if nobody has set an intended demo
-password (CLAUDE.md §5: no hardcoded credentials), not so this generator can
-roll its own hashing. Until F4.2 lands, password_hash stays None rather than
-storing an ad-hoc/placeholder hash.
+SEED_DEMO_USER_PASSWORD exists so seeding fails loudly if nobody has set an
+intended demo password (CLAUDE.md §5: no hardcoded credentials) -- it is
+hashed with F4.2's own argon2id helper (app.core.security.hash_password), the
+same one the real /auth/login endpoint verifies against, so every demo user
+can actually sign in through F5.4's real login screen with this one shared
+password.
 
 The five system roles themselves are *not* created here — migration 0001
 (backend/alembic/versions/0001_org_security_migration.py) already
@@ -17,6 +18,7 @@ import os
 
 from sqlalchemy import select
 
+from app.core.security import hash_password
 from app.models import Role, User, UserRole
 
 from seed.generators.base import SeedContext, register_generator
@@ -56,12 +58,14 @@ ROLE_DEFINITIONS = [
 def generate_demo_users(context: SeedContext) -> None:
     session = context.session
 
-    if not os.getenv("SEED_DEMO_USER_PASSWORD"):
+    demo_password = os.getenv("SEED_DEMO_USER_PASSWORD")
+    if not demo_password:
         raise RuntimeError(
             "Set SEED_DEMO_USER_PASSWORD before seeding demo users (see .env.example). "
-            "Hashing it into password_hash is F4.2's responsibility — this check only "
-            "guards against an operator forgetting to configure a demo login at all."
+            "It is hashed with app.core.security.hash_password before storage — this check "
+            "only guards against an operator forgetting to configure a demo login at all."
         )
+    demo_password_hash = hash_password(demo_password)
 
     users_by_role: dict[str, User] = {}
     for role_code, _description, email, display_name in ROLE_DEFINITIONS:
@@ -71,7 +75,7 @@ def generate_demo_users(context: SeedContext) -> None:
                 f"Role {role_code!r} not found — expected migration 0001 to have seeded it. "
                 "Run `alembic upgrade head` before seeding demo users."
             )
-        user = User(email=email, display_name=display_name, password_hash=None)
+        user = User(email=email, display_name=display_name, password_hash=demo_password_hash)
         user.roles.append(UserRole(role=role))
         session.add(user)
         users_by_role[role_code] = user
