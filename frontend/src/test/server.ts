@@ -282,4 +282,27 @@ export const recommendationsHandlers = [
   }),
 ];
 
-export const server = setupServer(...handlers, ...catalogHandlers, ...recommendationsHandlers);
+// LM.3 (docs/tasks/LM3-live-monitor-presenter-controls.md): fixture for the
+// scenario-candidates lookup, mirroring backend/app/schemas/live_monitor.py.
+// Uses a characteristic id distinct from CHARACTERISTIC_FIXTURE so tests can
+// tell "the default mix" and "a scenario's candidates" apart.
+export const SCENARIO_CHARACTERISTIC_ID = "77777777-8888-9999-0000-111111111111";
+
+export const liveMonitorHandlers = [
+  http.get(`${API_BASE_URL}/characteristics/scenario-candidates`, ({ request }) => {
+    const url = new URL(request.url);
+    const scenario = url.searchParams.get("scenario") ?? "";
+    return HttpResponse.json({
+      scenario,
+      candidate_pool_size: 1,
+      characteristic_ids: [SCENARIO_CHARACTERISTIC_ID],
+    });
+  }),
+];
+
+export const server = setupServer(
+  ...handlers,
+  ...catalogHandlers,
+  ...recommendationsHandlers,
+  ...liveMonitorHandlers,
+);

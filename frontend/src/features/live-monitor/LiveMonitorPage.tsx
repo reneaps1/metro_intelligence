@@ -1,12 +1,20 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ChevronUp } from "lucide-react";
 import { Card } from "../../components/ui/Card";
+import { useAuth } from "../../lib/auth/AuthProvider";
 import { listCharacteristics, listPartNumbers } from "../../lib/catalog/api";
 import { useAsync } from "../../lib/catalog/hooks";
 import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
+import { getScenarioCandidates } from "../../lib/live-monitor/api";
 import { useLiveSocket } from "../../lib/live-monitor/useLiveSocket";
-import type { ControlLimitsUpdatedEvent, LiveMonitorEvent, PointEvent } from "../../lib/live-monitor/types";
+import type {
+  ControlLimitsUpdatedEvent,
+  LiveMonitorEvent,
+  PointEvent,
+  ScenarioName,
+} from "../../lib/live-monitor/types";
+import { LiveMonitorControls } from "./LiveMonitorControls";
 import { SignalCard } from "./SignalCard";
 import { SignalDetailPanel } from "./SignalDetailPanel";
 
@@ -54,15 +62,68 @@ async function pickDemoCharacteristicIds(limit: number): Promise<string[]> {
 }
 
 export function LiveMonitorPage() {
-  const { data: characteristicIds, loading, error } = useAsync(
+  const { user } = useAuth();
+  // LM.3: only roles granted `live_monitor.update` (migration 0007) can
+  // steer the session -- mirrors backend/app/api/v1/live_monitor.py's RBAC,
+  // and the same read-vs-decide visibility pattern already used for
+  // recommendation accept/reject buttons.
+  const canControl = user?.role === "quality_engineer" || user?.role === "admin";
+
+  const { data: defaultIds, loading: defaultLoading, error: defaultError } = useAsync(
     () => pickDemoCharacteristicIds(MAX_SIGNALS),
     [],
   );
-  const ids = characteristicIds ?? [];
-  const { events, connectionState } = useLiveSocket(ids);
+  const [scenario, setScenario] = useState<ScenarioName | null>(null);
+  const {
+    data: scenarioResult,
+    loading: scenarioLoading,
+    error: scenarioError,
+  } = useAsync(
+    () => (scenario ? getScenarioCandidates(scenario, MAX_SIGNALS) : Promise.resolve(null)),
+    [scenario],
+  );
+
+  const ids = scenario ? (scenarioResult?.characteristic_ids ?? []) : (defaultIds ?? []);
+  const loading = scenario ? scenarioLoading : defaultLoading;
+  const error = scenario ? scenarioError : defaultError;
+
+  const { events, connectionState, sendControl } = useLiveSocket(ids);
   const contexts = useCharacteristicContexts(ids);
   const signals = useMemo(() => aggregateEvents(events), [events]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [speedMultiplier, setSpeedMultiplier] = useState(1);
+
+  // Every fresh connection (initial connect, reconnect, or a scenario-driven
+  // restart) starts a brand new server-side PlaybackControl at 1x/playing --
+  // re-assert whatever the presenter had already dialed in so a dropped
+  // connection or a scenario switch doesn't silently reset it.
+  useEffect(() => {
+    if (connectionState !== "open") return;
+    if (speedMultiplier !== 1) {
+      sendControl({ type: "control", action: "set_speed", speed_multiplier: speedMultiplier });
+    }
+    if (paused) {
+      sendControl({ type: "control", action: "pause" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionState]);
+
+  function togglePause() {
+    const next = !paused;
+    setPaused(next);
+    sendControl({ type: "control", action: next ? "pause" : "resume" });
+  }
+
+  function changeSpeed(speed: number) {
+    setSpeedMultiplier(speed);
+    sendControl({ type: "control", action: "set_speed", speed_multiplier: speed });
+  }
+
+  function changeScenario(next: ScenarioName | null) {
+    setScenario(next);
+    setExpandedId(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -87,6 +148,18 @@ export function LiveMonitorPage() {
           {connectionState === "closed" && "Not connected"}
         </span>
       </div>
+
+      {canControl && (
+        <LiveMonitorControls
+          paused={paused}
+          onTogglePause={togglePause}
+          speedMultiplier={speedMultiplier}
+          onChangeSpeed={changeSpeed}
+          scenario={scenario}
+          onChangeScenario={changeScenario}
+          disabled={connectionState !== "open"}
+        />
+      )}
 
       {loading && <Card>Loading characteristics…</Card>}
       {error && <Card className="text-status-nok">{error}</Card>}

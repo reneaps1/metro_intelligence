@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE_URL, getAccessToken } from "../api";
-import type { LiveMonitorEvent, LiveSocketConnectionState } from "./types";
+import type { ControlMessage, LiveMonitorEvent, LiveSocketConnectionState } from "./types";
 
 // LM.1 (docs/tasks/LM1-live-monitor-mvp.md): opens the Live Monitor
 // WebSocket for a set of characteristics, reconnecting with exponential
@@ -28,6 +28,11 @@ function buildWsUrl(characteristicIds: string[]): string | null {
 export interface UseLiveSocketResult {
   events: LiveMonitorEvent[];
   connectionState: LiveSocketConnectionState;
+  // LM.3: sends a presenter control message on the current connection.
+  // No-op (silently dropped) if the socket isn't open, or if the server
+  // deems the caller unauthorized (`live_monitor.update`) -- the caller is
+  // expected to gate visibility of controls on role, not on this succeeding.
+  sendControl: (message: ControlMessage) => void;
 }
 
 export function useLiveSocket(characteristicIds: string[]): UseLiveSocketResult {
@@ -103,5 +108,11 @@ export function useLiveSocket(characteristicIds: string[]): UseLiveSocketResult 
     // reopen the socket -- a fresh array reference with the same ids must not.
   }, [key]);
 
-  return { events, connectionState };
+  const sendControl = useCallback((message: ControlMessage) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
+    }
+  }, []);
+
+  return { events, connectionState, sendControl };
 }

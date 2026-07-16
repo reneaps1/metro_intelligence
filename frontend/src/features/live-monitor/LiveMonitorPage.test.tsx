@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
 import { renderAuthed } from "../../test/renderAuthed";
-import { VALID_EMAIL, VALID_PASSWORD, CHARACTERISTIC_FIXTURE, PART_FIXTURE } from "../../test/server";
+import {
+  VALID_EMAIL,
+  VALID_PASSWORD,
+  METROLOGIST_EMAIL,
+  METROLOGIST_PASSWORD,
+  CHARACTERISTIC_FIXTURE,
+  PART_FIXTURE,
+  SCENARIO_CHARACTERISTIC_ID,
+} from "../../test/server";
 import type { LiveMonitorEvent, LiveSocketConnectionState } from "../../lib/live-monitor/types";
 import { LiveMonitorPage } from "./LiveMonitorPage";
 
@@ -16,17 +24,26 @@ import { LiveMonitorPage } from "./LiveMonitorPage";
 // against the MSW-mocked `/catalog` API.
 let mockEvents: LiveMonitorEvent[] = [];
 let mockConnectionState: LiveSocketConnectionState = "open";
-
-vi.mock("../../lib/live-monitor/useLiveSocket", () => ({
-  useLiveSocket: () => ({ events: mockEvents, connectionState: mockConnectionState }),
+const mockSendControl = vi.fn();
+// LM.3: capture the exact `characteristicIds` the page passes in, so scenario
+// switching (which should feed a *different* id set into the socket) is
+// verifiable without a real WebSocket.
+const useLiveSocketSpy = vi.fn((_ids: string[]) => ({
+  events: mockEvents,
+  connectionState: mockConnectionState,
+  sendControl: mockSendControl,
 }));
 
-function renderPage() {
+vi.mock("../../lib/live-monitor/useLiveSocket", () => ({
+  useLiveSocket: (ids: string[]) => useLiveSocketSpy(ids),
+}));
+
+function renderPage(credentials: { email: string; password: string } = { email: VALID_EMAIL, password: VALID_PASSWORD }) {
   return renderAuthed(
     <Routes>
       <Route path="/live-monitor" element={<LiveMonitorPage />} />
     </Routes>,
-    { email: VALID_EMAIL, password: VALID_PASSWORD, route: "/live-monitor" },
+    { ...credentials, route: "/live-monitor" },
   );
 }
 
@@ -34,6 +51,8 @@ describe("LiveMonitorPage", () => {
   beforeEach(() => {
     mockEvents = [];
     mockConnectionState = "open";
+    mockSendControl.mockClear();
+    useLiveSocketSpy.mockClear();
   });
 
   it("renders a signal card for the resolved characteristic, nothing hardcoded", async () => {
@@ -142,5 +161,68 @@ describe("LiveMonitorPage", () => {
 
     await user.click(screen.getByRole("button", { name: /hide detail/i }));
     expect(screen.queryByText(/view full detail/i)).not.toBeInTheDocument();
+  });
+
+  // --- LM.3: presenter controls ---------------------------------------------
+
+  it("shows presenter controls for a quality_engineer (has live_monitor.update)", async () => {
+    renderPage();
+    await screen.findByText(CHARACTERISTIC_FIXTURE.name);
+
+    expect(screen.getByRole("button", { name: /pause/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/playback speed/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/scenario/i)).toBeInTheDocument();
+  });
+
+  it("hides presenter controls for a metrologist (view-only, no live_monitor.update)", async () => {
+    renderPage({ email: METROLOGIST_EMAIL, password: METROLOGIST_PASSWORD });
+    await screen.findByText(CHARACTERISTIC_FIXTURE.name);
+
+    expect(screen.queryByRole("button", { name: /pause/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/playback speed/i)).not.toBeInTheDocument();
+  });
+
+  it("sends a pause control message and flips the button to Play", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(CHARACTERISTIC_FIXTURE.name);
+
+    await user.click(screen.getByRole("button", { name: /pause/i }));
+
+    expect(mockSendControl).toHaveBeenCalledWith({ type: "control", action: "pause" });
+    expect(await screen.findByRole("button", { name: /play/i })).toBeInTheDocument();
+  });
+
+  it("sends a set_speed control message when the speed selector changes", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(CHARACTERISTIC_FIXTURE.name);
+
+    await user.selectOptions(screen.getByLabelText(/playback speed/i), "20");
+
+    expect(mockSendControl).toHaveBeenCalledWith({
+      type: "control",
+      action: "set_speed",
+      speed_multiplier: 20,
+    });
+  });
+
+  it("switches the watched characteristics when a scenario is selected, and back on 'Default mix'", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(CHARACTERISTIC_FIXTURE.name);
+    expect(useLiveSocketSpy).toHaveBeenLastCalledWith([CHARACTERISTIC_FIXTURE.id]);
+
+    await user.selectOptions(screen.getByLabelText(/scenario/i), "high_variance");
+
+    await waitFor(() => {
+      expect(useLiveSocketSpy).toHaveBeenLastCalledWith([SCENARIO_CHARACTERISTIC_ID]);
+    });
+
+    await user.selectOptions(screen.getByLabelText(/scenario/i), "Default mix");
+
+    await waitFor(() => {
+      expect(useLiveSocketSpy).toHaveBeenLastCalledWith([CHARACTERISTIC_FIXTURE.id]);
+    });
   });
 });
