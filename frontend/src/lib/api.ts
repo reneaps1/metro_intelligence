@@ -12,7 +12,7 @@
 // alongside the access token. The trade-off: a full page reload always
 // requires signing in again. That's acceptable for the demo and is strictly
 // safer than persisting either token to disk.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
@@ -26,6 +26,14 @@ export interface TokenPair {
 export function setTokens(tokens: TokenPair | null): void {
   accessToken = tokens?.accessToken ?? null;
   refreshToken = tokens?.refreshToken ?? null;
+}
+
+// LM.1: the access token in a WebSocket URL's query string (see
+// lib/live-monitor/useLiveSocket.ts) -- a WS handshake from the browser
+// can't attach an Authorization header, so it has to read the same in-memory
+// token this module already holds for REST calls.
+export function getAccessToken(): string | null {
+  return accessToken;
 }
 
 // Called by AuthProvider so a failed silent refresh (anywhere in the app)

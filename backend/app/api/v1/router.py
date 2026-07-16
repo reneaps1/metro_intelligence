@@ -10,6 +10,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.imports import router as imports_router
 from app.api.v1.intelligence import router as intelligence_router
+from app.api.v1.live_monitor import router as live_monitor_router
 from app.api.v1.measurements import router as measurements_router
 from app.api.v1.process_events import router as process_events_router
 from app.api.v1.users import router as users_router
@@ -22,3 +23,4 @@ api_router.include_router(imports_router)
 api_router.include_router(measurements_router)
 api_router.include_router(intelligence_router)
 api_router.include_router(process_events_router)
+api_router.include_router(live_monitor_router)
