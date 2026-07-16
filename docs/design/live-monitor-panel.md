@@ -66,13 +66,14 @@ frontend/src/lib/live-monitor/useLiveSocket.ts               # hook WebSocket co
 
 ## Fases de despliegue
 
-Tres fases, cada una independientemente demostrable y construyendo sobre la anterior — no bloquean al equipo de seguir con otras prioridades del roadmap entre una fase y la siguiente.
+Cuatro fases, cada una independientemente demostrable y construyendo sobre la anterior — no bloquean al equipo de seguir con otras prioridades del roadmap entre una fase y la siguiente.
 
 | Fase | Tareas (futuras F#.x en Notion) | Resultado demostrable |
 |---|---|---|
 | **Fase 1 — MVP funcional** | 1. Backend — replay service + WebSocket endpoint (nuevo, `BACKEND`+`ENGINES`, P1, ~M): orquesta el replay, conecta Compliance+SPC, expone `/ws/live-monitor` con RBAC.<br>2. Frontend — Live Monitor grid + signal cards (`FRONTEND`, P1, ~M): `LiveMonitorPage`, `SignalCard`, hook de WebSocket con reconexión. | Se puede prender el panel y ver señales "llegando" en vivo con estado OK/NOK — ya es demostrable end-to-end, aunque sin detalle ni controles. |
 | **Fase 2 — Profundidad explicable** | 3. Frontend — vista de detalle expandida (`FRONTEND`, P2, ~S): `SignalDetailPanel` reusando `TrendChart`, límites de tolerancia/control superpuestos, rationale del motor. | El presentador puede entrar al detalle de una señal y mostrar *por qué* el sistema la marca en riesgo — el diferenciador de "explicable, no caja negra". |
 | **Fase 3 — Pulido para presentador** | 4. Controles de presentador (`FRONTEND`, P2, ~S): play/pause, velocidad (1x/5x/20x), selector de escenario (stable/drift/shift/high_variance/nok). | El presentador controla el ritmo de la demo en vivo en lugar de dejar correr el replay a velocidad fija — mejora la experiencia de pitch, no añade funcionalidad core. |
+| **Fase 4 — Deep dive (página completa)** | 5. Backend — histórico de capacidad por ventana (`BACKEND`+`ENGINES`, P2, ~M): `capability_history_service.py`, endpoint `GET /characteristics/{id}/capability-history`, reusa `/series` (F4.6) para el rango temporal.<br>6. Frontend — página propia `/live-monitor/:characteristicId` (`FRONTEND`, P2, ~M): `LiveMonitorDetailPage`, `TrendChart` con límites de control, navegación por rango de fechas, histórico de Cpk. | El presentador se mete de lleno a una sola característica — serie histórica completa (no solo lo ya replayado), límites de control superpuestos, y puede moverse en el tiempo. Es la página "hero" del feature: tiene que verse pulida (ver `docs/tasks/LM4-live-monitor-deep-dive.md`, sección Calidad visual). |
 
 ## Todo se ancla al modelo de datos existente
 

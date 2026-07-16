@@ -23,12 +23,12 @@ Este panel es el argumento de venta central del feature: no basta con ver que un
   - `TrendChart` con la serie completa reproducida hasta el momento (no solo los últimos N puntos del sparkline), con nominal/límites de tolerancia como líneas de referencia (mismas convenciones que `CharacteristicTrendPage`, F5.7).
   - Límites de control (UCL/LCL del motor SPC, del evento `control_limits_updated` de LM.1) superpuestos.
   - Texto de rationale: `"Cpk 0.91 (motor spc_engine v1) — por debajo del umbral de 1.33"` / `"Dentro de tolerancia (deviation +0.012mm)"` — generado a partir de los campos reales del evento WS, nunca un texto genérico ni "score=X".
-  - Link a la característica en la vista histórica real (`/measurements/:characteristicId`, F5.7) para que el presentador pueda saltar del replay en vivo al histórico completo.
+  - Botón/link "Ver detalle completo" que navega a la página propia de deep-dive de LM.4 (`/live-monitor/:characteristicId` — límites de control históricos + navegación temporal), **no** a `/measurements/:characteristicId` (esa página sigue en datos mock hasta F5.7; no mezclar). Si LM.4 todavía no está implementada cuando se construya este panel, dejar el botón enlazando a `/measurements/:characteristicId` como fallback temporal y anotarlo explícitamente en el PR — no bloquear LM.2 esperando a LM.4.
 - Actualiza `LiveMonitorPage.tsx` (de LM.1) para manejar el estado de "tarjeta expandida" y montar `SignalDetailPanel`.
 
 ## 🚫 Fuera de alcance
 
-Controles de presentador (play/pause/velocidad/escenario — Fase 3, `LM3`); cualquier edición o registro manual de datos desde este panel (es de solo lectura).
+Controles de presentador (play/pause/velocidad/escenario — Fase 3, `LM3`); la página de deep-dive con histórico de Cpk y navegación temporal (Fase 4, `LM4` — este panel solo enlaza hacia allá, no la reimplementa); cualquier edición o registro manual de datos desde este panel (es de solo lectura).
 
 ## 📁 Archivos esperados
 
@@ -41,12 +41,13 @@ Controles de presentador (play/pause/velocidad/escenario — Fase 3, `LM3`); cua
 - `frontend/src/features/recommendations/RecommendationDetailPanel.tsx` (F5.9) — patrón ya establecido de "evidencia explicable" a seguir, mismo tono de rationale.
 - `frontend/src/components/charts/TrendChart.tsx` y `frontend/src/features/measurements/CharacteristicTrendPage.tsx` (F5.7) — convenciones de nominal/límites como líneas de referencia.
 - El resultado de LM.1: forma exacta de los eventos `point`/`control_limits_updated` del WebSocket.
+- `docs/tasks/LM4-live-monitor-deep-dive.md` — la página de destino del botón "Ver detalle completo".
 
 ## ✔️ Criterios de aceptación
 
 - [ ] El rationale mostrado siempre incluye el nombre y versión del motor (`engine_name`/`engine_version`) — nunca un texto sin esa trazabilidad.
 - [ ] Los límites mostrados (tolerancia y control) son los reales del evento WS, no recalculados ni aproximados en el frontend.
-- [ ] El link a la vista histórica navega a la característica correcta.
+- [ ] El botón "Ver detalle completo" navega a la característica correcta (a LM.4 si ya existe, o al fallback documentado si no).
 - [ ] Ambos temas (light/dark) verificados.
 
 ## 🧪 Testing
