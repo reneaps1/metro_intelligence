@@ -91,4 +91,12 @@ describe("LiveMonitorPage", () => {
 
     expect(await screen.findByText(/reconnecting/i)).toBeInTheDocument();
   });
+
+  it("surfaces a denied connection distinctly from a dropped one (no silent infinite retry)", async () => {
+    mockConnectionState = "denied";
+    renderPage();
+
+    expect(await screen.findByText(/access denied/i)).toBeInTheDocument();
+    expect(screen.queryByText(/reconnecting/i)).not.toBeInTheDocument();
+  });
 });

@@ -28,4 +28,4 @@ export interface ControlLimitsUpdatedEvent {
 
 export type LiveMonitorEvent = PointEvent | ControlLimitsUpdatedEvent;
 
-export type LiveSocketConnectionState = "connecting" | "open" | "reconnecting" | "closed";
+export type LiveSocketConnectionState = "connecting" | "open" | "reconnecting" | "denied" | "closed";

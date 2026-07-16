@@ -11,6 +11,11 @@ import type { LiveMonitorEvent, LiveSocketConnectionState } from "./types";
 const MAX_RETAINED_EVENTS = 1000;
 const INITIAL_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 10000;
+// Matches `status.WS_1008_POLICY_VIOLATION` in backend/app/api/v1/live_monitor.py:
+// the server closes with this code on purpose (invalid/expired token, or
+// missing the `live_monitor.stream` permission) -- retrying can never fix
+// that on its own, unlike a dropped connection.
+const POLICY_VIOLATION_CLOSE_CODE = 1008;
 
 function buildWsUrl(characteristicIds: string[]): string | null {
   const token = getAccessToken();
@@ -72,9 +77,13 @@ export function useLiveSocket(characteristicIds: string[]): UseLiveSocketResult 
         }
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event: CloseEvent) => {
         socketRef.current = null;
         if (unmountedRef.current) return;
+        if (event.code === POLICY_VIOLATION_CLOSE_CODE) {
+          setConnectionState("denied");
+          return;
+        }
         setConnectionState("reconnecting");
         const delay = backoffRef.current;
         backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);

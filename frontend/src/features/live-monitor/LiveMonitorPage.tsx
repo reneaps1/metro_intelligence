@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import clsx from "clsx";
 import { Card } from "../../components/ui/Card";
 import { listCharacteristics, listPartNumbers } from "../../lib/catalog/api";
 import { useAsync } from "../../lib/catalog/hooks";
@@ -68,10 +69,16 @@ export function LiveMonitorPage() {
             engines -- not a prediction, not a model.
           </p>
         </div>
-        <span className="text-xs font-medium text-text-secondary">
+        <span
+          className={clsx(
+            "text-xs font-medium",
+            connectionState === "denied" ? "text-status-nok" : "text-text-secondary",
+          )}
+        >
           {connectionState === "open" && "Connected"}
           {connectionState === "connecting" && "Connecting…"}
           {connectionState === "reconnecting" && "Reconnecting…"}
+          {connectionState === "denied" && "Access denied -- missing the live_monitor.stream permission"}
           {connectionState === "closed" && "Not connected"}
         </span>
       </div>
