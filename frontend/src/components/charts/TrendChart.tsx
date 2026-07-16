@@ -10,10 +10,21 @@ import {
 } from "recharts";
 import type { MeasurementPoint, Specification } from "../../lib/mock/types";
 
+// LM.2 (docs/tasks/LM2-live-monitor-detail-view.md): control limits are
+// optional and expressed in the same deviation-space as the tolerance lines
+// below (i.e. already offset from nominal by the caller) -- this component
+// stays a "dumb" presentational chart and never computes them itself.
+export interface ControlLimits {
+  centerLine: number;
+  ucl: number;
+  lcl: number;
+}
+
 interface TrendChartProps {
   points: MeasurementPoint[];
   specification: Specification;
   unit: string;
+  controlLimits?: ControlLimits | null;
 }
 
 function formatDate(iso: string): string {
@@ -32,7 +43,7 @@ function CustomDot(props: { cx?: number; cy?: number; payload?: MeasurementPoint
   return <polygon points={points} fill="var(--status-nok)" />;
 }
 
-export function TrendChart({ points, specification, unit }: TrendChartProps) {
+export function TrendChart({ points, specification, unit, controlLimits }: TrendChartProps) {
   const data = points.map((p) => ({ ...p, label: formatDate(p.measuredAt) }));
   const upperLimit = specification.upperTol !== null ? specification.upperTol : undefined;
   const lowerLimit = specification.lowerTol !== null ? specification.lowerTol : undefined;
@@ -60,6 +71,28 @@ export function TrendChart({ points, specification, unit }: TrendChartProps) {
           {lowerLimit !== undefined && (
             <ReferenceLine y={lowerLimit} stroke="var(--status-nok)" strokeDasharray="2 2" label={{ value: "LSL", position: "right", fontSize: 11, fill: "var(--status-nok)" }} />
           )}
+          {controlLimits && (
+            <>
+              <ReferenceLine
+                y={controlLimits.centerLine}
+                stroke="var(--chart-2)"
+                strokeDasharray="6 3"
+                label={{ value: "CL", position: "left", fontSize: 11, fill: "var(--chart-2)" }}
+              />
+              <ReferenceLine
+                y={controlLimits.ucl}
+                stroke="var(--chart-2)"
+                strokeDasharray="1 3"
+                label={{ value: "UCL", position: "left", fontSize: 11, fill: "var(--chart-2)" }}
+              />
+              <ReferenceLine
+                y={controlLimits.lcl}
+                stroke="var(--chart-2)"
+                strokeDasharray="1 3"
+                label={{ value: "LCL", position: "left", fontSize: 11, fill: "var(--chart-2)" }}
+              />
+            </>
+          )}
           <Line
             type="monotone"
             dataKey="deviation"
@@ -72,7 +105,8 @@ export function TrendChart({ points, specification, unit }: TrendChartProps) {
         </LineChart>
       </ResponsiveContainer>
       <p className="mt-1 text-xs text-text-secondary">
-        Individual measurements (I-MR). Triangles mark NOK results; dashed red lines are the tolerance limits, dashed gray is nominal.
+        Individual measurements (I-MR). Triangles mark NOK results; dashed red lines are the tolerance limits, dashed
+        gray is nominal{controlLimits && ", dotted lines are the SPC control limits (CL/UCL/LCL)"}.
       </p>
     </div>
   );

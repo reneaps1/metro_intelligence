@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import clsx from "clsx";
+import { ChevronUp } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { listCharacteristics, listPartNumbers } from "../../lib/catalog/api";
 import { useAsync } from "../../lib/catalog/hooks";
@@ -7,6 +8,7 @@ import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
 import { useLiveSocket } from "../../lib/live-monitor/useLiveSocket";
 import type { ControlLimitsUpdatedEvent, LiveMonitorEvent, PointEvent } from "../../lib/live-monitor/types";
 import { SignalCard } from "./SignalCard";
+import { SignalDetailPanel } from "./SignalDetailPanel";
 
 // LM.1 (docs/tasks/LM1-live-monitor-mvp.md): the panel watches a fixed-size
 // set of *real* characteristics -- resolved from the catalog API, never
@@ -14,9 +16,12 @@ import { SignalCard } from "./SignalCard";
 // first few part numbers, the same "8-12 signals" scale the design doc
 // describes for the operational dashboard mock.
 const MAX_SIGNALS = 8;
-const SPARKLINE_DEPTH = 30;
 
 interface SignalState {
+  // LM.2 (docs/tasks/LM2-live-monitor-detail-view.md): the full replayed
+  // series, not just a sparkline-sized slice -- `SignalCard` takes its own
+  // preview slice, and `SignalDetailPanel` needs the whole thing. Bounded
+  // upstream by `useLiveSocket`'s own MAX_RETAINED_EVENTS cap.
   points: PointEvent[];
   controlLimits: ControlLimitsUpdatedEvent | null;
 }
@@ -27,7 +32,6 @@ export function aggregateEvents(events: LiveMonitorEvent[]): Record<string, Sign
     const state = (byCharacteristic[event.characteristic_id] ??= { points: [], controlLimits: null });
     if (event.type === "point") {
       state.points.push(event);
-      if (state.points.length > SPARKLINE_DEPTH) state.points.shift();
     } else {
       state.controlLimits = event;
     }
@@ -58,6 +62,7 @@ export function LiveMonitorPage() {
   const { events, connectionState } = useLiveSocket(ids);
   const contexts = useCharacteristicContexts(ids);
   const signals = useMemo(() => aggregateEvents(events), [events]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
@@ -101,10 +106,39 @@ export function LiveMonitorPage() {
               unit={context?.characteristic.unit ?? ""}
               points={signal?.points ?? []}
               controlLimits={signal?.controlLimits ?? null}
+              selected={expandedId === characteristicId}
+              onClick={() => setExpandedId(expandedId === characteristicId ? null : characteristicId)}
             />
           );
         })}
       </div>
+
+      {expandedId && (
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-text-secondary">{contexts[expandedId]?.part?.code ?? ""}</p>
+              <p className="font-medium text-text-primary">
+                {contexts[expandedId]?.characteristic.name ?? expandedId}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpandedId(null)}
+              className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-text-secondary hover:text-text-primary"
+            >
+              <ChevronUp size={16} aria-hidden="true" /> Hide detail
+            </button>
+          </div>
+          <SignalDetailPanel
+            characteristicId={expandedId}
+            unit={contexts[expandedId]?.characteristic.unit ?? ""}
+            specification={contexts[expandedId]?.characteristic.active_specification ?? null}
+            points={signals[expandedId]?.points ?? []}
+            controlLimits={signals[expandedId]?.controlLimits ?? null}
+          />
+        </Card>
+      )}
     </div>
   );
 }
