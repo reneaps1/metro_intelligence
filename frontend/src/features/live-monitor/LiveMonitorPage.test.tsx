@@ -156,7 +156,7 @@ describe("LiveMonitorPage", () => {
     expect(await screen.findByText("Within tolerance (+0.010 mm from nominal).")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view full detail/i })).toHaveAttribute(
       "href",
-      `/measurements/${CHARACTERISTIC_FIXTURE.id}`,
+      `/live-monitor/${CHARACTERISTIC_FIXTURE.id}`,
     );
 
     await user.click(screen.getByRole("button", { name: /hide detail/i }));

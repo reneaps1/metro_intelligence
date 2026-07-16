@@ -40,11 +40,10 @@ export function SignalDetailPanel({
 }) {
   const lastPoint = points[points.length - 1] ?? null;
 
-  // LM.4 (docs/tasks/LM4-live-monitor-deep-dive.md) hasn't been built yet --
-  // per LM.2's own spec, fall back to the existing (mock-data) measurements
-  // trend page rather than link to a route that doesn't exist. Flip this to
-  // `/live-monitor/${characteristicId}` once LM.4 lands.
-  const fullDetailHref = `/measurements/${characteristicId}`;
+  // LM.4 (docs/tasks/LM4-live-monitor-deep-dive.md): full history, tolerance
+  // + control limits, date-range navigation, and Cpk-by-window -- all real
+  // data, none of it limited to what this session's replay has shown so far.
+  const fullDetailHref = `/live-monitor/${characteristicId}`;
 
   if (!specification) {
     return <p className="text-sm text-text-secondary">Loading specification…</p>;

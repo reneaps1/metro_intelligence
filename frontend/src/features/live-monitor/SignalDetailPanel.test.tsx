@@ -100,7 +100,7 @@ describe("SignalDetailPanel", () => {
 
     expect(screen.getByRole("link", { name: /view full detail/i })).toHaveAttribute(
       "href",
-      "/measurements/char-1",
+      "/live-monitor/char-1",
     );
   });
 });

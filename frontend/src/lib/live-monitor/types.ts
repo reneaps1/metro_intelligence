@@ -57,3 +57,57 @@ export interface ScenarioCandidatesResponse {
   candidate_pool_size: number;
   characteristic_ids: string[];
 }
+
+// LM.4 (docs/tasks/LM4-live-monitor-deep-dive.md): mirrors F4.6's
+// `/characteristics/{id}/series` and the new `/capability-history`
+// (backend/app/schemas/measurements.py) -- the first real REST consumer of
+// this shape in the frontend (F5.7 hasn't wired measurements screens to the
+// real API yet, so there's no shared `lib/measurements/` module to reuse).
+
+export interface SpecificationSnapshot {
+  id: string;
+  nominal: string;
+  lower_tol: string | null;
+  upper_tol: string | null;
+  unit: string;
+  valid_from: string;
+  valid_to: string | null;
+}
+
+export interface SeriesPoint {
+  result_id: string;
+  measured_at: string;
+  value: string;
+  deviation: string;
+  is_ok: boolean;
+  sample_index: number;
+  specification: SpecificationSnapshot;
+}
+
+export interface SeriesResponse {
+  characteristic_id: string;
+  unit: string;
+  total_points: number;
+  returned_points: number;
+  downsampled: boolean;
+  points: SeriesPoint[];
+}
+
+export interface CapabilityWindow {
+  window_start: string;
+  window_end: string;
+  point_count: number;
+  cpk: string | null;
+  center_line: string | null;
+  ucl: string | null;
+  lcl: string | null;
+  engine_name: string | null;
+  engine_version: string | null;
+}
+
+export interface CapabilityHistoryResponse {
+  characteristic_id: string;
+  unit: string;
+  window_size: number;
+  windows: CapabilityWindow[];
+}

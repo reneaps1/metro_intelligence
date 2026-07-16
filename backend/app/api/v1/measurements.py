@@ -30,6 +30,8 @@ from app.models.catalog import Characteristic, MeasurementProgram, Specification
 from app.models.measurement import MeasurementResult, MeasurementRun, MeasurementSample
 from app.models.security import User
 from app.schemas.measurements import (
+    CapabilityHistoryResponse,
+    CapabilityWindowRead,
     MeasurementResultRead,
     MeasurementRunDetailRead,
     MeasurementRunRead,
@@ -39,6 +41,7 @@ from app.schemas.measurements import (
     SeriesResponse,
     SpecificationSnapshot,
 )
+from app.services.capability_history_service import compute_capability_history
 
 router = APIRouter(tags=["measurements"])
 
@@ -225,4 +228,37 @@ def get_characteristic_series(
         returned_points=len(points),
         downsampled=downsampled,
         points=points,
+    )
+
+
+DEFAULT_CAPABILITY_WINDOW_SIZE = 20
+MAX_CAPABILITY_WINDOW_SIZE = 500
+
+
+@router.get(
+    "/characteristics/{characteristic_id}/capability-history",
+    response_model=CapabilityHistoryResponse,
+)
+def get_capability_history(
+    characteristic_id: uuid.UUID,
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = Query(default=None),
+    window_size: int = Query(default=DEFAULT_CAPABILITY_WINDOW_SIZE, ge=2, le=MAX_CAPABILITY_WINDOW_SIZE),
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_permission("measurement.measurement_result", "read")),
+) -> CapabilityHistoryResponse:
+    """LM.4 (docs/tasks/LM4-live-monitor-deep-dive.md): Cpk/control-limit
+    history over a date range, windowed by point count. Same RBAC as
+    `/series` (no new permission) -- this is the same measurement-result data,
+    just aggregated."""
+    characteristic = db.get(Characteristic, characteristic_id)
+    if characteristic is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Characteristic not found.")
+
+    windows = compute_capability_history(db, characteristic_id, from_=from_, to=to, window_size=window_size)
+    return CapabilityHistoryResponse(
+        characteristic_id=characteristic_id,
+        unit=characteristic.unit,
+        window_size=window_size,
+        windows=[CapabilityWindowRead.model_validate(window) for window in windows],
     )
