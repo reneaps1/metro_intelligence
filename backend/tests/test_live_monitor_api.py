@@ -15,6 +15,7 @@ builder itself lives in ``test_live_replay_service.py``):
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -155,10 +156,18 @@ def _collect_all(websocket) -> list[dict]:
     return messages
 
 
-def _ws_url(token: str, characteristic_ids: str, *, instant: bool = False) -> str:
+def _ws_url(
+    token: str,
+    characteristic_ids: str,
+    *,
+    instant: bool = False,
+    seconds_per_replay_day: float | None = None,
+) -> str:
     url = f"/api/v1/ws/live-monitor?token={token}&characteristic_ids={characteristic_ids}"
     if instant:
         url += "&seconds_per_replay_day=0"
+    elif seconds_per_replay_day is not None:
+        url += f"&seconds_per_replay_day={seconds_per_replay_day}"
     return url
 
 
@@ -235,3 +244,114 @@ def test_replaying_the_same_characteristic_twice_yields_the_same_sequence(
         second_run = _collect_all(websocket)
 
     assert first_run == second_run
+
+
+# --- LM.3: presenter controls ------------------------------------------------
+# Pause/resume's actual timing behavior (does it really stop advancing, does
+# a speed change take effect without a restart) is unit-tested against
+# `PlaybackControl` directly in test_live_replay_playback_control.py -- these
+# integration tests cover the WS wiring: a control message reaches the right
+# session, and RBAC gates who it's allowed to affect.
+
+
+def test_ws_pause_then_resume_preserves_every_point_with_no_loss_or_duplication(
+    client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    characteristic_id = str(demo_characteristic["characteristic_id"])
+    # A small but nonzero pace (unlike the `instant=True` tests above, where
+    # every wait is skipped and there would be nothing for a pause to gate).
+    url = _ws_url(as_role("quality_engineer"), characteristic_id, seconds_per_replay_day=0.05)
+
+    with client.websocket_connect(url) as websocket:
+        first = websocket.receive_json()
+        assert first["type"] == "point"
+
+        websocket.send_json({"type": "control", "action": "pause"})
+        time.sleep(0.3)
+        websocket.send_json({"type": "control", "action": "resume"})
+
+        rest = _collect_all(websocket)
+
+    points = [first] + [m for m in rest if m["type"] == "point"]
+    assert len(points) == demo_characteristic["point_count"]
+    measured_ats = [p["measured_at"] for p in points]
+    assert len(measured_ats) == len(set(measured_ats)), "no point was re-emitted"
+    assert measured_ats == sorted(measured_ats), "no point was skipped out of order"
+
+
+def test_ws_control_message_from_a_role_without_update_permission_is_ignored(
+    client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    # `metrologist` has `live_monitor.stream` (can watch) but not
+    # `live_monitor.update` (migration 0007) -- its pause attempt must not
+    # actually pause the session, or this test would hang waiting for a
+    # close that pausing-forever would never send.
+    characteristic_id = str(demo_characteristic["characteristic_id"])
+    url = _ws_url(as_role("metrologist"), characteristic_id, seconds_per_replay_day=0.05)
+
+    with client.websocket_connect(url) as websocket:
+        websocket.send_json({"type": "control", "action": "pause"})
+        messages = _collect_all(websocket)
+
+    point_messages = [m for m in messages if m["type"] == "point"]
+    assert len(point_messages) == demo_characteristic["point_count"]
+
+
+# --- LM.3: scenario candidates ------------------------------------------------
+
+
+def _auth_header(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_scenario_candidates_requires_authentication(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/characteristics/scenario-candidates", params={"scenario": "stable_capable"}
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("role", ["viewer", "metrologist", "auditor"])
+def test_scenario_candidates_denied_without_update_permission(client: TestClient, as_role, role: str) -> None:
+    response = client.get(
+        "/api/v1/characteristics/scenario-candidates",
+        params={"scenario": "stable_capable"},
+        headers=_auth_header(as_role(role)),
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("role", ["quality_engineer", "admin"])
+def test_scenario_candidates_allowed_with_update_permission(client: TestClient, as_role, role: str) -> None:
+    response = client.get(
+        "/api/v1/characteristics/scenario-candidates",
+        params={"scenario": "stable_capable"},
+        headers=_auth_header(as_role(role)),
+    )
+    assert response.status_code == 200
+
+
+def test_scenario_candidates_rejects_an_unknown_scenario_name(client: TestClient, as_role) -> None:
+    response = client.get(
+        "/api/v1/characteristics/scenario-candidates",
+        params={"scenario": "not_a_real_scenario"},
+        headers=_auth_header(as_role("admin")),
+    )
+    assert response.status_code == 422
+
+
+def test_scenario_candidates_returns_a_bounded_list_of_real_ids(
+    client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    response = client.get(
+        "/api/v1/characteristics/scenario-candidates",
+        params={"scenario": "stable_capable", "limit": 3},
+        headers=_auth_header(as_role("admin")),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["scenario"] == "stable_capable"
+    assert len(body["characteristic_ids"]) <= 3
+    assert body["candidate_pool_size"] >= 1  # at least the fixture characteristic
+    for characteristic_id in body["characteristic_ids"]:
+        uuid.UUID(characteristic_id)  # every id is a real, well-formed UUID

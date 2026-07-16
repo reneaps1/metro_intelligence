@@ -116,6 +116,7 @@ Role abbreviations used below:
 | `presentation` | `Report` | V, M, QE, AD, AU | M, QE, AD | AD | none | AD | Report generation/export is allowed; template management is admin-only. |
 | `system` | `SystemConfiguration` | AD, AU | AD | AD | none | AD | Includes preferences defaults, retention, feature flags, and security settings. |
 | `live_monitor` | `Stream` | M, QE, AD, AU | none | none | none | AD | WebSocket replay of already-seeded measurements (`docs/design/live-monitor-panel.md`); read-only, same auth as any REST endpoint, never writes to `measurement_results`. |
+| `live_monitor` | `Control` | none | none | QE, AD | none | AD | Presenter controls (pause/resume/speed/scenario, LM.3) -- distinct from `Stream`: any viewer can watch, only QE/AD can steer the session. Uses the existing `update` action ("modify a mutable current-state resource") rather than inventing a new action verb -- a live replay session is exactly that kind of mutable, ephemeral state. |
 
 ## Minimum Demo Permissions
 

@@ -1,7 +1,9 @@
-"""LM.1 (docs/tasks/LM1-live-monitor-mvp.md): WebSocket endpoint streaming the
+"""LM.1/LM.3 (docs/tasks/LM1-live-monitor-mvp.md, docs/tasks/
+LM3-live-monitor-presenter-controls.md): WebSocket endpoint streaming the
 deterministic replay (`app.services.live_replay_service`) of already-seeded
-measurement history for one or more characteristics, for the Live Monitor
-demo panel.
+measurement history for one or more characteristics, plus (LM.3) presenter
+control over an in-flight session and a REST lookup for scenario-matched
+candidate characteristics.
 
 Path deviation from docs/design/live-monitor-panel.md: that brainstorm doc
 sketches the path as top-level `/ws/live-monitor`. This task's own "Archivos
@@ -18,8 +20,23 @@ query param (`?token=...`) and validated with the same `decode_token` +
 revocation-check logic `get_current_user` uses for REST calls -- it just
 can't be expressed as the same `Depends(oauth2_scheme)` chain since there's
 no header to read it from. Authorization reuses the same RBAC tables via the
-new `live_monitor.stream` permission token (migration 0006) -- no exception
-for WebSockets (CLAUDE.md §5).
+`live_monitor.stream` permission token (migration 0006) for watching, and the
+separate `live_monitor.update` token (migration 0007, LM.3) for presenter
+control -- no exception for WebSockets (CLAUDE.md §5).
+
+LM.3 control protocol: pause/resume/set_speed are sent as JSON control
+messages *on the same open WebSocket* (client -> server), mutating a shared
+`PlaybackControl` (`live_replay_service.py`) that every characteristic's
+replay task already reads from -- chosen over a separate REST endpoint
+because the session only exists as this one open connection; there's no
+session id to look a REST call up by. `set_scenario`, by contrast, is *not*
+a WS control message: changing scenario means watching a different set of
+characteristics, and LM.1's frontend hook already reconnects cleanly
+whenever its requested characteristic_ids change -- so the frontend just
+fetches new candidate ids from `GET /characteristics/scenario-candidates`
+and opens a new connection with them. Reusing the existing reconnect path
+for that satisfies "no mixing points from two scenarios" for free, without
+inventing a second, redundant restart mechanism.
 
 Connection/session manager: in-memory, single process -- one `asyncio.Task`
 (and its own DB session) per requested characteristic, fanned into one queue
@@ -32,29 +49,37 @@ would need a shared pub/sub (e.g. Redis) instead of the in-process queue.
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from dataclasses import asdict
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
-from app.core.security import decode_token, is_token_revoked
+from app.core.security import decode_token, is_token_revoked, require_permission
 from app.models.security import Permission, RolePermission, User, UserRole
+from app.schemas.live_monitor import ScenarioCandidatesResponse
 from app.services.live_replay_service import (
     DEFAULT_SECONDS_PER_REPLAY_DAY,
+    PlaybackControl,
     PointEvent,
     ReplayEvent,
     ReplayNotAvailable,
     stream_replay,
 )
+from app.services.scenario_classifier import SCENARIO_NAMES, load_candidate_profiles, rank_by_scenario
 
 router = APIRouter(tags=["live-monitor"])
 
-PERMISSION_TOKEN = "live_monitor.stream"
+STREAM_PERMISSION_TOKEN = "live_monitor.stream"
+CONTROL_PERMISSION_TOKEN = "live_monitor.update"
+
+MIN_SPEED_MULTIPLIER = 0.01
+MAX_SPEED_MULTIPLIER = 100.0
 
 
 def _authenticate(token: str, db: Session) -> User | None:
@@ -86,12 +111,12 @@ def _authenticate(token: str, db: Session) -> User | None:
     return user
 
 
-def _user_has_stream_permission(db: Session, user: User) -> bool:
+def _user_has_permission(db: Session, user: User, token: str) -> bool:
     stmt = (
         select(Permission.token)
         .join(RolePermission, RolePermission.permission_id == Permission.id)
         .join(UserRole, UserRole.role_id == RolePermission.role_id)
-        .where(UserRole.user_id == user.id, Permission.token == PERMISSION_TOKEN)
+        .where(UserRole.user_id == user.id, Permission.token == token)
     )
     return db.execute(stmt).first() is not None
 
@@ -129,6 +154,41 @@ def _serialize_event(event: ReplayEvent) -> dict[str, Any]:
     return payload
 
 
+async def _control_listener(websocket: WebSocket, control: PlaybackControl, can_control: bool) -> None:
+    """LM.3: listens for `{"type": "control", "action": ...}` messages on the
+    same connection and mutates the shared `PlaybackControl` in place. A
+    connected client without `live_monitor.update` can still watch (the
+    stream itself doesn't depend on this task) -- its control messages are
+    just silently ignored, fail-closed rather than erroring the connection."""
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            if not can_control:
+                continue
+            try:
+                message = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(message, dict) or message.get("type") != "control":
+                continue
+
+            action = message.get("action")
+            if action == "pause":
+                control.running.clear()
+            elif action == "resume":
+                control.running.set()
+            elif action == "set_speed":
+                multiplier = message.get("speed_multiplier")
+                if (
+                    isinstance(multiplier, int | float)
+                    and not isinstance(multiplier, bool)
+                    and MIN_SPEED_MULTIPLIER <= multiplier <= MAX_SPEED_MULTIPLIER
+                ):
+                    control.speed_multiplier = float(multiplier)
+    except WebSocketDisconnect:
+        pass
+
+
 @router.websocket("/ws/live-monitor")
 async def live_monitor_stream(
     websocket: WebSocket,
@@ -142,9 +202,10 @@ async def live_monitor_stream(
     if user is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-    if not _user_has_stream_permission(db, user):
+    if not _user_has_permission(db, user, STREAM_PERMISSION_TOKEN):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    can_control = _user_has_permission(db, user, CONTROL_PERMISSION_TOKEN)
 
     ids = _parse_characteristic_ids(characteristic_ids)
     if not ids:
@@ -153,17 +214,15 @@ async def live_monitor_stream(
 
     await websocket.accept()
 
+    control = PlaybackControl(
+        seconds_per_replay_day=seconds_per_replay_day, speed_multiplier=speed_multiplier
+    )
     queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
     async def _run_one(characteristic_id: uuid.UUID) -> None:
         session = SessionLocal()
         try:
-            async for event in stream_replay(
-                session,
-                characteristic_id,
-                seconds_per_replay_day=seconds_per_replay_day,
-                speed_multiplier=speed_multiplier,
-            ):
+            async for event in stream_replay(session, characteristic_id, control=control):
                 await queue.put(_serialize_event(event))
         except ReplayNotAvailable:
             # One bad/empty id in a multi-characteristic request shouldn't
@@ -179,6 +238,7 @@ async def live_monitor_stream(
         await queue.put(None)
 
     completion_watcher = asyncio.create_task(_signal_completion())
+    control_listener = asyncio.create_task(_control_listener(websocket, control, can_control))
 
     try:
         while True:
@@ -196,5 +256,31 @@ async def live_monitor_stream(
         pass
     finally:
         completion_watcher.cancel()
+        control_listener.cancel()
         for task in tasks:
             task.cancel()
+
+
+@router.get("/characteristics/scenario-candidates", response_model=ScenarioCandidatesResponse)
+def get_scenario_candidates(
+    scenario: str = Query(...),
+    limit: int = Query(default=8, ge=1, le=50),
+    db: Session = Depends(get_db),
+    # Gated behind the same `live_monitor.update` (control) permission as the
+    # WS control messages, not the broader `live_monitor.stream` (read) one --
+    # picking which scenario to demo is part of steering the session, not
+    # just watching it.
+    _user: User = Depends(require_permission("live_monitor", "update")),
+) -> ScenarioCandidatesResponse:
+    if scenario not in SCENARIO_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown scenario '{scenario}'. Valid values: {', '.join(SCENARIO_NAMES)}.",
+        )
+    profiles = load_candidate_profiles(db)
+    characteristic_ids = rank_by_scenario(profiles, scenario, limit)
+    return ScenarioCandidatesResponse(
+        scenario=scenario,
+        candidate_pool_size=len(profiles),
+        characteristic_ids=characteristic_ids,
+    )

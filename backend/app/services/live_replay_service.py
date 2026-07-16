@@ -27,7 +27,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
@@ -187,6 +187,43 @@ def _sleep_seconds_for_gap(
     return min(real_days * seconds_per_replay_day / speed_multiplier, MAX_SLEEP_SECONDS)
 
 
+PAUSE_POLL_SECONDS = 0.1
+
+
+@dataclass
+class PlaybackControl:
+    """LM.3 (docs/tasks/LM3-live-monitor-presenter-controls.md): shared,
+    mutable playback state for one WS session. Built once per connection and
+    passed to every characteristic's :func:`stream_replay` call so a single
+    pause/resume/speed-change control message affects the whole session
+    without restarting any of its tasks. ``running`` is set while playing,
+    cleared while paused -- starts set (playing) per :meth:`__post_init__`.
+    """
+
+    seconds_per_replay_day: float = DEFAULT_SECONDS_PER_REPLAY_DAY
+    speed_multiplier: float = 1.0
+    running: asyncio.Event = field(default_factory=asyncio.Event)
+
+    def __post_init__(self) -> None:
+        self.running.set()
+
+
+async def _controlled_sleep(control: PlaybackControl, total_seconds: float) -> None:
+    """Sleep ``total_seconds``, but stop advancing while ``control.running``
+    is cleared and resume from wherever it left off (never restarting the
+    full duration) once it's set again -- this is what lets a pause/resume
+    control message take effect on an in-flight wait without losing or
+    re-emitting the point it's waiting to deliver. Ticking in small
+    increments (rather than a single ``asyncio.sleep``) is what makes pause
+    responsive instead of only checked once per point."""
+    remaining = total_seconds
+    while remaining > 0:
+        await control.running.wait()
+        tick = min(PAUSE_POLL_SECONDS, remaining)
+        await asyncio.sleep(tick)
+        remaining -= tick
+
+
 async def stream_replay(
     db: Session,
     characteristic_id: uuid.UUID,
@@ -194,12 +231,16 @@ async def stream_replay(
     seconds_per_replay_day: float = DEFAULT_SECONDS_PER_REPLAY_DAY,
     speed_multiplier: float = 1.0,
     control_limit_recalc_every: int = CONTROL_LIMIT_RECALC_EVERY,
+    control: PlaybackControl | None = None,
 ) -> AsyncIterator[ReplayEvent]:
     """Yield :func:`build_replay_events`'s sequence for ``characteristic_id``,
     paced so that ``seconds_per_replay_day`` real seconds of clock time elapse
     per real day of measurement history (design target: 1-3s/day), scaled by
-    ``speed_multiplier`` (presenter speed control -- out of scope for LM1,
-    exposed here so LM3 doesn't need to touch this function). Raises
+    ``speed_multiplier``. Pass a shared :class:`PlaybackControl` (LM.3) to let
+    an external pause/resume/speed-change mutate an *in-flight* session; the
+    ``seconds_per_replay_day``/``speed_multiplier`` kwargs still work
+    standalone (LM.1's original call sites/tests) by building a private,
+    unshared control internally when ``control`` is omitted. Raises
     :class:`ReplayNotAvailable` if the characteristic has no active spec or
     fewer than two results."""
     spec, results = load_replay_source(db, characteristic_id)
@@ -207,13 +248,19 @@ async def stream_replay(
         characteristic_id, spec, results, control_limit_recalc_every=control_limit_recalc_every
     )
 
+    session_control = control or PlaybackControl(
+        seconds_per_replay_day=seconds_per_replay_day, speed_multiplier=speed_multiplier
+    )
+
     previous_measured_at: datetime | None = None
     for event in events:
         if isinstance(event, PointEvent):
             if previous_measured_at is not None:
                 gap = (event.measured_at - previous_measured_at).total_seconds()
-                sleep_for = _sleep_seconds_for_gap(gap, seconds_per_replay_day, speed_multiplier)
+                sleep_for = _sleep_seconds_for_gap(
+                    gap, session_control.seconds_per_replay_day, session_control.speed_multiplier
+                )
                 if sleep_for > 0:
-                    await asyncio.sleep(sleep_for)
+                    await _controlled_sleep(session_control, sleep_for)
             previous_measured_at = event.measured_at
         yield event

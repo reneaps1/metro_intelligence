@@ -37,7 +37,7 @@ Dos hallazgos clave de la exploración que hicimos antes de escribir esta tarea:
 ### Frontend
 
 - `frontend/src/features/live-monitor/LiveMonitorDetailPage.tsx`: página nueva, ruta `/live-monitor/:characteristicId` en `App.tsx` (mismo patrón `/recurso/:id` que `/catalog/:partId` y `/measurements/:characteristicId`).
-- `frontend/src/components/charts/TrendChart.tsx`: agregar prop opcional `controlLimits?: { centerLine, ucl, lcl }` (más `ReferenceLine`s) — cambio compatible hacia atrás; `CharacteristicTrendPage` sigue funcionando igual al no pasarla.
+- `frontend/src/components/charts/TrendChart.tsx`: ya tiene la prop opcional `controlLimits?: { centerLine, ucl, lcl }` (agregada en LM.2 para su propio panel) — esta página la reusa tal cual, con los valores por ventana de `capability-history` en vez del snapshot en vivo de LM.2; no hay que volver a tocar `TrendChart`.
 - Cliente mínimo para `/characteristics/{id}/series` y `/characteristics/{id}/capability-history` (no existe hoy un `lib/measurements/api.ts` real porque F5.7 no está hecho en frontend — esta página es su primer consumidor real; alcance acotado a lo que esta página necesita, no una migración completa de F5.7).
 - Controles de rango de fechas (presets 7/30/90 días / todo, o selector de fechas) que vuelven a pedir `/series` y `/capability-history` al cambiar — cubre "moverse en el tiempo" reusando el backend existente, sin construir zoom/brush interactivo desde cero.
 - Chart/lista secundaria con el histórico de Cpk por ventana.
