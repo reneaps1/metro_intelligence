@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
+  Radio,
   ShieldAlert,
   UploadCloud,
 } from "lucide-react";
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { to: "/imports", label: "Import File", icon: UploadCloud },
   { to: "/catalog", label: "Parts & Catalog", icon: Box },
   { to: "/measurements", label: "Measurements", icon: Activity },
+  { to: "/live-monitor", label: "Live Monitor", icon: Radio },
   { to: "/risk", label: "Risk", icon: ShieldAlert },
   { to: "/recommendations", label: "Recommendations", icon: CheckSquare },
 ];

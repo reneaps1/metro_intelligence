@@ -68,5 +68,10 @@ Then update the task's Notion page: add a delivery note with the PR link, and se
 | F8.D.md | MI-45 | SPC engine (demo) |
 | F9.D.md | MI-46 | Risk engine (demo) |
 | F10.D.md | MI-47 | Adaptive inspection engine (demo) |
+| LM1-live-monitor-mvp.md | — (no Notion page; see `docs/design/live-monitor-panel.md`) | Live Monitor Fase 1/3: replay backend + WebSocket + grid frontend |
+| LM2-live-monitor-detail-view.md | — (no Notion page) | Live Monitor Fase 2/3: vista de detalle explicable (depende de LM1) |
+| LM3-live-monitor-presenter-controls.md | — (no Notion page) | Live Monitor Fase 3/3: controles de presentador (depende de LM1/LM2) |
 
 (F3.3 — measurement series generator — already has an open PR, #7, pending review/merge; no handoff file needed since it's essentially done.)
+
+The three `LM*` files are a demo-enhancement feature (a SCADA-style live measurements panel) that came out of a brainstorming session, not from the original Notion phase plan — no Notion tickets exist for them yet. Design doc: `docs/design/live-monitor-panel.md`. Run them in order (LM1 → LM2 → LM3); each depends on the previous one's PR.

@@ -115,6 +115,7 @@ Role abbreviations used below:
 | `presentation` | `Dashboard` | V, M, QE, AD, AU | AD | V, M, QE, AD | none | AD | Users may update only own layout/preferences; global dashboards are admin-managed. |
 | `presentation` | `Report` | V, M, QE, AD, AU | M, QE, AD | AD | none | AD | Report generation/export is allowed; template management is admin-only. |
 | `system` | `SystemConfiguration` | AD, AU | AD | AD | none | AD | Includes preferences defaults, retention, feature flags, and security settings. |
+| `live_monitor` | `Stream` | M, QE, AD, AU | none | none | none | AD | WebSocket replay of already-seeded measurements (`docs/design/live-monitor-panel.md`); read-only, same auth as any REST endpoint, never writes to `measurement_results`. |
 
 ## Minimum Demo Permissions
 
