@@ -18,7 +18,6 @@ import os
 
 from sqlalchemy import select
 
-from app.core.security import hash_password
 from app.models import Role, User, UserRole
 
 from seed.generators.base import SeedContext, register_generator
@@ -56,6 +55,10 @@ ROLE_DEFINITIONS = [
 
 @register_generator
 def generate_demo_users(context: SeedContext) -> None:
+    # Import lazily so static seed metadata can be inspected without loading
+    # the application's runtime settings and database engine.
+    from app.core.security import hash_password
+
     session = context.session
 
     demo_password = os.getenv("SEED_DEMO_USER_PASSWORD")
