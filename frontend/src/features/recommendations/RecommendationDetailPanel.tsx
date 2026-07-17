@@ -52,7 +52,7 @@ export function RecommendationDetailPanel({
           {detail.engine_name} · {detail.engine_version}
         </p>
         <Link
-          to={`/measurements/${detail.characteristic_id}`}
+          to={`/live-monitor/${detail.characteristic_id}`}
           className="mt-1 inline-block text-xs text-brand-primary hover:underline"
         >
           View characteristic trend →

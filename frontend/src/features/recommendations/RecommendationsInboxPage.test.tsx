@@ -96,7 +96,7 @@ describe("RecommendationsInboxPage", () => {
     expect(await screen.findByText(/risk score 62/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view characteristic trend/i })).toHaveAttribute(
       "href",
-      `/measurements/${REC_PENDING_FIXTURE.characteristic_id}`,
+      `/live-monitor/${REC_PENDING_FIXTURE.characteristic_id}`,
     );
   });
 });
