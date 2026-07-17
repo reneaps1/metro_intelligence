@@ -60,7 +60,7 @@ export function OperationalDashboard() {
                 const characteristic = characteristics.find((c) => c.id === rec.characteristicId);
                 return (
                   <li key={rec.id} className="py-2 text-sm">
-                    <Link to="/risk" className="text-text-primary hover:text-brand-primary">
+                    <Link to={`/measurements/${rec.characteristicId}`} className="text-text-primary hover:text-brand-primary">
                       {characteristic?.name} — {rec.type.replace(/_/g, " ")}
                     </Link>
                     <p className="text-xs text-text-secondary">risk {rec.riskScore}</p>

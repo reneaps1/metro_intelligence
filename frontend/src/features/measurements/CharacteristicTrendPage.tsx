@@ -25,8 +25,8 @@ export function CharacteristicTrendPage() {
 
   return (
     <div className="space-y-4">
-      <Link to={`/catalog/${characteristic.partId}`} className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary">
-        <ArrowLeft size={16} /> Back to {part?.name}
+      <Link to="/measurements" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary">
+        <ArrowLeft size={16} /> Back to measurements
       </Link>
       <div>
         <p className="font-mono text-xs text-text-secondary">

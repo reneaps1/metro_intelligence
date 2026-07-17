@@ -69,6 +69,9 @@ export function RiskPage() {
 
       <Card>
         <CardHeader title="Recommendations" />
+        <p className="mb-2 text-xs text-text-secondary">
+          Live backend data — may not correspond 1:1 with the risk rows above (proxy/demo data).
+        </p>
         <Link
           to="/recommendations"
           className="inline-flex items-center gap-1 text-sm font-medium text-brand-primary hover:underline"
