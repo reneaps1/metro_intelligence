@@ -419,3 +419,63 @@ def test_viewer_is_denied_per_the_actual_rbac_matrix(measurements_client: TestCl
     test follows the matrix over docs/tasks/F4.6.md's inconsistent prose."""
     response = measurements_client.get("/api/v1/measurement-runs", headers=as_role("viewer"))
     assert response.status_code == 403
+
+
+# --- LM.4 capability-history --------------------------------------------------
+
+
+def test_capability_history_returns_real_engine_output(
+    measurements_client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{demo_characteristic['characteristic_id']}/capability-history",
+        params={"window_size": 5},
+        headers=as_role("metrologist"),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["characteristic_id"] == str(demo_characteristic["characteristic_id"])
+    assert body["window_size"] == 5
+    # demo_characteristic seeds exactly 5 results -> one window.
+    assert len(body["windows"]) == 1
+    window = body["windows"][0]
+    assert window["point_count"] == 5
+    assert window["engine_name"] == "spc_engine"
+    assert window["ucl"] is not None
+    assert window["lcl"] is not None
+
+
+def test_capability_history_404s_for_an_unknown_characteristic(
+    measurements_client: TestClient, as_role
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{uuid.uuid4()}/capability-history",
+        headers=as_role("metrologist"),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("role", ["metrologist", "quality_engineer", "admin", "auditor"])
+def test_capability_history_allows_the_same_roles_as_series(
+    measurements_client: TestClient, as_role, demo_characteristic: dict, role: str
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{demo_characteristic['characteristic_id']}/capability-history",
+        headers=as_role(role),
+    )
+    assert response.status_code == 200
+
+
+def test_capability_history_denies_viewer_same_as_series(
+    measurements_client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{demo_characteristic['characteristic_id']}/capability-history",
+        headers=as_role("viewer"),
+    )
+    assert response.status_code == 403
+
+
+def test_capability_history_unauthenticated_rejected(measurements_client: TestClient) -> None:
+    response = measurements_client.get(f"/api/v1/characteristics/{uuid.uuid4()}/capability-history")
+    assert response.status_code == 401

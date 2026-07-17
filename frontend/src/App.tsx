@@ -7,6 +7,7 @@ import { PartDetailPage } from "./features/catalog/PartDetailPage";
 import { MeasurementsListPage } from "./features/measurements/MeasurementsListPage";
 import { CharacteristicTrendPage } from "./features/measurements/CharacteristicTrendPage";
 import { LiveMonitorPage } from "./features/live-monitor/LiveMonitorPage";
+import { LiveMonitorDetailPage } from "./features/live-monitor/LiveMonitorDetailPage";
 import { RiskPage } from "./features/risk/RiskPage";
 import { DashboardPage } from "./features/dashboards/DashboardPage";
 import { RecommendationsInboxPage } from "./features/recommendations/RecommendationsInboxPage";
@@ -31,6 +32,7 @@ export function App() {
         <Route path="/measurements" element={<MeasurementsListPage />} />
         <Route path="/measurements/:characteristicId" element={<CharacteristicTrendPage />} />
         <Route path="/live-monitor" element={<LiveMonitorPage />} />
+        <Route path="/live-monitor/:characteristicId" element={<LiveMonitorDetailPage />} />
         <Route path="/risk" element={<RiskPage />} />
         <Route path="/recommendations" element={<RecommendationsInboxPage />} />
       </Route>

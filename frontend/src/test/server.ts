@@ -288,6 +288,89 @@ export const recommendationsHandlers = [
 // tell "the default mix" and "a scenario's candidates" apart.
 export const SCENARIO_CHARACTERISTIC_ID = "77777777-8888-9999-0000-111111111111";
 
+// LM.4 (docs/tasks/LM4-live-monitor-deep-dive.md): fixtures mirroring F4.6's
+// /series and the new /capability-history (backend/app/schemas/measurements.py).
+export const SERIES_FIXTURE = {
+  characteristic_id: CHARACTERISTIC_FIXTURE.id,
+  unit: "mm",
+  total_points: 3,
+  returned_points: 3,
+  downsampled: false,
+  points: [
+    {
+      result_id: "r1",
+      measured_at: "2026-01-01T00:00:00Z",
+      value: "10.010",
+      deviation: "0.010",
+      is_ok: true,
+      sample_index: 0,
+      specification: {
+        id: ACTIVE_SPEC_FIXTURE.id,
+        nominal: "10.000",
+        lower_tol: "-0.050",
+        upper_tol: "0.050",
+        unit: "mm",
+        valid_from: "2026-01-01T00:00:00Z",
+        valid_to: null,
+      },
+    },
+    {
+      result_id: "r2",
+      measured_at: "2026-01-02T00:00:00Z",
+      value: "9.990",
+      deviation: "-0.010",
+      is_ok: true,
+      sample_index: 1,
+      specification: {
+        id: ACTIVE_SPEC_FIXTURE.id,
+        nominal: "10.000",
+        lower_tol: "-0.050",
+        upper_tol: "0.050",
+        unit: "mm",
+        valid_from: "2026-01-01T00:00:00Z",
+        valid_to: null,
+      },
+    },
+    {
+      result_id: "r3",
+      measured_at: "2026-01-03T00:00:00Z",
+      value: "10.020",
+      deviation: "0.020",
+      is_ok: true,
+      sample_index: 2,
+      specification: {
+        id: ACTIVE_SPEC_FIXTURE.id,
+        nominal: "10.000",
+        lower_tol: "-0.050",
+        upper_tol: "0.050",
+        unit: "mm",
+        valid_from: "2026-01-01T00:00:00Z",
+        valid_to: null,
+      },
+    },
+  ],
+};
+
+export const CAPABILITY_HISTORY_FIXTURE = {
+  characteristic_id: CHARACTERISTIC_FIXTURE.id,
+  unit: "mm",
+  window_size: 20,
+  windows: [
+    {
+      window_start: "2026-01-01T00:00:00Z",
+      window_end: "2026-01-03T00:00:00Z",
+      point_count: 3,
+      cpk: "1.8",
+      center_line: "10.007",
+      ucl: "10.05",
+      lcl: "9.96",
+      engine_name: "spc_engine",
+      engine_version: "v1",
+      nominal: "10.000",
+    },
+  ],
+};
+
 export const liveMonitorHandlers = [
   http.get(`${API_BASE_URL}/characteristics/scenario-candidates`, ({ request }) => {
     const url = new URL(request.url);
@@ -298,6 +381,10 @@ export const liveMonitorHandlers = [
       characteristic_ids: [SCENARIO_CHARACTERISTIC_ID],
     });
   }),
+  http.get(`${API_BASE_URL}/characteristics/:id/series`, () => HttpResponse.json(SERIES_FIXTURE)),
+  http.get(`${API_BASE_URL}/characteristics/:id/capability-history`, () =>
+    HttpResponse.json(CAPABILITY_HISTORY_FIXTURE),
+  ),
 ];
 
 export const server = setupServer(

@@ -97,3 +97,37 @@ class SeriesResponse(BaseModel):
     returned_points: int
     downsampled: bool
     points: list[SeriesPoint]
+
+
+class CapabilityWindowRead(BaseModel):
+    """One non-overlapping window's real Cp/control-limit output (F8.D). All
+    five numeric fields are null together when the window has fewer than 2
+    points -- not enough to estimate a standard deviation/moving range at
+    all, not just Cpk specifically (LM.4, docs/tasks/LM4-live-monitor-deep-dive.md).
+
+    `nominal` is the specification this window's rows were actually measured
+    under -- a window can close early at a spec-version boundary, so this can
+    differ from the characteristic's *current* active spec. Callers must use
+    this nominal (never the current one) to convert `center_line`/`ucl`/`lcl`
+    into deviation-space, or the converted values are silently offset by the
+    nominal delta between spec versions."""
+
+    window_start: datetime
+    window_end: datetime
+    point_count: int
+    cpk: Decimal | None
+    center_line: Decimal | None
+    ucl: Decimal | None
+    lcl: Decimal | None
+    engine_name: str | None
+    engine_version: str | None
+    nominal: Decimal | None
+
+    model_config = {"from_attributes": True}
+
+
+class CapabilityHistoryResponse(BaseModel):
+    characteristic_id: uuid.UUID
+    unit: str
+    window_size: int
+    windows: list[CapabilityWindowRead]
