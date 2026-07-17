@@ -2,16 +2,12 @@ import { Link } from "react-router-dom";
 import { TrendChart } from "../../components/charts/TrendChart";
 import type { Specification } from "../../lib/catalog/types";
 import type { ControlLimitsUpdatedEvent, PointEvent } from "../../lib/live-monitor/types";
+import { CPK_CAPABLE_THRESHOLD } from "../../lib/live-monitor/constants";
 
 // LM.2 (docs/tasks/LM2-live-monitor-detail-view.md): the explainable-evidence
 // panel opened from a `SignalCard` click. Same pattern as
 // `RecommendationDetailPanel` (F5.9): rationale text + engine attribution,
 // no bare numbers.
-//
-// Cpk >= 1.33 is the standard SPC convention for "capable" -- used here only
-// to phrase the real Cpk value from the WS event in words, never to
-// recompute or approximate it (CLAUDE.md §16, §22).
-const CPK_CAPABLE_THRESHOLD = 1.33;
 
 function capabilityRationale(controlLimits: ControlLimitsUpdatedEvent): string {
   if (controlLimits.cpk === null) {

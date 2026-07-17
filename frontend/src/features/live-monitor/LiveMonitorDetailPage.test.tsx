@@ -142,4 +142,32 @@ describe("LiveMonitorDetailPage", () => {
 
     expect(await screen.findByText("Characteristic not found.")).toBeInTheDocument();
   });
+
+  it("labels the Cpk-history trend as insufficient data with only one window (the default fixture)", async () => {
+    renderPage();
+
+    expect(await screen.findByText(/trend \(rule-based, from real cpk history\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/not enough cpk history yet/i)).toBeInTheDocument();
+  });
+
+  it("shows a rule-based declining trend from real Cpk history, never ML/prediction language", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/characteristics/:id/capability-history`, () =>
+        HttpResponse.json({
+          ...CAPABILITY_HISTORY_FIXTURE,
+          windows: [
+            { ...CAPABILITY_HISTORY_FIXTURE.windows[0], window_start: "2026-01-01T00:00:00Z", cpk: "1.80" },
+            { ...CAPABILITY_HISTORY_FIXTURE.windows[0], window_start: "2026-01-02T00:00:00Z", cpk: "1.40" },
+            { ...CAPABILITY_HISTORY_FIXTURE.windows[0], window_start: "2026-01-03T00:00:00Z", cpk: "1.10" },
+          ],
+        }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText(/1\.80 → 1\.40 → 1\.10/)).toBeInTheDocument();
+    expect(screen.queryByText(/predict/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bML\b/)).not.toBeInTheDocument();
+  });
 });

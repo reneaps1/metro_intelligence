@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
 import { getCapabilityHistory, getCharacteristicSeries } from "../../lib/live-monitor/api";
 import type { CapabilityWindow } from "../../lib/live-monitor/types";
+import { summarizeCapabilityTrend } from "../../lib/live-monitor/capabilityTrend";
 import { useAsync } from "../../lib/catalog/hooks";
 import { formatSpecification } from "../../lib/catalog/format";
 import { TrendChart } from "../../components/charts/TrendChart";
@@ -113,6 +114,7 @@ export function LiveMonitorDetailPage() {
   const windows = capability.data?.windows ?? [];
   const latestWindow = [...windows].reverse().find((w) => w.cpk !== null) ?? null;
   const trendControlLimits = computeTrendControlLimits(latestWindow);
+  const trendSummary = useMemo(() => summarizeCapabilityTrend(windows), [windows]);
 
   const isRefetching = (series.loading && series.data !== null) || (capability.loading && capability.data !== null);
   const isFirstLoad = series.loading && series.data === null;
@@ -195,6 +197,17 @@ export function LiveMonitorDetailPage() {
 
       <Card className={isRefetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
         <CardHeader title="Cpk history" />
+        {!isFirstLoad && (
+          <p
+            className={
+              trendSummary.direction === "declining"
+                ? "mb-3 text-sm text-status-warning"
+                : "mb-3 text-sm text-text-secondary"
+            }
+          >
+            <span className="font-medium">Trend (rule-based, from real Cpk history):</span> {trendSummary.text}
+          </p>
+        )}
         {isFirstLoad ? (
           <p className="text-sm text-text-secondary">Loading capability history…</p>
         ) : windows.length > 0 ? (
