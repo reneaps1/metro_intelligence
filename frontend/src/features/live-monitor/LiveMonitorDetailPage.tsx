@@ -186,6 +186,7 @@ export function LiveMonitorDetailPage() {
             specification={trendSpecification}
             unit={trendSpecification.unit}
             controlLimits={trendControlLimits}
+            zoomable
           />
         ) : (
           <p className="text-sm text-text-secondary">Not enough points in this range to plot a trend.</p>
