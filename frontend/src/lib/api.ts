@@ -101,15 +101,26 @@ async function readErrorMessage(response: Response, allowAuthDetail: boolean): P
   return friendlyMessageFor(response.status);
 }
 
+// Without this, a `fetch()` that never gets a response (backend stuck --
+// single uvicorn worker with no free thread/DB connection) hangs forever:
+// the browser has no built-in fetch timeout, so the UI is left showing its
+// loading state indefinitely with no error. 20s covers a slow-but-alive
+// backend; callers with legitimately longer requests (file uploads) pass
+// their own `timeoutMs`.
+const DEFAULT_TIMEOUT_MS = 20_000;
+
 let refreshInFlight: Promise<boolean> | null = null;
 
 async function refreshTokens(): Promise<boolean> {
   if (!refreshToken) return false;
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), DEFAULT_TIMEOUT_MS);
   try {
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: timeoutController.signal,
     });
     if (!response.ok) return false;
     const data = (await response.json()) as { access_token: string; refresh_token: string };
@@ -117,6 +128,8 @@ async function refreshTokens(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -132,10 +145,12 @@ function refreshTokensOnce(): Promise<boolean> {
 interface FetchOptions extends RequestInit {
   /** Skip attaching the Authorization header and skip the 401-refresh retry (login itself). */
   skipAuth?: boolean;
+  /** Override the default request timeout (e.g. file uploads need longer). */
+  timeoutMs?: number;
 }
 
 async function request<T>(path: string, options: FetchOptions = {}, isRetry = false): Promise<T> {
-  const { skipAuth = false, ...init } = options;
+  const { skipAuth = false, timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = options;
   const headers = new Headers(init.headers);
   if (!skipAuth && accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
@@ -147,11 +162,19 @@ async function request<T>(path: string, options: FetchOptions = {}, isRetry = fa
     headers.set("Content-Type", "application/json");
   }
 
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
-  } catch {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, signal: timeoutController.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError(0, "The server took too long to respond. Please try again.");
+    }
     throw new ApiError(0, "Unable to reach the server. Check your connection and try again.");
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (response.status === 401 && !skipAuth && !isRetry) {

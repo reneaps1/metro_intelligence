@@ -18,7 +18,7 @@ import jwt
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.ratelimit import limiter
@@ -33,7 +33,7 @@ from app.core.security import (
     revoke_token,
     verify_password,
 )
-from app.models.security import User
+from app.models.security import User, UserRole
 from app.schemas.auth import RefreshRequest, TokenResponse, UserMe
 from app.services.audit_service import write_audit_log
 
@@ -188,7 +188,15 @@ def logout(
 
 
 @router.get("/me", response_model=UserMe)
-def me(current_user: User = Depends(get_current_user)) -> UserMe:
+def me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> UserMe:
+    # Eager-load to avoid one lazy query per role (N+1) -- get_current_user's
+    # db.get(User, ...) doesn't accept loader options, so re-select here.
+    stmt = (
+        select(User)
+        .where(User.id == current_user.id)
+        .options(selectinload(User.roles).selectinload(UserRole.role))
+    )
+    current_user = db.execute(stmt).unique().scalar_one()
     roles = [ur.role.name for ur in current_user.roles]
     return UserMe(
         id=str(current_user.id),

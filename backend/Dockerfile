@@ -23,4 +23,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers trusts X-Forwarded-For/-Proto so request.client.host (used by
+# slowapi's rate limiter and the audit log's ip_address) reflects the real
+# client instead of the nginx `proxy` container. forwarded_allow_ips='*' is
+# safe here specifically because `backend` publishes no host port (see
+# docker-compose.yml) -- net_app is reachable only from the `proxy` and
+# `frontend` containers, never directly from outside Docker.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]

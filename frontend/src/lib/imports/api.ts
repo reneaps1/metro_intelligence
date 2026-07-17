@@ -22,8 +22,12 @@ export function validateFileClientSide(file: File): string | null {
   return null;
 }
 
+// Longer than api.ts's default request timeout -- up to MAX_FILE_SIZE_BYTES
+// (20 MB) can legitimately take longer than a JSON call on a slow link.
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 export function uploadImport(file: File): Promise<ImportedFile> {
   const form = new FormData();
   form.append("file", file);
-  return apiFetch<ImportedFile>("/imports", { method: "POST", body: form });
+  return apiFetch<ImportedFile>("/imports", { method: "POST", body: form, timeoutMs: UPLOAD_TIMEOUT_MS });
 }
