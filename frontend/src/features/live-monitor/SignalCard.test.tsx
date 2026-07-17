@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SignalCard } from "./SignalCard";
-import type { ControlLimitsUpdatedEvent, PointEvent } from "../../lib/live-monitor/types";
+import type { AlertCreatedEvent, ControlLimitsUpdatedEvent, PointEvent } from "../../lib/live-monitor/types";
 
 function point(overrides: Partial<PointEvent> = {}): PointEvent {
   return {
@@ -28,6 +28,21 @@ const CONTROL_LIMITS: ControlLimitsUpdatedEvent = {
   engine_name: "spc_engine",
   engine_version: "v1",
 };
+
+function alertEvent(overrides: Partial<AlertCreatedEvent> = {}): AlertCreatedEvent {
+  return {
+    type: "alert_created",
+    id: "alert-1",
+    characteristic_id: "char-1",
+    severity: "warning",
+    trigger_type: "compliance_violation",
+    rationale: "0.150 mm above the upper tolerance limit.",
+    engine_name: "alarm_rules_engine",
+    engine_version: "v1",
+    created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
 
 describe("SignalCard", () => {
   it("shows a waiting state before any point has arrived", () => {
@@ -80,5 +95,54 @@ describe("SignalCard", () => {
 
     expect(screen.getByText(/cpk 1\.42/i)).toBeInTheDocument();
     expect(screen.getByText(/spc_engine/)).toBeInTheDocument();
+  });
+
+  it("shows no alarm badge when there are no open alerts", () => {
+    render(
+      <SignalCard
+        characteristicName="Bore Diameter A"
+        partCode="MI-DEMO-1001"
+        unit="mm"
+        points={[point()]}
+        controlLimits={null}
+      />,
+    );
+
+    expect(screen.queryByText(/alarm/i)).not.toBeInTheDocument();
+  });
+
+  it("shows an alarm badge with the real rationale on hover when an alert is open", () => {
+    render(
+      <SignalCard
+        characteristicName="Bore Diameter A"
+        partCode="MI-DEMO-1001"
+        unit="mm"
+        points={[point()]}
+        controlLimits={null}
+        openAlerts={[alertEvent()]}
+      />,
+    );
+
+    const badge = screen.getByText("Alarm");
+    expect(badge.closest("span[title]")).toHaveAttribute("title", "0.150 mm above the upper tolerance limit.");
+  });
+
+  it("headlines the most severe open alert and shows a count for the rest", () => {
+    render(
+      <SignalCard
+        characteristicName="Bore Diameter A"
+        partCode="MI-DEMO-1001"
+        unit="mm"
+        points={[point()]}
+        controlLimits={null}
+        openAlerts={[
+          alertEvent({ severity: "warning", rationale: "warning one" }),
+          alertEvent({ severity: "critical", rationale: "critical one" }),
+        ]}
+      />,
+    );
+
+    const badge = screen.getByText(/alarm \(\+1\)/i);
+    expect(badge.closest("span[title]")).toHaveAttribute("title", "critical one");
   });
 });

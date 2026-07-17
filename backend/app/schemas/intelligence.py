@@ -93,3 +93,26 @@ class ActionTakenCreate(BaseModel):
     description: str = Field(min_length=1, max_length=4000)
     outcome_status: Literal["pending", "effective", "ineffective", "not_applicable"] = "pending"
     observed_at: datetime | None = None
+
+
+class AlertRead(BaseModel):
+    """Live Monitor alarm fix (2026-07): a real, engine-attributed alarm --
+    see `app.engines.spc.alarm_rules` for what triggers one and
+    `app.services.alarm_detection_service` for how it's persisted."""
+
+    id: uuid.UUID
+    characteristic_id: uuid.UUID
+    severity: str
+    trigger_type: str
+    trigger_id: uuid.UUID
+    message: str
+    rationale: str
+    computed_inputs: dict[str, Any]
+    engine_name: str
+    engine_version: str
+    created_at: datetime
+    delivered_at: datetime | None
+    acknowledged_at: datetime | None
+    acknowledged_by_user_id: uuid.UUID | None
+
+    model_config = {"from_attributes": True}

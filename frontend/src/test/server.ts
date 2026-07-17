@@ -12,6 +12,8 @@ export const ADMIN_EMAIL = "luis.torres@demo.local";
 export const ADMIN_PASSWORD = "admin-password-for-tests-only";
 export const METROLOGIST_EMAIL = "ana.garcia@demo.local";
 export const METROLOGIST_PASSWORD = "metrologist-password-for-tests-only";
+export const AUDITOR_EMAIL = "carlos.ruiz@demo.local";
+export const AUDITOR_PASSWORD = "auditor-password-for-tests-only";
 
 export const ME_FIXTURE = {
   id: "8f14e45f-ceea-467e-adde-3fb5c8a5f3ba",
@@ -37,10 +39,19 @@ export const ME_METROLOGIST_FIXTURE = {
   roles: ["metrologist"],
 };
 
+export const ME_AUDITOR_FIXTURE = {
+  id: "bf14e45f-ceea-467e-adde-3fb5c8a5f3bd",
+  email: AUDITOR_EMAIL,
+  display_name: "Carlos Ruiz",
+  is_active: true,
+  roles: ["auditor"],
+};
+
 const CREDENTIALS: Record<string, { password: string; accessToken: string }> = {
   [VALID_EMAIL]: { password: VALID_PASSWORD, accessToken: "access-token-1" },
   [ADMIN_EMAIL]: { password: ADMIN_PASSWORD, accessToken: "access-token-admin" },
   [METROLOGIST_EMAIL]: { password: METROLOGIST_PASSWORD, accessToken: "access-token-metrologist" },
+  [AUDITOR_EMAIL]: { password: AUDITOR_PASSWORD, accessToken: "access-token-auditor" },
 };
 
 const ME_BY_TOKEN: Record<string, typeof ME_FIXTURE> = {
@@ -48,6 +59,7 @@ const ME_BY_TOKEN: Record<string, typeof ME_FIXTURE> = {
   "access-token-2": ME_FIXTURE,
   "access-token-admin": ME_ADMIN_FIXTURE,
   "access-token-metrologist": ME_METROLOGIST_FIXTURE,
+  "access-token-auditor": ME_AUDITOR_FIXTURE,
 };
 
 export const handlers = [
@@ -371,6 +383,27 @@ export const CAPABILITY_HISTORY_FIXTURE = {
   ],
 };
 
+// Live Monitor alarm fix (2026-07): default handler returns no open alerts
+// so every existing Live Monitor test (which doesn't care about alarms)
+// keeps passing without knowing about this endpoint -- tests that DO care
+// override it with `server.use(...)`.
+export const ALERT_FIXTURE = {
+  id: "cccccccc-dddd-eeee-ffff-000000000001",
+  characteristic_id: CHARACTERISTIC_FIXTURE.id,
+  severity: "warning",
+  trigger_type: "compliance_violation",
+  trigger_id: "cccccccc-dddd-eeee-ffff-000000000002",
+  message: "0.150 mm above the upper tolerance limit.",
+  rationale: "0.150 mm above the upper tolerance limit.",
+  computed_inputs: { value: "10.15", deviation: "0.15" },
+  engine_name: "alarm_rules_engine",
+  engine_version: "v1",
+  created_at: "2026-01-05T00:00:00Z",
+  delivered_at: "2026-01-05T00:00:00Z",
+  acknowledged_at: null,
+  acknowledged_by_user_id: null,
+};
+
 export const liveMonitorHandlers = [
   http.get(`${API_BASE_URL}/characteristics/scenario-candidates`, ({ request }) => {
     const url = new URL(request.url);
@@ -384,6 +417,15 @@ export const liveMonitorHandlers = [
   http.get(`${API_BASE_URL}/characteristics/:id/series`, () => HttpResponse.json(SERIES_FIXTURE)),
   http.get(`${API_BASE_URL}/characteristics/:id/capability-history`, () =>
     HttpResponse.json(CAPABILITY_HISTORY_FIXTURE),
+  ),
+  http.get(`${API_BASE_URL}/alerts`, () => HttpResponse.json({ items: [], total: 0, page: 1, page_size: 50 })),
+  http.post(`${API_BASE_URL}/alerts/:id/acknowledge`, ({ params }) =>
+    HttpResponse.json({
+      ...ALERT_FIXTURE,
+      id: params.id,
+      acknowledged_at: "2026-01-06T00:00:00Z",
+      acknowledged_by_user_id: ME_FIXTURE.id,
+    }),
   ),
 ];
 

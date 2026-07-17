@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bell } from "lucide-react";
+import { useAuth } from "../../lib/auth/AuthProvider";
 import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
-import { getCapabilityHistory, getCharacteristicSeries } from "../../lib/live-monitor/api";
-import type { CapabilityWindow } from "../../lib/live-monitor/types";
+import { acknowledgeAlert, getAlerts, getCapabilityHistory, getCharacteristicSeries } from "../../lib/live-monitor/api";
+import type { Alert, CapabilityWindow } from "../../lib/live-monitor/types";
 import { summarizeCapabilityTrend } from "../../lib/live-monitor/capabilityTrend";
 import { useAsync } from "../../lib/catalog/hooks";
 import { formatSpecification } from "../../lib/catalog/format";
@@ -11,6 +12,18 @@ import { TrendChart } from "../../components/charts/TrendChart";
 import { CapabilityHistoryChart } from "../../components/charts/CapabilityHistoryChart";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { StatTile } from "../../components/ui/StatTile";
+import { StatusChip, type ChipStatus } from "../../components/ui/StatusChip";
+import { ApiError } from "../../lib/api";
+
+function alertChipStatus(severity: Alert["severity"]): ChipStatus {
+  if (severity === "critical") return "critical";
+  if (severity === "warning") return "warning";
+  return "info";
+}
+
+function formatTimestamp(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
 
 // LM.4 code-review fix: `window` can belong to an older specification
 // version than the characteristic's *current* one (a window closes early at
@@ -56,6 +69,30 @@ export function LiveMonitorDetailPage() {
   const id = characteristicId ?? "";
   const contexts = useCharacteristicContexts(id ? [id] : []);
   const context = contexts[id];
+  const { user } = useAuth();
+  // Live Monitor alarm fix: mirrors rbac.md's `intelligence.alert.update`
+  // grant -- every seeded role except `auditor` (read-only everywhere).
+  const canAcknowledge = user?.role !== "auditor";
+
+  const alerts = useAsync(
+    () => (id ? getAlerts({ characteristicId: id, state: "open" }) : Promise.reject(new Error("Missing characteristic id"))),
+    [id],
+  );
+  const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
+  const [acknowledgeError, setAcknowledgeError] = useState<string | null>(null);
+
+  async function handleAcknowledge(alertId: string) {
+    setAcknowledgingId(alertId);
+    setAcknowledgeError(null);
+    try {
+      await acknowledgeAlert(alertId);
+      alerts.refetch();
+    } catch (err) {
+      setAcknowledgeError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setAcknowledgingId(null);
+    }
+  }
 
   const [range, setRange] = useState<RangePreset>("all");
   // Anchored to the characteristic's own last real measurement, never to
@@ -177,6 +214,40 @@ export function LiveMonitorDetailPage() {
 
       {series.error && <p className="text-sm text-status-nok">{series.error}</p>}
       {capability.error && <p className="text-sm text-status-nok">{capability.error}</p>}
+
+      {alerts.data && alerts.data.items.length > 0 && (
+        <Card className="border-status-warning">
+          <CardHeader title="Active alarms" action={<Bell size={18} className="text-status-warning" aria-hidden="true" />} />
+          {alerts.error && <p className="text-sm text-status-nok">{alerts.error}</p>}
+          {acknowledgeError && <p className="mb-2 text-sm text-status-nok">{acknowledgeError}</p>}
+          <ul className="space-y-3">
+            {alerts.data.items.map((alert) => (
+              <li key={alert.id} className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <div className="mb-1 flex items-center gap-2">
+                    <StatusChip status={alertChipStatus(alert.severity)} />
+                    <span className="text-xs text-text-secondary">{formatTimestamp(alert.created_at)}</span>
+                  </div>
+                  <p className="text-sm text-text-primary">{alert.rationale}</p>
+                  <p className="mt-1 text-xs text-text-disabled">
+                    {alert.engine_name} · {alert.engine_version}
+                  </p>
+                </div>
+                {canAcknowledge && (
+                  <button
+                    type="button"
+                    onClick={() => handleAcknowledge(alert.id)}
+                    disabled={acknowledgingId === alert.id}
+                    className="min-h-[36px] shrink-0 rounded border border-border px-3 text-sm font-medium text-text-secondary transition-colors hover:border-brand-primary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {acknowledgingId === alert.id ? "Acknowledging…" : "Acknowledge"}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card className={isRefetching ? "opacity-60 transition-opacity" : "transition-opacity"}>
         <CardHeader title="Trend (I-MR) — tolerance and control limits" />

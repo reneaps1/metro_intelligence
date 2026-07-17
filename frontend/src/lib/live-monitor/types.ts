@@ -26,7 +26,23 @@ export interface ControlLimitsUpdatedEvent {
   engine_version: string;
 }
 
-export type LiveMonitorEvent = PointEvent | ControlLimitsUpdatedEvent;
+// Live Monitor alarm fix (2026-07): pushed by `_run_one` alongside
+// point/control_limits_updated events the moment a new, real, persisted
+// `Alert` row is created (`app.api.v1.live_monitor._serialize_alert_event`)
+// -- never a fabricated client-side warning.
+export interface AlertCreatedEvent {
+  type: "alert_created";
+  id: string;
+  characteristic_id: string;
+  severity: "info" | "warning" | "critical";
+  trigger_type: string;
+  rationale: string;
+  engine_name: string;
+  engine_version: string;
+  created_at: string;
+}
+
+export type LiveMonitorEvent = PointEvent | ControlLimitsUpdatedEvent | AlertCreatedEvent;
 
 export type LiveSocketConnectionState = "connecting" | "open" | "reconnecting" | "denied" | "closed";
 
@@ -115,4 +131,31 @@ export interface CapabilityHistoryResponse {
   unit: string;
   window_size: number;
   windows: CapabilityWindow[];
+}
+
+// Live Monitor alarm fix (2026-07): mirrors `AlertRead`
+// (backend/app/schemas/intelligence.py) -- the persisted, auditable form of
+// an alarm, as returned by `GET /alerts` and `POST /alerts/{id}/acknowledge`.
+export interface Alert {
+  id: string;
+  characteristic_id: string;
+  severity: "info" | "warning" | "critical";
+  trigger_type: string;
+  trigger_id: string;
+  message: string;
+  rationale: string;
+  computed_inputs: Record<string, string>;
+  engine_name: string;
+  engine_version: string;
+  created_at: string;
+  delivered_at: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by_user_id: string | null;
+}
+
+export interface AlertsPage {
+  items: Alert[];
+  total: number;
+  page: number;
+  page_size: number;
 }

@@ -105,6 +105,38 @@ describe("LiveMonitorPage", () => {
     expect(await screen.findByText("NOK")).toBeInTheDocument();
   });
 
+  it("shows an alarm badge once an alert_created event arrives for the resolved characteristic", async () => {
+    mockEvents = [
+      {
+        type: "point",
+        characteristic_id: CHARACTERISTIC_FIXTURE.id,
+        value: "10.200",
+        deviation: "0.200",
+        is_ok: false,
+        measured_at: "2026-01-01T00:00:00Z",
+        rationale: "0.150 mm above the upper tolerance limit.",
+        engine_name: "compliance_engine",
+        engine_version: "v1",
+      },
+      {
+        type: "alert_created",
+        id: "alert-1",
+        characteristic_id: CHARACTERISTIC_FIXTURE.id,
+        severity: "warning",
+        trigger_type: "compliance_violation",
+        rationale: "0.150 mm above the upper tolerance limit.",
+        engine_name: "alarm_rules_engine",
+        engine_version: "v1",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+
+    renderPage();
+
+    await screen.findByText(CHARACTERISTIC_FIXTURE.name);
+    expect(await screen.findByText("Alarm")).toBeInTheDocument();
+  });
+
   it("surfaces the socket's reconnecting state", async () => {
     mockConnectionState = "reconnecting";
     renderPage();

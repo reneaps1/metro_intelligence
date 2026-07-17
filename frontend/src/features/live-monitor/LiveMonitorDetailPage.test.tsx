@@ -8,9 +8,12 @@ import {
   server,
   VALID_EMAIL,
   VALID_PASSWORD,
+  AUDITOR_EMAIL,
+  AUDITOR_PASSWORD,
   CHARACTERISTIC_FIXTURE,
   SERIES_FIXTURE,
   CAPABILITY_HISTORY_FIXTURE,
+  ALERT_FIXTURE,
 } from "../../test/server";
 import { LiveMonitorDetailPage, computeTrendControlLimits } from "./LiveMonitorDetailPage";
 import type { CapabilityWindow } from "../../lib/live-monitor/types";
@@ -129,6 +132,92 @@ describe("LiveMonitorDetailPage", () => {
     const latest = requestedRanges[requestedRanges.length - 1];
     expect(latest.from).not.toBeNull();
     expect(latest.to).not.toBeNull();
+  });
+
+  it("shows no active-alarms card when there are no open alerts (the default fixture)", async () => {
+    renderPage();
+
+    await screen.findByText(CHARACTERISTIC_FIXTURE.name);
+    expect(screen.queryByText(/active alarms/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the active-alarms card with the real rationale and engine attribution for an open alert", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/alerts`, () =>
+        HttpResponse.json({ items: [ALERT_FIXTURE], total: 1, page: 1, page_size: 50 }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText(/active alarms/i)).toBeInTheDocument();
+    expect(screen.getByText(ALERT_FIXTURE.rationale)).toBeInTheDocument();
+    expect(screen.getByText(/alarm_rules_engine/)).toBeInTheDocument();
+    expect(screen.getByText("Warning")).toBeInTheDocument();
+  });
+
+  it("acknowledges an alert and removes it from the list", async () => {
+    const user = userEvent.setup();
+    let acknowledged = false;
+    server.use(
+      http.get(`${API_BASE_URL}/alerts`, () =>
+        HttpResponse.json({
+          items: acknowledged ? [] : [ALERT_FIXTURE],
+          total: acknowledged ? 0 : 1,
+          page: 1,
+          page_size: 50,
+        }),
+      ),
+      http.post(`${API_BASE_URL}/alerts/:id/acknowledge`, () => {
+        acknowledged = true;
+        return HttpResponse.json({ ...ALERT_FIXTURE, acknowledged_at: "2026-01-06T00:00:00Z" });
+      }),
+    );
+
+    renderPage();
+    expect(await screen.findByText(/active alarms/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /acknowledge/i }));
+
+    await waitFor(() => expect(screen.queryByText(/active alarms/i)).not.toBeInTheDocument());
+  });
+
+  it("shows a clean error and keeps the alert listed if acknowledging fails", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get(`${API_BASE_URL}/alerts`, () =>
+        HttpResponse.json({ items: [ALERT_FIXTURE], total: 1, page: 1, page_size: 50 }),
+      ),
+      http.post(`${API_BASE_URL}/alerts/:id/acknowledge`, () =>
+        HttpResponse.json({ detail: "Alert already acknowledged." }, { status: 409 }),
+      ),
+    );
+
+    renderPage();
+    expect(await screen.findByText(/active alarms/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /acknowledge/i }));
+
+    expect(await screen.findByText("Alert already acknowledged.")).toBeInTheDocument();
+    expect(screen.getByText(/active alarms/i)).toBeInTheDocument();
+  });
+
+  it("does not show the Acknowledge action for an auditor (read-only role)", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/alerts`, () =>
+        HttpResponse.json({ items: [ALERT_FIXTURE], total: 1, page: 1, page_size: 50 }),
+      ),
+    );
+
+    renderAuthed(
+      <Routes>
+        <Route path="/live-monitor/:characteristicId" element={<LiveMonitorDetailPage />} />
+      </Routes>,
+      { email: AUDITOR_EMAIL, password: AUDITOR_PASSWORD, route: `/live-monitor/${CHARACTERISTIC_FIXTURE.id}` },
+    );
+
+    expect(await screen.findByText(/active alarms/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /acknowledge/i })).not.toBeInTheDocument();
   });
 
   it("surfaces a clean error message when the series request fails", async () => {

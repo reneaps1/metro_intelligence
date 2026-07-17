@@ -3,6 +3,8 @@
 // lib/api.ts's apiFetch.
 import { apiFetch } from "../api";
 import type {
+  Alert,
+  AlertsPage,
   CapabilityHistoryResponse,
   ScenarioCandidatesResponse,
   ScenarioName,
@@ -38,4 +40,20 @@ export function getCapabilityHistory(
   if (range.windowSize) params.set("window_size", String(range.windowSize));
   const query = params.toString();
   return apiFetch(`/characteristics/${characteristicId}/capability-history${query ? `?${query}` : ""}`);
+}
+
+// Live Monitor alarm fix (2026-07).
+export function getAlerts(params: {
+  characteristicId?: string;
+  state?: "open" | "acknowledged";
+}): Promise<AlertsPage> {
+  const query = new URLSearchParams();
+  if (params.characteristicId) query.set("characteristic_id", params.characteristicId);
+  if (params.state) query.set("state", params.state);
+  const qs = query.toString();
+  return apiFetch(`/alerts${qs ? `?${qs}` : ""}`);
+}
+
+export function acknowledgeAlert(alertId: string): Promise<Alert> {
+  return apiFetch(`/alerts/${alertId}/acknowledge`, { method: "POST" });
 }
