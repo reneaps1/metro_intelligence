@@ -2,11 +2,14 @@
 over a date range, partitioned into fixed-size, non-overlapping windows of
 measurement results.
 
-Reuses the exact query shape `app.api.v1.measurements.get_characteristic_series`
-already uses (join MeasurementResult -> Specification, filtered by
-`characteristic_id` and an optional `measured_at` range, ordered by
-`measured_at`) -- this module only adds the windowing on top, never
-reimplements the range query.
+Mirrors the range-query shape `app.api.v1.measurements.get_characteristic_series`
+uses (join MeasurementResult -> Specification, filtered by `characteristic_id`
+and an optional `measured_at` range, ordered by `measured_at`) -- this module
+adds the windowing on top. Note this is a *parallel* query, not a shared one:
+`/series` additionally joins `MeasurementSample` (for `sample_index`), which
+this module doesn't need and doesn't include. If `/series`'s filtering
+semantics change (e.g. to exclude a sample-level flag), that change won't
+automatically apply here -- keep both in sync by hand if that ever happens.
 
 A window never mixes measurement results taken against two different
 specification versions: if the ordered result set crosses a spec-version
@@ -53,6 +56,14 @@ class CapabilityWindow:
     lcl: Decimal | None
     engine_name: str | None
     engine_version: str | None
+    # The nominal of the specification this window's rows were actually
+    # measured under -- NOT necessarily the characteristic's current active
+    # spec. A window can close early at a spec-version boundary (see
+    # `_partition_into_windows`), so a caller converting `center_line`/`ucl`/
+    # `lcl` (absolute values) into deviation-space MUST subtract *this*
+    # nominal, never the characteristic's current one, or the converted
+    # limits are silently offset by the nominal delta between versions.
+    nominal: Decimal | None
 
 
 def _window_from_rows(rows: list[tuple[MeasurementResult, Specification]]) -> CapabilityWindow:
@@ -71,6 +82,7 @@ def _window_from_rows(rows: list[tuple[MeasurementResult, Specification]]) -> Ca
             lcl=None,
             engine_name=None,
             engine_version=None,
+            nominal=None,
         )
 
     values = [result.value for result, _spec in rows]
@@ -98,6 +110,7 @@ def _window_from_rows(rows: list[tuple[MeasurementResult, Specification]]) -> Ca
         lcl=limits.individuals_lcl,
         engine_name=limits.engine_name,
         engine_version=limits.engine_version,
+        nominal=spec.nominal,
     )
 
 

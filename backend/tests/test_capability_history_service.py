@@ -271,3 +271,128 @@ def test_from_to_range_narrows_the_windowed_result_set(
 
     assert sum(w.point_count for w in narrowed) == 6
     assert sum(w.point_count for w in narrowed) < sum(w.point_count for w in all_windows)
+
+
+@pytest.fixture
+def characteristic_with_nominal_change(demo_machine: uuid.UUID) -> dict:
+    """Like `characteristic_with_two_spec_versions`, but the two spec
+    versions have *different nominals* (10 -> 12), not just different
+    tolerances -- needed to make a wrong-nominal bug in a caller observable.
+    `characteristic_with_two_spec_versions` alone can't catch that class of
+    bug because both its versions happen to share nominal=10."""
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        family = ProductFamily(code=f"MI-DEMO-FAM-{suffix}", name="Demo family (fictitious)")
+        db.add(family)
+        db.flush()
+        part = PartNumber(product_family_id=family.id, code=f"MI-DEMO-{suffix}", name="Demo bracket")
+        db.add(part)
+        classification = CharacteristicClassification(code=f"CLS-{suffix}", name="Demo classification")
+        db.add(classification)
+        db.flush()
+        characteristic = Characteristic(
+            part_number_id=part.id,
+            balloon_number="1",
+            name="Demo diameter",
+            characteristic_type="diameter",
+            unit="mm",
+            classification_id=classification.id,
+        )
+        db.add(characteristic)
+        db.flush()
+
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        boundary = start + timedelta(days=6)
+        old_spec = Specification(
+            characteristic_id=characteristic.id,
+            nominal=10,
+            lower_tol=-1,
+            upper_tol=1,
+            unit="mm",
+            valid_from=start,
+            valid_to=boundary,
+        )
+        new_spec = Specification(
+            characteristic_id=characteristic.id,
+            nominal=12,
+            lower_tol=-1,
+            upper_tol=1,
+            unit="mm",
+            valid_from=boundary,
+        )
+        db.add_all([old_spec, new_spec])
+        db.flush()
+
+        program = MeasurementProgram(
+            part_number_id=part.id, name="CMM Program", output_mapping={"1": "COL_1"}
+        )
+        db.add(program)
+        db.flush()
+
+        def _add_result(day: int, value: Decimal, spec_id: uuid.UUID) -> None:
+            run = MeasurementRun(
+                measurement_program_id=program.id,
+                machine_id=demo_machine,
+                operator_identifier="OP",
+                batch_lot=f"BATCH-{day}",
+                run_at=start + timedelta(days=day),
+            )
+            db.add(run)
+            db.flush()
+            sample = MeasurementSample(measurement_run_id=run.id, sample_sequence=1)
+            db.add(sample)
+            db.flush()
+            db.add(
+                MeasurementResult(
+                    measured_at=run.run_at,
+                    measurement_sample_id=sample.id,
+                    characteristic_id=characteristic.id,
+                    specification_id=spec_id,
+                    value=value,
+                )
+            )
+            db.flush()
+
+        for day in range(6):
+            value = Decimal("10.1") if day % 2 == 0 else Decimal("9.9")
+            _add_result(day, value, old_spec.id)
+        for day in range(6, 12):
+            value = Decimal("12.1") if day % 2 == 0 else Decimal("11.9")
+            _add_result(day, value, new_spec.id)
+
+        db.commit()
+        return {
+            "characteristic_id": characteristic.id,
+            "old_spec_nominal": old_spec.nominal,
+            "new_spec_nominal": new_spec.nominal,
+        }
+    finally:
+        db.close()
+
+
+def test_window_nominal_matches_the_spec_the_window_was_actually_measured_under(
+    characteristic_with_nominal_change: dict,
+) -> None:
+    """Regression test: a caller converting center_line/ucl/lcl to deviation-
+    space must use each window's own nominal, never the characteristic's
+    current active spec's nominal -- verify the service actually exposes the
+    correct, differing nominal per window rather than a single characteristic-
+    wide value."""
+    db = SessionLocal()
+    try:
+        windows = compute_capability_history(
+            db,
+            characteristic_id=characteristic_with_nominal_change["characteristic_id"],
+            from_=None,
+            to=None,
+            window_size=6,
+        )
+    finally:
+        db.close()
+
+    assert len(windows) == 2
+    old_window, new_window = windows
+    assert old_window.nominal == characteristic_with_nominal_change["old_spec_nominal"]
+    assert new_window.nominal == characteristic_with_nominal_change["new_spec_nominal"]
+    assert old_window.nominal != new_window.nominal

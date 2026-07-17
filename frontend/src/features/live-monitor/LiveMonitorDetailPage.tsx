@@ -3,12 +3,36 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
 import { getCapabilityHistory, getCharacteristicSeries } from "../../lib/live-monitor/api";
+import type { CapabilityWindow } from "../../lib/live-monitor/types";
 import { useAsync } from "../../lib/catalog/hooks";
 import { formatSpecification } from "../../lib/catalog/format";
 import { TrendChart } from "../../components/charts/TrendChart";
 import { CapabilityHistoryChart } from "../../components/charts/CapabilityHistoryChart";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { StatTile } from "../../components/ui/StatTile";
+
+// LM.4 code-review fix: `window` can belong to an older specification
+// version than the characteristic's *current* one (a window closes early at
+// a spec-version boundary, so a short trailing window under a newer spec can
+// have cpk=null and get skipped when picking "the latest window with a
+// defined Cpk", falling back to a window still under an older spec).
+// Converting its absolute center_line/ucl/lcl to deviation-space MUST use
+// that window's own `nominal` -- never the characteristic's current active
+// spec's nominal -- or the converted values are silently offset by the
+// nominal delta between spec versions. Exported as its own pure function so
+// this specific conversion is unit-testable without rendering the chart.
+export function computeTrendControlLimits(
+  window: CapabilityWindow | null,
+): { centerLine: number; ucl: number; lcl: number } | null {
+  if (!window || window.nominal === null) return null;
+  if (window.center_line === null || window.ucl === null || window.lcl === null) return null;
+  const nominal = Number(window.nominal);
+  return {
+    centerLine: Number(window.center_line) - nominal,
+    ucl: Number(window.ucl) - nominal,
+    lcl: Number(window.lcl) - nominal,
+  };
+}
 
 // LM.4 (docs/tasks/LM4-live-monitor-deep-dive.md): points are windowed by
 // count (not time) in the capability-history request -- 20 mirrors F10.D's
@@ -88,14 +112,7 @@ export function LiveMonitorDetailPage() {
 
   const windows = capability.data?.windows ?? [];
   const latestWindow = [...windows].reverse().find((w) => w.cpk !== null) ?? null;
-  const trendControlLimits =
-    latestWindow && latestWindow.center_line !== null && latestWindow.ucl !== null && latestWindow.lcl !== null
-      ? {
-          centerLine: Number(latestWindow.center_line) - nominal,
-          ucl: Number(latestWindow.ucl) - nominal,
-          lcl: Number(latestWindow.lcl) - nominal,
-        }
-      : null;
+  const trendControlLimits = computeTrendControlLimits(latestWindow);
 
   const isRefetching = (series.loading && series.data !== null) || (capability.loading && capability.data !== null);
   const isFirstLoad = series.loading && series.data === null;

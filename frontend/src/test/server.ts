@@ -366,6 +366,7 @@ export const CAPABILITY_HISTORY_FIXTURE = {
       lcl: "9.96",
       engine_name: "spc_engine",
       engine_version: "v1",
+      nominal: "10.000",
     },
   ],
 };

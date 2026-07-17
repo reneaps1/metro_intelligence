@@ -103,6 +103,11 @@ export interface CapabilityWindow {
   lcl: string | null;
   engine_name: string | null;
   engine_version: string | null;
+  // The specification this window's rows were actually measured under --
+  // NOT necessarily the characteristic's current active spec (a window can
+  // close early at a spec-version boundary). Use this, never the current
+  // spec's nominal, to convert center_line/ucl/lcl into deviation-space.
+  nominal: string | null;
 }
 
 export interface CapabilityHistoryResponse {

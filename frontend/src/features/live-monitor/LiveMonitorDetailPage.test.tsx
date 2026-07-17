@@ -12,9 +12,63 @@ import {
   SERIES_FIXTURE,
   CAPABILITY_HISTORY_FIXTURE,
 } from "../../test/server";
-import { LiveMonitorDetailPage } from "./LiveMonitorDetailPage";
+import { LiveMonitorDetailPage, computeTrendControlLimits } from "./LiveMonitorDetailPage";
+import type { CapabilityWindow } from "../../lib/live-monitor/types";
 
 const API_BASE_URL = "http://localhost:8000/api/v1";
+
+function capabilityWindow(overrides: Partial<CapabilityWindow> = {}): CapabilityWindow {
+  return {
+    window_start: "2026-01-01T00:00:00Z",
+    window_end: "2026-01-10T00:00:00Z",
+    point_count: 10,
+    cpk: "1.50",
+    center_line: "10.05",
+    ucl: "10.15",
+    lcl: "9.95",
+    engine_name: "spc_engine",
+    engine_version: "v1",
+    nominal: "10.00",
+    ...overrides,
+  };
+}
+
+describe("computeTrendControlLimits", () => {
+  it("returns null when there is no window", () => {
+    expect(computeTrendControlLimits(null)).toBeNull();
+  });
+
+  it("returns null when the window has no nominal (e.g. fewer than 2 points)", () => {
+    expect(computeTrendControlLimits(capabilityWindow({ nominal: null }))).toBeNull();
+  });
+
+  it("converts absolute center_line/ucl/lcl to deviation-space using the WINDOW's own nominal", () => {
+    // Regression test for the code-review finding: a window can belong to an
+    // older spec version than the characteristic's current active one. This
+    // function only ever sees the window, so it can't accidentally reach for
+    // some other, wrong nominal -- passing a nominal that differs from any
+    // "current spec" is exactly what proves that.
+    const window = capabilityWindow({ center_line: "12.05", ucl: "12.15", lcl: "11.95", nominal: "12.00" });
+
+    const result = computeTrendControlLimits(window)!;
+    expect(result.centerLine).toBeCloseTo(0.05, 6);
+    expect(result.ucl).toBeCloseTo(0.15, 6);
+    expect(result.lcl).toBeCloseTo(-0.05, 6);
+  });
+
+  it("uses a different window's different nominal correctly (not a hardcoded/shared value)", () => {
+    const oldSpecWindow = capabilityWindow({ center_line: "10.05", ucl: "10.15", lcl: "9.95", nominal: "10.00" });
+    const newSpecWindow = capabilityWindow({ center_line: "12.05", ucl: "12.15", lcl: "11.95", nominal: "12.00" });
+
+    const oldResult = computeTrendControlLimits(oldSpecWindow)!;
+    const newResult = computeTrendControlLimits(newSpecWindow)!;
+
+    expect(oldResult.centerLine).toBeCloseTo(0.05, 6);
+    expect(newResult.centerLine).toBeCloseTo(0.05, 6);
+    // Same *relative* deviation despite very different absolute nominals --
+    // proves each result used its own window's nominal, not one shared value.
+  });
+});
 
 function renderPage() {
   return renderAuthed(
