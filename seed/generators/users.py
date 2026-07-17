@@ -57,7 +57,7 @@ ROLE_DEFINITIONS = [
 def generate_demo_users(context: SeedContext) -> None:
     # Import lazily so static seed metadata can be inspected without loading
     # the application's runtime settings and database engine.
-    from app.core.security import hash_password
+    from app.core.password import hash_password
 
     session = context.session
 
