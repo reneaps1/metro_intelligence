@@ -5,6 +5,7 @@ behavior on its own; see app.services.recommendation_service's docstring."""
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -12,11 +13,12 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.security import require_permission
-from app.models.intelligence import Decision, Recommendation
+from app.models.intelligence import Alert, Decision, Recommendation
 from app.models.security import User
 from app.schemas.intelligence import (
     ActionTakenCreate,
     ActionTakenRead,
+    AlertRead,
     DecisionRead,
     DecisionRequest,
     DecisionResponse,
@@ -24,7 +26,7 @@ from app.schemas.intelligence import (
     RecommendationDetailRead,
     RecommendationRead,
 )
-from app.services.audit_service import AuditContext, get_audit_context
+from app.services.audit_service import AuditContext, get_audit_context, record_event
 from app.services.recommendation_service import (
     DecisionNotFoundError,
     InvalidStateTransitionError,
@@ -146,3 +148,63 @@ def create_action_taken(
     except DecisionNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found.") from exc
     return ActionTakenRead.model_validate(action_taken)
+
+
+# Live Monitor alarm fix (2026-07): reuses the `intelligence.alert`
+# permission tokens already seeded by migration 0001 (rbac.md: read is
+# viewer/metrologist/quality_engineer/admin/auditor; update -- "mark
+# acknowledged" -- is every one of those except auditor).
+@router.get("/alerts", response_model=Page[AlertRead])
+def list_alerts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    state: str | None = Query(default=None, pattern="^(open|acknowledged)$"),
+    characteristic_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_permission("intelligence.alert", "read")),
+) -> Page[AlertRead]:
+    filtered = select(Alert)
+    if state == "open":
+        filtered = filtered.where(Alert.acknowledged_at.is_(None))
+    elif state == "acknowledged":
+        filtered = filtered.where(Alert.acknowledged_at.is_not(None))
+    if characteristic_id is not None:
+        filtered = filtered.where(Alert.characteristic_id == characteristic_id)
+
+    total = db.execute(select(func.count()).select_from(filtered.subquery())).scalar_one()
+    page_stmt = filtered.order_by(Alert.created_at.desc()).limit(page_size).offset((page - 1) * page_size)
+    rows = db.execute(page_stmt).scalars().all()
+    return Page(
+        items=[AlertRead.model_validate(row) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/alerts/{alert_id}/acknowledge", response_model=AlertRead)
+def acknowledge_alert(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("intelligence.alert", "update")),
+    context: AuditContext = Depends(get_audit_context),
+) -> AlertRead:
+    alert = db.get(Alert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found.")
+    if alert.acknowledged_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Alert already acknowledged.")
+
+    alert.acknowledged_by_user_id = current_user.id
+    alert.acknowledged_at = datetime.now(UTC)
+    record_event(
+        db,
+        context,
+        action="acknowledged",
+        entity_type="intelligence.alert",
+        entity_id=alert.id,
+        after={"acknowledged_by_user_id": current_user.id, "acknowledged_at": alert.acknowledged_at},
+    )
+    db.commit()
+    db.refresh(alert)
+    return AlertRead.model_validate(alert)

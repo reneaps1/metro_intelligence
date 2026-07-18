@@ -147,16 +147,27 @@ class Alert(Base):
     """Mutable delivery/read state (`delivered_at`, `read_at`) — not
     append-only like Decision/ActionTaken, since marking an alert read is a
     legitimate update. `trigger_id` is a bare column (polymorphic reference
-    across recommendation/risk_assessment/process_event), no FK."""
+    across recommendation/risk_assessment/process_event/measurement result),
+    no FK -- `characteristic_id`, by contrast, is a direct FK, since every
+    Live Monitor alarm (`app.engines.spc.alarm_rules`) is always
+    characteristic-scoped.
+
+    `acknowledged_at`/`acknowledged_by_user_id` are this alert type's
+    "read/acknowledged" update (rbac.md: `intelligence.alert.update`) --
+    `acknowledged_at IS NULL` means "open", the dedup key
+    `alarm_detection_service.record_alarm_if_new` checks before opening a
+    second alert for the same characteristic + rule."""
 
     __tablename__ = "intelligence_alerts"
     __table_args__ = (
         CheckConstraint("severity IN ('info', 'warning', 'critical')", name="ck_intelligence_alerts_severity"),
         CheckConstraint(
-            "trigger_type IN ('recommendation', 'risk_assessment', 'process_event')",
+            "trigger_type IN ('recommendation', 'risk_assessment', 'process_event', "
+            "'compliance_violation', 'capability_below_threshold')",
             name="ck_intelligence_alerts_trigger_type",
         ),
         Index("ix_intelligence_alerts_created_at", "created_at"),
+        Index("ix_intelligence_alerts_characteristic_id", "characteristic_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -164,9 +175,20 @@ class Alert(Base):
     target_roles: Mapped[list[str]] = mapped_column(ARRAY(String(32)), nullable=False)
     trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
     trigger_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    characteristic_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("catalog_characteristics.id", ondelete="RESTRICT"), nullable=False
+    )
+    engine_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    engine_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    computed_inputs: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("security_users.id", ondelete="SET NULL"), nullable=True
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

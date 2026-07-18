@@ -61,10 +61,14 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
 from app.core.security import decode_token, is_token_revoked, require_permission
+from app.engines.spc.alarm_rules import evaluate_capability_alarm, evaluate_compliance_alarm
+from app.models.intelligence import Alert
 from app.models.security import Permission, RolePermission, User, UserRole
 from app.schemas.live_monitor import ScenarioCandidatesResponse
+from app.services.alarm_detection_service import record_alarm_if_new
 from app.services.live_replay_service import (
     DEFAULT_SECONDS_PER_REPLAY_DAY,
+    ControlLimitsEvent,
     PlaybackControl,
     PointEvent,
     ReplayEvent,
@@ -154,6 +158,37 @@ def _serialize_event(event: ReplayEvent) -> dict[str, Any]:
     return payload
 
 
+def _serialize_alert_event(alert: Alert) -> dict[str, Any]:
+    """Live Monitor alarm fix: pushed to the grid the moment a new alert is
+    persisted, alongside the point/control-limits events -- same
+    hand-rolled-dict shape as `_serialize_event` (no WS event here goes
+    through a Pydantic model, `app/schemas/live_monitor.py` module docstring)."""
+    return {
+        "type": "alert_created",
+        "id": str(alert.id),
+        "characteristic_id": str(alert.characteristic_id),
+        "severity": alert.severity,
+        "trigger_type": alert.trigger_type,
+        "rationale": alert.rationale,
+        "engine_name": alert.engine_name,
+        "engine_version": alert.engine_version,
+        "created_at": alert.created_at.isoformat(),
+    }
+
+
+def _detect_alarm(event: ReplayEvent) -> Any:
+    """Live Monitor alarm fix: evaluates the pure alarm rule matching
+    `event`'s type against the real Compliance/SPC output it already
+    carries -- `None` when nothing crosses a rule's threshold."""
+    if isinstance(event, PointEvent):
+        return evaluate_compliance_alarm(
+            is_ok=event.is_ok, rationale=event.rationale, value=event.value, deviation=event.deviation
+        )
+    if isinstance(event, ControlLimitsEvent):
+        return evaluate_capability_alarm(cpk=event.cpk, ucl=event.ucl, lcl=event.lcl)
+    return None
+
+
 async def _control_listener(websocket: WebSocket, control: PlaybackControl, can_control: bool) -> None:
     """LM.3: listens for `{"type": "control", "action": ...}` messages on the
     same connection and mutates the shared `PlaybackControl` in place. A
@@ -221,9 +256,24 @@ async def live_monitor_stream(
 
     async def _run_one(characteristic_id: uuid.UUID) -> None:
         session = SessionLocal()
+        # `ControlLimitsEvent` has no `measured_at` of its own (it's a
+        # recalculation over accumulated points, not a single measurement) --
+        # it always follows the `PointEvent` it was recalculated after
+        # (`build_replay_events`), so the most recent point's timestamp is
+        # the correct "as of" moment to resolve a capability alarm's
+        # `trigger_id` against.
+        last_measured_at = None
         try:
             async for event in stream_replay(session, characteristic_id, control=control):
                 await queue.put(_serialize_event(event))
+                if isinstance(event, PointEvent):
+                    last_measured_at = event.measured_at
+                rule_result = _detect_alarm(event)
+                if rule_result is not None and last_measured_at is not None:
+                    alert = record_alarm_if_new(session, characteristic_id, rule_result, last_measured_at)
+                    if alert is not None:
+                        session.commit()
+                        await queue.put(_serialize_alert_event(alert))
         except ReplayNotAvailable:
             # One bad/empty id in a multi-characteristic request shouldn't
             # kill the streams for the rest of the requested set.

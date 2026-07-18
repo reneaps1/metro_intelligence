@@ -9,6 +9,7 @@ import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
 import { getScenarioCandidates } from "../../lib/live-monitor/api";
 import { useLiveSocket } from "../../lib/live-monitor/useLiveSocket";
 import type {
+  AlertCreatedEvent,
   ControlLimitsUpdatedEvent,
   LiveMonitorEvent,
   PointEvent,
@@ -32,16 +33,28 @@ interface SignalState {
   // upstream by `useLiveSocket`'s own MAX_RETAINED_EVENTS cap.
   points: PointEvent[];
   controlLimits: ControlLimitsUpdatedEvent | null;
+  // Live Monitor alarm fix (2026-07): every `alert_created` event seen this
+  // session -- real, persisted alarms (app.services.alarm_detection_service),
+  // not computed client-side. Not pruned on acknowledge (acknowledging
+  // happens on the deep-dive page, a separate route/session) -- see
+  // SignalCard's own docstring for why that's an acceptable limitation here.
+  openAlerts: AlertCreatedEvent[];
 }
 
 export function aggregateEvents(events: LiveMonitorEvent[]): Record<string, SignalState> {
   const byCharacteristic: Record<string, SignalState> = {};
   for (const event of events) {
-    const state = (byCharacteristic[event.characteristic_id] ??= { points: [], controlLimits: null });
+    const state = (byCharacteristic[event.characteristic_id] ??= {
+      points: [],
+      controlLimits: null,
+      openAlerts: [],
+    });
     if (event.type === "point") {
       state.points.push(event);
-    } else {
+    } else if (event.type === "control_limits_updated") {
       state.controlLimits = event;
+    } else {
+      state.openAlerts.push(event);
     }
   }
   return byCharacteristic;
@@ -179,6 +192,7 @@ export function LiveMonitorPage() {
               unit={context?.characteristic.unit ?? ""}
               points={signal?.points ?? []}
               controlLimits={signal?.controlLimits ?? null}
+              openAlerts={signal?.openAlerts ?? []}
               selected={expandedId === characteristicId}
               onClick={() => setExpandedId(expandedId === characteristicId ? null : characteristicId)}
             />

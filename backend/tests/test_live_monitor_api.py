@@ -33,6 +33,7 @@ from app.models.catalog import (
     ProductFamily,
     Specification,
 )
+from app.models.intelligence import Alert
 from app.models.measurement import MeasurementResult, MeasurementRun, MeasurementSample
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -71,11 +72,9 @@ def as_role(client: TestClient):
     return _token
 
 
-@pytest.fixture
-def demo_characteristic() -> dict:
-    """A characteristic with an active spec and a short, deterministic
-    measurement history spread one day apart -- enough to exercise a full
-    replay (including at least one control-limits recalculation) quickly."""
+def _build_characteristic(
+    values: tuple[str, ...], *, lower_tol: Decimal | int = -1, upper_tol: Decimal | int = 1
+) -> dict:
     suffix = uuid.uuid4().hex[:8]
     db = SessionLocal()
     try:
@@ -98,7 +97,11 @@ def demo_characteristic() -> dict:
         db.add(characteristic)
         db.flush()
         spec = Specification(
-            characteristic_id=characteristic.id, nominal=10, lower_tol=-1, upper_tol=1, unit="mm"
+            characteristic_id=characteristic.id,
+            nominal=10,
+            lower_tol=lower_tol,
+            upper_tol=upper_tol,
+            unit="mm",
         )
         db.add(spec)
         db.flush()
@@ -109,8 +112,7 @@ def demo_characteristic() -> dict:
         db.flush()
 
         start = datetime(2026, 1, 1, tzinfo=UTC)
-        values = [Decimal(v) for v in ("10.0", "10.1", "9.9", "10.2", "9.8", "10.0")]
-        for i, value in enumerate(values):
+        for i, raw_value in enumerate(values):
             run = MeasurementRun(
                 measurement_program_id=program.id,
                 operator_identifier="OP",
@@ -127,13 +129,42 @@ def demo_characteristic() -> dict:
                     measurement_sample_id=sample.id,
                     characteristic_id=characteristic.id,
                     specification_id=spec.id,
-                    value=value,
+                    value=Decimal(raw_value),
                 )
             )
         db.commit()
         return {"characteristic_id": characteristic.id, "point_count": len(values)}
     finally:
         db.close()
+
+
+@pytest.fixture
+def demo_characteristic() -> dict:
+    """A characteristic with an active spec and a short, deterministic
+    measurement history spread one day apart -- enough to exercise a full
+    replay (including at least one control-limits recalculation) quickly."""
+    return _build_characteristic(("10.0", "10.1", "9.9", "10.2", "9.8", "10.0"))
+
+
+@pytest.fixture
+def demo_characteristic_with_nok() -> dict:
+    """Live Monitor alarm fix: a tight tolerance with exactly one point
+    (the last of 5, aligned with `CONTROL_LIMIT_RECALC_EVERY`) clearly
+    outside it -- deterministically triggers exactly one
+    `compliance_violation` alarm."""
+    return _build_characteristic(
+        ("10.00", "10.01", "9.99", "10.02", "11.00"), lower_tol=Decimal("-0.05"), upper_tol=Decimal("0.05")
+    )
+
+
+@pytest.fixture
+def demo_characteristic_with_consecutive_nok() -> dict:
+    """Live Monitor alarm fix: two consecutive out-of-tolerance points --
+    proves the dedup rule (one open alert per characteristic + rule), not
+    just that an alarm can fire once."""
+    return _build_characteristic(
+        ("10.00", "10.01", "11.00", "11.20", "9.99"), lower_tol=Decimal("-0.05"), upper_tol=Decimal("0.05")
+    )
 
 
 def _measurement_result_count() -> int:
@@ -355,3 +386,73 @@ def test_scenario_candidates_returns_a_bounded_list_of_real_ids(
     assert body["candidate_pool_size"] >= 1  # at least the fixture characteristic
     for characteristic_id in body["characteristic_ids"]:
         uuid.UUID(characteristic_id)  # every id is a real, well-formed UUID
+
+
+# --- Live Monitor alarm fix: alert_created WS event + persistence ----------
+
+
+def _alert_count(characteristic_id: uuid.UUID, trigger_type: str) -> int:
+    db = SessionLocal()
+    try:
+        return db.execute(
+            sa.select(sa.func.count())
+            .select_from(Alert)
+            .where(Alert.characteristic_id == characteristic_id, Alert.trigger_type == trigger_type)
+        ).scalar_one()
+    finally:
+        db.close()
+
+
+def test_ws_emits_alert_created_and_persists_it_for_a_nok_point(
+    client: TestClient, as_role, demo_characteristic_with_nok: dict
+) -> None:
+    characteristic_id = str(demo_characteristic_with_nok["characteristic_id"])
+    url = _ws_url(as_role("metrologist"), characteristic_id, instant=True)
+
+    with client.websocket_connect(url) as websocket:
+        messages = _collect_all(websocket)
+
+    alert_messages = [m for m in messages if m["type"] == "alert_created"]
+    compliance_alerts = [m for m in alert_messages if m["trigger_type"] == "compliance_violation"]
+    assert len(compliance_alerts) == 1
+    assert compliance_alerts[0]["characteristic_id"] == characteristic_id
+    assert compliance_alerts[0]["severity"] == "warning"
+    assert compliance_alerts[0]["engine_name"] == "alarm_rules_engine"
+    uuid.UUID(compliance_alerts[0]["id"])  # a real persisted row id, not a placeholder
+
+    assert _alert_count(demo_characteristic_with_nok["characteristic_id"], "compliance_violation") == 1
+
+
+def test_ws_does_not_duplicate_alerts_for_consecutive_nok_points(
+    client: TestClient, as_role, demo_characteristic_with_consecutive_nok: dict
+) -> None:
+    characteristic_id = demo_characteristic_with_consecutive_nok["characteristic_id"]
+    url = _ws_url(as_role("metrologist"), str(characteristic_id), instant=True)
+
+    with client.websocket_connect(url) as websocket:
+        messages = _collect_all(websocket)
+
+    point_messages = [m for m in messages if m["type"] == "point"]
+    nok_points = [m for m in point_messages if not m["is_ok"]]
+    assert len(nok_points) == 2  # both out-of-tolerance points really are NOK
+
+    alert_messages = [m for m in messages if m["type"] == "alert_created"]
+    compliance_alerts = [m for m in alert_messages if m["trigger_type"] == "compliance_violation"]
+    assert len(compliance_alerts) == 1  # only the first NOK point opened an alert -- dedup blocked the second
+
+    assert _alert_count(characteristic_id, "compliance_violation") == 1
+
+
+def test_ws_never_alarms_a_fully_capable_stable_characteristic(
+    client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    # Regression guard for the two tests above: a characteristic with no NOK
+    # points and comfortable tolerance (the original LM.1 fixture) must not
+    # emit any alert at all.
+    characteristic_id = str(demo_characteristic["characteristic_id"])
+    url = _ws_url(as_role("metrologist"), characteristic_id, instant=True)
+
+    with client.websocket_connect(url) as websocket:
+        messages = _collect_all(websocket)
+
+    assert [m for m in messages if m["type"] == "alert_created"] == []
