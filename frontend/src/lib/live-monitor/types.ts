@@ -133,6 +133,30 @@ export interface CapabilityHistoryResponse {
   windows: CapabilityWindow[];
 }
 
+// Phase 13 preview (CLAUDE.md §22): a real, shadow-mode CUSUM drift result
+// over the same Cpk-window series CapabilityHistoryResponse returns. Never
+// persisted, never feeds an Alert/Recommendation -- display-only.
+export interface ExperimentalDriftPoint {
+  index: number;
+  value: string;
+  cusum_high: string;
+  cusum_low: string;
+}
+
+export interface ExperimentalDriftResult {
+  drift_detected: boolean;
+  drift_direction: "upward" | "downward" | null;
+  drift_index: number | null;
+  target: string;
+  stdev: string;
+  k: string;
+  h: string;
+  points: ExperimentalDriftPoint[];
+  rationale: string;
+  engine_name: string;
+  engine_version: string;
+}
+
 // Live Monitor alarm fix (2026-07): mirrors `AlertRead`
 // (backend/app/schemas/intelligence.py) -- the persisted, auditable form of
 // an alarm, as returned by `GET /alerts` and `POST /alerts/{id}/acknowledge`.
