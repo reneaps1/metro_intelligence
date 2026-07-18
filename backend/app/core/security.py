@@ -24,8 +24,6 @@ from collections.abc import Callable
 from typing import Any
 
 import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import VerificationError, VerifyMismatchError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -34,25 +32,9 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.security import Permission, RolePermission, User, UserRole
+from app.core.password import hash_password, verify_password
 
 settings = get_settings()
-
-# --- Password hashing (argon2id) ------------------------------------------------
-_hasher = PasswordHasher()
-
-
-def hash_password(password: str) -> str:
-    return _hasher.hash(password)
-
-
-def verify_password(password: str, password_hash: str | None) -> bool:
-    if not password_hash:
-        return False
-    try:
-        return _hasher.verify(password_hash, password)
-    except (VerifyMismatchError, VerificationError):
-        return False
-
 
 # --- JWT ----------------------------------------------------------------------
 ALGORITHM = settings.jwt_algorithm
