@@ -7,6 +7,7 @@ import type {
   AlertsPage,
   CapabilityHistoryResponse,
   ExperimentalDriftResult,
+  SamplingRecommendationResult,
   ScenarioCandidatesResponse,
   ScenarioName,
   SeriesResponse,
@@ -55,6 +56,23 @@ export function getExperimentalDrift(
   if (range.windowSize) params.set("window_size", String(range.windowSize));
   const query = params.toString();
   return apiFetch(`/characteristics/${characteristicId}/experimental-drift${query ? `?${query}` : ""}`);
+}
+
+// EXPERIMENTAL (Thompson-Sampling adaptive sampling frequency recommender)
+// -- shadow-mode, read-only, same RBAC as getCapabilityHistory (no new
+// permission). Unlike getExperimentalDrift, this always returns a body
+// (never null) -- insufficient history is a conservative-default body, not
+// a null response.
+export function getSamplingRecommendation(
+  characteristicId: string,
+  range: { from?: string; to?: string; windowSize?: number },
+): Promise<SamplingRecommendationResult> {
+  const params = new URLSearchParams();
+  if (range.from) params.set("from", range.from);
+  if (range.to) params.set("to", range.to);
+  if (range.windowSize) params.set("window_size", String(range.windowSize));
+  const query = params.toString();
+  return apiFetch(`/characteristics/${characteristicId}/sampling-recommendation${query ? `?${query}` : ""}`);
 }
 
 // Live Monitor alarm fix (2026-07).

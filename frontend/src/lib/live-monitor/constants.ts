@@ -9,3 +9,7 @@ export const CPK_CAPABLE_THRESHOLD = 1.33;
 // include on its own). Flip to false to hide it before a client demo that
 // isn't ready for it -- no other code path depends on this flag.
 export const EXPERIMENTAL_DRIFT_ENABLED: boolean = true;
+
+// EXPERIMENTAL (Thompson-Sampling adaptive sampling frequency recommender):
+// same one-flip-removal pattern as EXPERIMENTAL_DRIFT_ENABLED.
+export const EXPERIMENTAL_ADAPTIVE_SAMPLING_ENABLED: boolean = true;

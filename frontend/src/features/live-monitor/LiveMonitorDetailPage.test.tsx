@@ -14,6 +14,8 @@ import {
   SERIES_FIXTURE,
   CAPABILITY_HISTORY_FIXTURE,
   ALERT_FIXTURE,
+  SAMPLING_RECOMMENDATION_FIXTURE,
+  REC_PENDING_FIXTURE,
 } from "../../test/server";
 import { LiveMonitorDetailPage, computeTrendControlLimits } from "./LiveMonitorDetailPage";
 import type { CapabilityWindow } from "../../lib/live-monitor/types";
@@ -258,5 +260,132 @@ describe("LiveMonitorDetailPage", () => {
     expect(await screen.findByText(/1\.80 → 1\.40 → 1\.10/)).toBeInTheDocument();
     expect(screen.queryByText(/predict/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\bML\b/)).not.toBeInTheDocument();
+  });
+
+  // --- EXPERIMENTAL adaptive sampling (Thompson Sampling) -------------------
+
+  it("shows the experimental adaptive sampling block with the recommended frequency and EXPERIMENTAL label", async () => {
+    renderPage();
+
+    expect(await screen.findByText(/muestreo adaptativo: cada 20 piezas/i)).toBeInTheDocument();
+    expect(screen.getByText(/experimental — muestreo adaptativo/i)).toBeInTheDocument();
+    expect(screen.getByText(/advisory only, does not replace the engineer's judgment/i)).toBeInTheDocument();
+  });
+
+  it("colors the recommended frequency using the ok/warning/nok status rule, always paired with the numeric text", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/characteristics/:id/sampling-recommendation`, () =>
+        HttpResponse.json({ ...SAMPLING_RECOMMENDATION_FIXTURE, recommended_frequency: 50 }),
+      ),
+    );
+    renderPage();
+
+    const sparse = await screen.findByText(/muestreo adaptativo: cada 50 piezas/i);
+    expect(sparse.className).toContain("text-status-ok");
+
+    server.use(
+      http.get(`${API_BASE_URL}/characteristics/:id/sampling-recommendation`, () =>
+        HttpResponse.json({ ...SAMPLING_RECOMMENDATION_FIXTURE, recommended_frequency: 5 }),
+      ),
+    );
+    renderPage();
+
+    const tight = await screen.findAllByText(/muestreo adaptativo: cada 5 piezas/i);
+    expect(tight[tight.length - 1].className).toContain("text-status-nok");
+  });
+
+  it("shows the existing rule-based recommendations list side by side with the adaptive sampling block", async () => {
+    renderPage();
+
+    expect(await screen.findByText(/muestreo adaptativo: cada 20 piezas/i)).toBeInTheDocument();
+    expect(screen.getByText(/existing recommendations \(rule-based\)/i)).toBeInTheDocument();
+    expect(screen.getByText(REC_PENDING_FIXTURE.rationale)).toBeInTheDocument();
+  });
+
+  it("shows a conflict warning when the adaptive result disagrees with an existing pending recommendation", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/characteristics/:id/sampling-recommendation`, () =>
+        HttpResponse.json({
+          ...SAMPLING_RECOMMENDATION_FIXTURE,
+          conflicting_recommendations: [
+            {
+              id: REC_PENDING_FIXTURE.id,
+              type: REC_PENDING_FIXTURE.recommendation_type,
+              status: REC_PENDING_FIXTURE.state,
+              title: "Frequency increase: Trend approaching upper tolerance.",
+              reason: REC_PENDING_FIXTURE.rationale,
+              conflict_reason: "Asks for tighter inspection; this proposes a routine frequency instead.",
+            },
+          ],
+        }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText(/conflicts with existing recommendation/i)).toBeInTheDocument();
+    expect(screen.getByText(/asks for tighter inspection/i)).toBeInTheDocument();
+  });
+
+  it("shows a loading state for the adaptive sampling block independently of the Cpk history chart", async () => {
+    let resolveSampling: (value: typeof SAMPLING_RECOMMENDATION_FIXTURE) => void = () => {};
+    const pending = new Promise<typeof SAMPLING_RECOMMENDATION_FIXTURE>((resolve) => {
+      resolveSampling = resolve;
+    });
+    server.use(
+      http.get(`${API_BASE_URL}/characteristics/:id/sampling-recommendation`, async () => {
+        const body = await pending;
+        return HttpResponse.json(body);
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText(CHARACTERISTIC_FIXTURE.name)).toBeInTheDocument();
+    expect(await screen.findByText(/loading adaptive sampling recommendation/i)).toBeInTheDocument();
+
+    resolveSampling(SAMPLING_RECOMMENDATION_FIXTURE);
+
+    await waitFor(() => expect(screen.getByText(/muestreo adaptativo: cada 20 piezas/i)).toBeInTheDocument());
+  });
+
+  it("shows low-confidence, insufficient-history language when too few windows have been analyzed", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/characteristics/:id/sampling-recommendation`, () =>
+        HttpResponse.json({
+          ...SAMPLING_RECOMMENDATION_FIXTURE,
+          recommended_frequency: 5,
+          confidence: 0,
+          windows_analyzed: 1,
+        }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText(/low confidence/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a definitive result/i)).toBeInTheDocument();
+  });
+
+  it("never hides the existing recommendation system, even when the adaptive sampling request fails", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/characteristics/:id/sampling-recommendation`, () =>
+        HttpResponse.json({ detail: "Internal error." }, { status: 500 }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText(/existing recommendations \(rule-based\)/i)).toBeInTheDocument();
+    expect(screen.getByText(REC_PENDING_FIXTURE.rationale)).toBeInTheDocument();
+  });
+
+  it("never embeds an accept/reject control in the adaptive sampling block, only a link to the recommendations inbox", async () => {
+    renderPage();
+
+    expect(await screen.findByText(/muestreo adaptativo: cada 20 piezas/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view inbox/i })).toHaveAttribute("href", "/recommendations");
   });
 });

@@ -9,11 +9,18 @@ import {
   getCapabilityHistory,
   getCharacteristicSeries,
   getExperimentalDrift,
+  getSamplingRecommendation,
 } from "../../lib/live-monitor/api";
 import type { Alert, CapabilityWindow } from "../../lib/live-monitor/types";
 import { summarizeCapabilityTrend } from "../../lib/live-monitor/capabilityTrend";
 import { describeDrift } from "../../lib/live-monitor/experimentalDrift";
-import { EXPERIMENTAL_DRIFT_ENABLED } from "../../lib/live-monitor/constants";
+import {
+  describeSamplingRecommendation,
+  frequencyToStatus,
+  recommendationStateToChipStatus,
+} from "../../lib/live-monitor/adaptiveSampling";
+import { EXPERIMENTAL_ADAPTIVE_SAMPLING_ENABLED, EXPERIMENTAL_DRIFT_ENABLED } from "../../lib/live-monitor/constants";
+import { listRecommendations } from "../../lib/recommendations/api";
 import { useAsync } from "../../lib/catalog/hooks";
 import { formatSpecification } from "../../lib/catalog/format";
 import { TrendChart } from "../../components/charts/TrendChart";
@@ -23,6 +30,12 @@ import { StatTile } from "../../components/ui/StatTile";
 import { StatusChip, type ChipStatus } from "../../components/ui/StatusChip";
 import { InfoTooltip } from "../../components/ui/Tooltip";
 import { ApiError } from "../../lib/api";
+
+const FREQUENCY_STATUS_TEXT_CLASS: Record<"ok" | "warning" | "nok", string> = {
+  ok: "text-status-ok",
+  warning: "text-status-warning",
+  nok: "text-status-nok",
+};
 
 function alertChipStatus(severity: Alert["severity"]): ChipStatus {
   if (severity === "critical") return "critical";
@@ -140,6 +153,27 @@ export function LiveMonitorDetailPage() {
         : Promise.resolve(null),
     [id, computedRange.from, computedRange.to],
   );
+  // EXPERIMENTAL (Thompson-Sampling adaptive sampling frequency
+  // recommender): fetched independently, same shadow-mode isolation as
+  // `drift` above -- never blocks the trusted Cpk history or the real
+  // recommendations list below.
+  const samplingRecommendation = useAsync(
+    () =>
+      EXPERIMENTAL_ADAPTIVE_SAMPLING_ENABLED && id
+        ? getSamplingRecommendation(id, { ...computedRange, windowSize: CAPABILITY_WINDOW_SIZE })
+        : Promise.resolve(null),
+    [id, computedRange.from, computedRange.to],
+  );
+  // The real, rule-based recommendation system for this characteristic --
+  // fetched independently too, so it is never hidden or delayed by the
+  // experimental block above failing/loading/being flagged off.
+  const existingRecommendations = useAsync(
+    () =>
+      id
+        ? listRecommendations({ characteristicId: id, page: 1 })
+        : Promise.reject(new Error("Missing characteristic id")),
+    [id],
+  );
 
   useEffect(() => {
     if (latestMeasuredAt === null && series.data && series.data.points.length > 0) {
@@ -172,6 +206,10 @@ export function LiveMonitorDetailPage() {
   const trendControlLimits = computeTrendControlLimits(latestWindow);
   const trendSummary = useMemo(() => summarizeCapabilityTrend(windows), [windows]);
   const driftSummary = useMemo(() => describeDrift(drift.data ?? null), [drift.data]);
+  const samplingSummary = useMemo(
+    () => describeSamplingRecommendation(samplingRecommendation.data ?? null),
+    [samplingRecommendation.data],
+  );
 
   const isRefetching = (series.loading && series.data !== null) || (capability.loading && capability.data !== null);
   const isFirstLoad = series.loading && series.data === null;
@@ -333,6 +371,108 @@ export function LiveMonitorDetailPage() {
           <p className="text-sm text-text-secondary">Not enough points in this range to compute capability history.</p>
         )}
       </Card>
+
+      {EXPERIMENTAL_ADAPTIVE_SAMPLING_ENABLED && !isFirstLoad && (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="rounded border border-dashed border-border p-3">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="rounded-full border border-status-warning px-2 py-0.5 text-xs font-medium text-status-warning">
+                Experimental — Muestreo adaptativo
+              </span>
+              <InfoTooltip label="What is this?">
+                Experimental adaptive inspection sampling frequency recommendation (Thompson Sampling),
+                computed from real Cpk history. This is a suggestion only — it does not replace the
+                engineer's judgment and never overrides the rule-based recommendation system shown alongside
+                it.
+                {samplingRecommendation.data && (
+                  <>
+                    <br />
+                    <br />
+                    Confidence: {(samplingRecommendation.data.confidence * 100).toFixed(0)}%
+                    <br />
+                    Windows analyzed: {samplingRecommendation.data.windows_analyzed}
+                    <br />
+                    Current Cpk: {samplingRecommendation.data.current_cpk.toFixed(2)}
+                    <br />
+                    Trend: {samplingRecommendation.data.cpk_trend}
+                  </>
+                )}
+              </InfoTooltip>
+            </div>
+            {samplingRecommendation.loading && !samplingRecommendation.data ? (
+              <p className="text-sm text-text-secondary">Loading adaptive sampling recommendation…</p>
+            ) : samplingRecommendation.error ? (
+              <p className="text-sm text-status-nok">{samplingRecommendation.error}</p>
+            ) : samplingRecommendation.data ? (
+              <>
+                <p
+                  className={`text-sm font-medium ${
+                    FREQUENCY_STATUS_TEXT_CLASS[frequencyToStatus(samplingRecommendation.data.recommended_frequency)]
+                  }`}
+                >
+                  📊 Muestreo adaptativo: cada {samplingRecommendation.data.recommended_frequency} piezas
+                </p>
+                <p className="mt-1 text-sm text-text-secondary">{samplingSummary.text}</p>
+                {samplingRecommendation.data.windows_analyzed < 5 && (
+                  <p className="mt-1 text-xs text-text-disabled">
+                    Low confidence — not enough Cpk history yet ({samplingRecommendation.data.windows_analyzed}{" "}
+                    window(s) analyzed). Not a definitive result.
+                  </p>
+                )}
+                {samplingRecommendation.data.conflicting_recommendations &&
+                  samplingRecommendation.data.conflicting_recommendations.length > 0 && (
+                    <div className="mt-2 rounded border border-status-nok bg-status-nok-bg p-2">
+                      <p className="text-xs font-medium text-status-nok">
+                        Conflicts with existing recommendation(s):
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {samplingRecommendation.data.conflicting_recommendations.map((conflict) => (
+                          <li key={conflict.id} className="text-xs text-text-secondary">
+                            <span className="font-medium text-text-primary">{conflict.title}</span> —{" "}
+                            {conflict.conflict_reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                <p className="mt-2 text-xs text-text-disabled">
+                  EXPERIMENTAL — advisory only, does not replace the engineer's judgment.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-text-secondary">{samplingSummary.text}</p>
+            )}
+          </div>
+
+          <div className="rounded border border-dashed border-border p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-text-secondary">Existing recommendations (rule-based)</span>
+              <Link to="/recommendations" className="text-xs text-brand-primary hover:underline">
+                View inbox
+              </Link>
+            </div>
+            {existingRecommendations.loading && !existingRecommendations.data ? (
+              <p className="text-sm text-text-secondary">Loading…</p>
+            ) : existingRecommendations.error ? (
+              <p className="text-sm text-status-nok">{existingRecommendations.error}</p>
+            ) : existingRecommendations.data && existingRecommendations.data.items.length > 0 ? (
+              <ul className="space-y-2">
+                {existingRecommendations.data.items.map((rec) => (
+                  <li
+                    key={rec.id}
+                    className="flex items-start justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0"
+                  >
+                    <p className="min-w-0 truncate text-sm text-text-primary">{rec.rationale}</p>
+                    <StatusChip status={recommendationStateToChipStatus(rec.state)} label={rec.state} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-text-secondary">No existing recommendations for this characteristic.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

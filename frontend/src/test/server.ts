@@ -404,6 +404,19 @@ export const ALERT_FIXTURE = {
   acknowledged_by_user_id: null,
 };
 
+// EXPERIMENTAL (Thompson-Sampling adaptive sampling frequency recommender):
+// fixture mirroring SamplingRecommendation (backend/app/schemas/measurements.py).
+// Default has no conflicts -- tests that care override with server.use(...).
+export const SAMPLING_RECOMMENDATION_FIXTURE = {
+  characteristic_id: CHARACTERISTIC_FIXTURE.id,
+  recommended_frequency: 20,
+  current_cpk: 1.8,
+  cpk_trend: "stable",
+  confidence: 0.75,
+  windows_analyzed: 8,
+  conflicting_recommendations: null,
+};
+
 export const liveMonitorHandlers = [
   http.get(`${API_BASE_URL}/characteristics/scenario-candidates`, ({ request }) => {
     const url = new URL(request.url);
@@ -421,6 +434,10 @@ export const liveMonitorHandlers = [
   // Phase 13 preview (CLAUDE.md §22) -- default fixture has too little
   // history for the CUSUM engine to run, mirroring CAPABILITY_HISTORY_FIXTURE.
   http.get(`${API_BASE_URL}/characteristics/:id/experimental-drift`, () => HttpResponse.json(null)),
+  // EXPERIMENTAL (Thompson-Sampling adaptive sampling frequency recommender).
+  http.get(`${API_BASE_URL}/characteristics/:id/sampling-recommendation`, () =>
+    HttpResponse.json(SAMPLING_RECOMMENDATION_FIXTURE),
+  ),
   http.get(`${API_BASE_URL}/alerts`, () => HttpResponse.json({ items: [], total: 0, page: 1, page_size: 50 })),
   http.post(`${API_BASE_URL}/alerts/:id/acknowledge`, ({ params }) =>
     HttpResponse.json({
