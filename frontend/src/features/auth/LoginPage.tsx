@@ -59,6 +59,7 @@ export function LoginPage() {
       <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
         Powered by Caliprex
       </span>
+      <span className="text-[11px] text-text-secondary">Deploy test: 2026-07-18</span>
       <Card raised className="w-full max-w-md">
         <div className="mb-6 text-center">
           <h1 className="text-xl font-semibold text-text-primary">Metro Intelligence</h1>
