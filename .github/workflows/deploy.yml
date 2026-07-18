@@ -28,6 +28,11 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             docker compose -f docker-compose.vps.yml build frontend backend
-            docker compose -f docker-compose.vps.yml up -d
+            # Remove any container occupying our target names that this
+            # compose project doesn't already track (e.g. left over from a
+            # manual `docker run`/test outside compose) -- otherwise `up -d`
+            # fails with a name conflict instead of recreating it.
+            docker rm -f metro-intelligence-backend-1 metro-intelligence-frontend-1 2>/dev/null || true
+            docker compose -f docker-compose.vps.yml up -d --remove-orphans
             docker image prune -f
             echo "✅ Deploy complete"
