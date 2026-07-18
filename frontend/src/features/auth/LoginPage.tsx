@@ -55,7 +55,10 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-app p-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-surface-app p-6">
+      <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+        Powered by Caliprex
+      </span>
       <Card raised className="w-full max-w-md">
         <div className="mb-6 text-center">
           <h1 className="text-xl font-semibold text-text-primary">Metro Intelligence</h1>
