@@ -32,6 +32,7 @@ from app.models.security import User
 from app.schemas.measurements import (
     CapabilityHistoryResponse,
     CapabilityWindowRead,
+    ExperimentalDriftRead,
     MeasurementResultRead,
     MeasurementRunDetailRead,
     MeasurementRunRead,
@@ -42,6 +43,7 @@ from app.schemas.measurements import (
     SpecificationSnapshot,
 )
 from app.services.capability_history_service import compute_capability_history
+from app.services.drift_detection_service import compute_experimental_drift
 
 router = APIRouter(tags=["measurements"])
 
@@ -262,3 +264,27 @@ def get_capability_history(
         window_size=window_size,
         windows=[CapabilityWindowRead.model_validate(window) for window in windows],
     )
+
+
+@router.get(
+    "/characteristics/{characteristic_id}/experimental-drift",
+    response_model=ExperimentalDriftRead | None,
+)
+def get_experimental_drift(
+    characteristic_id: uuid.UUID,
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = Query(default=None),
+    window_size: int = Query(default=DEFAULT_CAPABILITY_WINDOW_SIZE, ge=2, le=MAX_CAPABILITY_WINDOW_SIZE),
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_permission("measurement.measurement_result", "read")),
+) -> ExperimentalDriftRead | None:
+    """Phase 13 preview (CLAUDE.md §22): a real, shadow-mode CUSUM drift
+    detector over the same Cpk-window series `/capability-history` returns.
+    Read-only, no side effects -- never writes an Alert/Recommendation, same
+    RBAC as `/capability-history` (no new permission)."""
+    characteristic = db.get(Characteristic, characteristic_id)
+    if characteristic is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Characteristic not found.")
+
+    result = compute_experimental_drift(db, characteristic_id, from_=from_, to=to, window_size=window_size)
+    return ExperimentalDriftRead.model_validate(result) if result is not None else None

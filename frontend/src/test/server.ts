@@ -418,6 +418,9 @@ export const liveMonitorHandlers = [
   http.get(`${API_BASE_URL}/characteristics/:id/capability-history`, () =>
     HttpResponse.json(CAPABILITY_HISTORY_FIXTURE),
   ),
+  // Phase 13 preview (CLAUDE.md §22) -- default fixture has too little
+  // history for the CUSUM engine to run, mirroring CAPABILITY_HISTORY_FIXTURE.
+  http.get(`${API_BASE_URL}/characteristics/:id/experimental-drift`, () => HttpResponse.json(null)),
   http.get(`${API_BASE_URL}/alerts`, () => HttpResponse.json({ items: [], total: 0, page: 1, page_size: 50 })),
   http.post(`${API_BASE_URL}/alerts/:id/acknowledge`, ({ params }) =>
     HttpResponse.json({

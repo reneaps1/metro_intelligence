@@ -131,3 +131,32 @@ class CapabilityHistoryResponse(BaseModel):
     unit: str
     window_size: int
     windows: list[CapabilityWindowRead]
+
+
+class CusumPointRead(BaseModel):
+    index: int
+    value: Decimal
+    cusum_high: Decimal
+    cusum_low: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class ExperimentalDriftRead(BaseModel):
+    """Phase 13 preview (CLAUDE.md §22) -- a real, shadow-mode CUSUM drift
+    result over the same Cpk-window series `CapabilityHistoryResponse`
+    returns. Never persisted, never feeds an Alert/Recommendation."""
+
+    drift_detected: bool
+    drift_direction: str | None
+    drift_index: int | None
+    target: Decimal
+    stdev: Decimal
+    k: Decimal
+    h: Decimal
+    points: list[CusumPointRead]
+    rationale: str
+    engine_name: str
+    engine_version: str
+
+    model_config = {"from_attributes": True}

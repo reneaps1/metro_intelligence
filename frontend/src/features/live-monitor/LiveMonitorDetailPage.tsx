@@ -3,9 +3,17 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Bell } from "lucide-react";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
-import { acknowledgeAlert, getAlerts, getCapabilityHistory, getCharacteristicSeries } from "../../lib/live-monitor/api";
+import {
+  acknowledgeAlert,
+  getAlerts,
+  getCapabilityHistory,
+  getCharacteristicSeries,
+  getExperimentalDrift,
+} from "../../lib/live-monitor/api";
 import type { Alert, CapabilityWindow } from "../../lib/live-monitor/types";
 import { summarizeCapabilityTrend } from "../../lib/live-monitor/capabilityTrend";
+import { describeDrift } from "../../lib/live-monitor/experimentalDrift";
+import { EXPERIMENTAL_DRIFT_ENABLED } from "../../lib/live-monitor/constants";
 import { useAsync } from "../../lib/catalog/hooks";
 import { formatSpecification } from "../../lib/catalog/format";
 import { TrendChart } from "../../components/charts/TrendChart";
@@ -13,6 +21,7 @@ import { CapabilityHistoryChart } from "../../components/charts/CapabilityHistor
 import { Card, CardHeader } from "../../components/ui/Card";
 import { StatTile } from "../../components/ui/StatTile";
 import { StatusChip, type ChipStatus } from "../../components/ui/StatusChip";
+import { InfoTooltip } from "../../components/ui/Tooltip";
 import { ApiError } from "../../lib/api";
 
 function alertChipStatus(severity: Alert["severity"]): ChipStatus {
@@ -121,6 +130,16 @@ export function LiveMonitorDetailPage() {
         : Promise.reject(new Error("Missing characteristic id")),
     [id, computedRange.from, computedRange.to],
   );
+  // Phase 13 preview (CLAUDE.md §22): fetched independently of `capability`
+  // so the trusted rule-based Cpk history above never depends on this
+  // experimental surface loading, erroring, or being flagged off.
+  const drift = useAsync(
+    () =>
+      EXPERIMENTAL_DRIFT_ENABLED && id
+        ? getExperimentalDrift(id, { ...computedRange, windowSize: CAPABILITY_WINDOW_SIZE })
+        : Promise.resolve(null),
+    [id, computedRange.from, computedRange.to],
+  );
 
   useEffect(() => {
     if (latestMeasuredAt === null && series.data && series.data.points.length > 0) {
@@ -152,6 +171,7 @@ export function LiveMonitorDetailPage() {
   const latestWindow = [...windows].reverse().find((w) => w.cpk !== null) ?? null;
   const trendControlLimits = computeTrendControlLimits(latestWindow);
   const trendSummary = useMemo(() => summarizeCapabilityTrend(windows), [windows]);
+  const driftSummary = useMemo(() => describeDrift(drift.data ?? null), [drift.data]);
 
   const isRefetching = (series.loading && series.data !== null) || (capability.loading && capability.data !== null);
   const isFirstLoad = series.loading && series.data === null;
@@ -278,6 +298,26 @@ export function LiveMonitorDetailPage() {
           >
             <span className="font-medium">Trend (rule-based, from real Cpk history):</span> {trendSummary.text}
           </p>
+        )}
+        {EXPERIMENTAL_DRIFT_ENABLED && !isFirstLoad && !drift.loading && (
+          <div className="mb-3 rounded border border-dashed border-border p-3">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="rounded-full border border-status-warning px-2 py-0.5 text-xs font-medium text-status-warning">
+                Experimental — Phase 13 preview
+              </span>
+              <InfoTooltip label="What is this?">
+                Experimental statistical drift detection (CUSUM), Phase 13 preview. Computed from real Cpk
+                history — not simulated — but not used for alerts, recommendations, or any operational
+                decision. For information only.
+              </InfoTooltip>
+            </div>
+            <p className="text-sm text-text-secondary">{driftSummary.text}</p>
+            {drift.data && (
+              <p className="mt-1 text-xs text-text-disabled">
+                {drift.data.engine_name} · {drift.data.engine_version}
+              </p>
+            )}
+          </div>
         )}
         {isFirstLoad ? (
           <p className="text-sm text-text-secondary">Loading capability history…</p>

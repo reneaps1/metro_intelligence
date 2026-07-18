@@ -6,6 +6,7 @@ import type {
   Alert,
   AlertsPage,
   CapabilityHistoryResponse,
+  ExperimentalDriftResult,
   ScenarioCandidatesResponse,
   ScenarioName,
   SeriesResponse,
@@ -40,6 +41,20 @@ export function getCapabilityHistory(
   if (range.windowSize) params.set("window_size", String(range.windowSize));
   const query = params.toString();
   return apiFetch(`/characteristics/${characteristicId}/capability-history${query ? `?${query}` : ""}`);
+}
+
+// Phase 13 preview (CLAUDE.md §22) -- shadow-mode, read-only, same RBAC as
+// getCapabilityHistory (no new permission).
+export function getExperimentalDrift(
+  characteristicId: string,
+  range: { from?: string; to?: string; windowSize?: number },
+): Promise<ExperimentalDriftResult | null> {
+  const params = new URLSearchParams();
+  if (range.from) params.set("from", range.from);
+  if (range.to) params.set("to", range.to);
+  if (range.windowSize) params.set("window_size", String(range.windowSize));
+  const query = params.toString();
+  return apiFetch(`/characteristics/${characteristicId}/experimental-drift${query ? `?${query}` : ""}`);
 }
 
 // Live Monitor alarm fix (2026-07).
