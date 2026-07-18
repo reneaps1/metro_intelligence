@@ -14,8 +14,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Page[T](BaseModel):
@@ -160,3 +161,24 @@ class ExperimentalDriftRead(BaseModel):
     engine_version: str
 
     model_config = {"from_attributes": True}
+
+
+class SamplingRecommendation(BaseModel):
+    """EXPERIMENTAL (Thompson-Sampling adaptive inspection sampling
+    frequency recommender, CLAUDE.md §22): read-only, purely advisory,
+    never overrides `app.schemas.intelligence.RecommendationRead`/the real
+    Decision flow. `characteristic_id` is `str`, not `uuid.UUID` like every
+    other schema in this file -- a deliberate exception, honoring the
+    literal shape this experimental surface was specified with. Safe here
+    specifically because this schema is always built by direct
+    construction in `adaptive_sampling_service.py` (`str(characteristic_id)`),
+    never via `model_validate(..., from_attributes=True)` against an ORM
+    row."""
+
+    characteristic_id: str
+    recommended_frequency: int
+    current_cpk: float
+    cpk_trend: Literal["stable", "improving", "declining"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    windows_analyzed: int
+    conflicting_recommendations: list[dict[str, Any]] | None = None

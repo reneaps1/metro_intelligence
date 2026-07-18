@@ -157,6 +157,32 @@ export interface ExperimentalDriftResult {
   engine_version: string;
 }
 
+// EXPERIMENTAL (Thompson-Sampling adaptive sampling frequency recommender):
+// mirrors SamplingRecommendation (backend/app/schemas/measurements.py).
+// Read-only, purely advisory -- never persisted, never feeds an
+// Alert/Recommendation/Decision. Unlike the Decimal fields elsewhere in this
+// file (which arrive as strings), these numeric fields are native `number`
+// because the backend schema declares them as `int`/`float`/`Literal`, not
+// `Decimal` -- FastAPI/Pydantic serializes those as native JSON numbers.
+export interface SamplingRecommendationConflict {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  reason: string;
+  conflict_reason: string;
+}
+
+export interface SamplingRecommendationResult {
+  characteristic_id: string;
+  recommended_frequency: number;
+  current_cpk: number;
+  cpk_trend: "stable" | "improving" | "declining";
+  confidence: number;
+  windows_analyzed: number;
+  conflicting_recommendations: SamplingRecommendationConflict[] | null;
+}
+
 // Live Monitor alarm fix (2026-07): mirrors `AlertRead`
 // (backend/app/schemas/intelligence.py) -- the persisted, auditable form of
 // an alarm, as returned by `GET /alerts` and `POST /alerts/{id}/acknowledge`.

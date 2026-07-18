@@ -38,10 +38,12 @@ from app.schemas.measurements import (
     MeasurementRunRead,
     MeasurementSampleRead,
     Page,
+    SamplingRecommendation,
     SeriesPoint,
     SeriesResponse,
     SpecificationSnapshot,
 )
+from app.services.adaptive_sampling_service import compute_adaptive_sampling_recommendation
 from app.services.capability_history_service import compute_capability_history
 from app.services.drift_detection_service import compute_experimental_drift
 
@@ -288,3 +290,35 @@ def get_experimental_drift(
 
     result = compute_experimental_drift(db, characteristic_id, from_=from_, to=to, window_size=window_size)
     return ExperimentalDriftRead.model_validate(result) if result is not None else None
+
+
+@router.get(
+    "/characteristics/{characteristic_id}/sampling-recommendation",
+    response_model=SamplingRecommendation,
+)
+def get_sampling_recommendation(
+    characteristic_id: uuid.UUID,
+    from_: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = Query(default=None),
+    window_size: int = Query(default=DEFAULT_CAPABILITY_WINDOW_SIZE, ge=2, le=MAX_CAPABILITY_WINDOW_SIZE),
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_permission("measurement.measurement_result", "read")),
+) -> SamplingRecommendation:
+    """EXPERIMENTAL (see app.services.adaptive_sampling_service): a
+    Thompson-Sampling-based adaptive inspection sampling frequency
+    recommendation over the same Cpk-window series `/capability-history`
+    returns, cross-checked against the real Recommendation table for this
+    characteristic. Read-only, purely advisory -- never writes an Alert/
+    Recommendation/Decision, never overrides the rule-based system. Same
+    RBAC as `/capability-history` and `/recommendations` (identical
+    {metrologist, quality_engineer, admin, auditor} read role set per
+    docs/security/rbac.md -- no new permission, same precedent as
+    `/experimental-drift`). Fewer than the engine's minimum window count is
+    NOT a 404/error: the response body carries a conservative default
+    frequency with low confidence instead."""
+    characteristic = db.get(Characteristic, characteristic_id)
+    if characteristic is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Characteristic not found.")
+    return compute_adaptive_sampling_recommendation(
+        db, characteristic_id, from_=from_, to=to, window_size=window_size
+    )

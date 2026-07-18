@@ -39,10 +39,12 @@ from app.models.catalog import (
     ProductFamily,
     Specification,
 )
+from app.models.intelligence import Recommendation
 from app.models.measurement import MeasurementResult, MeasurementRun, MeasurementSample
 from app.models.org import Area, Cell, Line, Machine, Organization, Site
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from conftest import DEMO_USERS, KNOWN_PASSWORD
 
@@ -479,3 +481,233 @@ def test_capability_history_denies_viewer_same_as_series(
 def test_capability_history_unauthenticated_rejected(measurements_client: TestClient) -> None:
     response = measurements_client.get(f"/api/v1/characteristics/{uuid.uuid4()}/capability-history")
     assert response.status_code == 401
+
+
+# --- EXPERIMENTAL sampling-recommendation -------------------------------------
+
+# Deterministic, distinct offsets within one window -- never all-identical,
+# so each window's own Cpk is defined (nonzero within-window stdev), and
+# tight enough around the +/-1 tolerance that Cpk is well above the 1.67
+# threshold (same convention as test_drift_detection_service.py's
+# TIGHT_OFFSETS).
+SAMPLING_TIGHT_OFFSETS = [Decimal("-0.02"), Decimal("-0.01"), Decimal("0"), Decimal("0.01"), Decimal("0.02")]
+SAMPLING_WINDOW_SIZE = len(SAMPLING_TIGHT_OFFSETS)
+
+
+def _make_sampling_characteristic(db: SessionLocal) -> dict:
+    suffix = uuid.uuid4().hex[:8]
+    family = ProductFamily(code=f"MI-DEMO-SMP-{suffix}", name="Demo family (fictitious)")
+    db.add(family)
+    db.flush()
+    part = PartNumber(product_family_id=family.id, code=f"MI-DEMO-SMP-{suffix}", name="Demo bracket")
+    db.add(part)
+    classification = CharacteristicClassification(code=f"SMP-CLS-{suffix}", name="Demo classification")
+    db.add(classification)
+    db.flush()
+    characteristic = Characteristic(
+        part_number_id=part.id,
+        balloon_number="1",
+        name="Sampling demo diameter",
+        characteristic_type="diameter",
+        unit="mm",
+        classification_id=classification.id,
+    )
+    db.add(characteristic)
+    db.flush()
+    spec = Specification(
+        characteristic_id=characteristic.id, nominal=10, lower_tol=-1, upper_tol=1, unit="mm"
+    )
+    db.add(spec)
+    program = MeasurementProgram(
+        part_number_id=part.id, name="Sampling CMM Program", output_mapping={"1": "COL_1"}
+    )
+    db.add(program)
+    db.flush()
+    db.commit()
+    return {
+        "characteristic_id": characteristic.id,
+        "spec_id": spec.id,
+        "program_id": program.id,
+        "part_id": part.id,
+    }
+
+
+def _insert_sampling_windows(
+    db, characteristic_id, spec_id, program_id, *, n_windows: int, offsets: list[Decimal], start=None
+):
+    cursor = start or datetime(2026, 1, 1, tzinfo=UTC)
+    for _ in range(n_windows):
+        run = MeasurementRun(measurement_program_id=program_id, operator_identifier="OP", run_at=cursor)
+        db.add(run)
+        db.flush()
+        sample = MeasurementSample(measurement_run_id=run.id, sample_sequence=1)
+        db.add(sample)
+        db.flush()
+        for offset in offsets:
+            db.add(
+                MeasurementResult(
+                    measured_at=cursor,
+                    measurement_sample_id=sample.id,
+                    characteristic_id=characteristic_id,
+                    specification_id=spec_id,
+                    value=Decimal(10) + offset,
+                )
+            )
+            cursor += timedelta(minutes=1)
+    db.commit()
+    return cursor
+
+
+def test_sampling_recommendation_returns_conservative_default_for_the_demo_fixture(
+    measurements_client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    """demo_characteristic seeds exactly 5 results -> 1 window, below the
+    engine's minimum_windows=5 -- must still be a 200 with a conservative
+    default body, never a 404 or a null response."""
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{demo_characteristic['characteristic_id']}/sampling-recommendation",
+        headers=as_role("metrologist"),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["windows_analyzed"] == 1
+    assert body["recommended_frequency"] == 5
+    assert body["confidence"] == 0.0
+    assert body["conflicting_recommendations"] is None
+
+
+def test_sampling_recommendation_computes_a_real_result_with_enough_windows(
+    measurements_client: TestClient, as_role
+) -> None:
+    db = SessionLocal()
+    try:
+        ctx = _make_sampling_characteristic(db)
+        _insert_sampling_windows(
+            db,
+            ctx["characteristic_id"],
+            ctx["spec_id"],
+            ctx["program_id"],
+            n_windows=6,
+            offsets=SAMPLING_TIGHT_OFFSETS,
+        )
+    finally:
+        db.close()
+
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{ctx['characteristic_id']}/sampling-recommendation",
+        params={"window_size": SAMPLING_WINDOW_SIZE},
+        headers=as_role("metrologist"),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["windows_analyzed"] == 6
+    assert body["recommended_frequency"] in {5, 10, 20, 50, 100}
+    assert 0.0 <= body["confidence"] <= 1.0
+    assert body["cpk_trend"] in {"stable", "improving", "declining"}
+
+
+def test_sampling_recommendation_surfaces_a_conflict_with_an_existing_pending_frequency_increase(
+    measurements_client: TestClient, as_role
+) -> None:
+    db = SessionLocal()
+    try:
+        ctx = _make_sampling_characteristic(db)
+        _insert_sampling_windows(
+            db,
+            ctx["characteristic_id"],
+            ctx["spec_id"],
+            ctx["program_id"],
+            n_windows=6,
+            offsets=SAMPLING_TIGHT_OFFSETS,
+        )
+        recommendation = Recommendation(
+            characteristic_id=ctx["characteristic_id"],
+            recommendation_type="frequency_increase",
+            rationale="Trend approaching upper tolerance with rising variance.",
+            evidence={},
+            engine_name="adaptive_inspection_engine",
+            engine_version="v1",
+            state="pending",
+        )
+        db.add(recommendation)
+        db.commit()
+        recommendation_id = recommendation.id
+    finally:
+        db.close()
+
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{ctx['characteristic_id']}/sampling-recommendation",
+        params={"window_size": SAMPLING_WINDOW_SIZE},
+        headers=as_role("metrologist"),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["conflicting_recommendations"] is not None
+    ids = [c["id"] for c in body["conflicting_recommendations"]]
+    assert str(recommendation_id) in ids
+
+
+def test_sampling_recommendation_404s_for_an_unknown_characteristic(
+    measurements_client: TestClient, as_role
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{uuid.uuid4()}/sampling-recommendation",
+        headers=as_role("metrologist"),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("role", ["metrologist", "quality_engineer", "admin", "auditor"])
+def test_sampling_recommendation_allows_the_same_roles_as_capability_history(
+    measurements_client: TestClient, as_role, demo_characteristic: dict, role: str
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{demo_characteristic['characteristic_id']}/sampling-recommendation",
+        headers=as_role(role),
+    )
+    assert response.status_code == 200
+
+
+def test_sampling_recommendation_denies_viewer_same_as_capability_history(
+    measurements_client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{demo_characteristic['characteristic_id']}/sampling-recommendation",
+        headers=as_role("viewer"),
+    )
+    assert response.status_code == 403
+
+
+def test_sampling_recommendation_unauthenticated_rejected(
+    measurements_client: TestClient, demo_characteristic: dict
+) -> None:
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{demo_characteristic['characteristic_id']}/sampling-recommendation"
+    )
+    assert response.status_code == 401
+
+
+def test_sampling_recommendation_never_creates_a_recommendation_row(
+    measurements_client: TestClient, as_role, demo_characteristic: dict
+) -> None:
+    characteristic_id = demo_characteristic["characteristic_id"]
+
+    def _count_recommendations() -> int:
+        db = SessionLocal()
+        try:
+            return db.execute(
+                select(func.count())
+                .select_from(Recommendation)
+                .where(Recommendation.characteristic_id == characteristic_id)
+            ).scalar_one()
+        finally:
+            db.close()
+
+    before = _count_recommendations()
+    response = measurements_client.get(
+        f"/api/v1/characteristics/{characteristic_id}/sampling-recommendation",
+        headers=as_role("metrologist"),
+    )
+    assert response.status_code == 200
+    after = _count_recommendations()
+    assert after == before
