@@ -21,7 +21,7 @@ from seed.generators.users import generate_demo_users  # noqa: E402
 
 # seed.db (imported above) inserts backend/ onto sys.path as a side effect,
 # the same way seed/generators/users.py reaches app.core.security.
-from app.core.security import verify_password  # noqa: E402
+from app.core.password import verify_password  # noqa: E402
 
 TEST_DATABASE_URL = os.getenv("METRO_TEST_DATABASE_URL")
 BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
