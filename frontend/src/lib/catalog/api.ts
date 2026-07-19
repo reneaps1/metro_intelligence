@@ -55,7 +55,7 @@ export function createPartNumber(payload: PartNumberCreateInput): Promise<PartNu
   return apiFetch("/catalog/part-numbers", { method: "POST", body: JSON.stringify(payload) });
 }
 
-export function listCharacteristics(partNumberId: string): Promise<Page<Characteristic>> {
+export function listCharacteristics(partNumberId?: string): Promise<Page<Characteristic>> {
   return apiFetch(`/catalog/characteristics${query({ part_number_id: partNumberId, page_size: 200 })}`);
 }
 
