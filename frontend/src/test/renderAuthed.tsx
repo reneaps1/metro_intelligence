@@ -2,6 +2,7 @@ import { useEffect, type ReactElement, type ReactNode } from "react";
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider, useAuth } from "../lib/auth/AuthProvider";
+import { DemoDataProvider } from "../lib/mock/DataProvider";
 
 // F5.5 (MI-34): catalog screens read `useAuth().user` to gate edit UI, so
 // their tests need an already-signed-in session. Driving the real login flow
@@ -25,11 +26,13 @@ export function renderAuthed(
 ) {
   return render(
     <AuthProvider>
-      <MemoryRouter initialEntries={[route]}>
-        <AutoLogin email={email} password={password}>
-          {ui}
-        </AutoLogin>
-      </MemoryRouter>
+      <DemoDataProvider>
+        <MemoryRouter initialEntries={[route]}>
+          <AutoLogin email={email} password={password}>
+            {ui}
+          </AutoLogin>
+        </MemoryRouter>
+      </DemoDataProvider>
     </AuthProvider>,
   );
 }

@@ -1,20 +1,13 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useAuth } from "../../lib/auth/AuthProvider";
-import { useAsync } from "../../lib/catalog/hooks";
-import { useCharacteristicContexts } from "../../lib/recommendations/hooks";
-import { decideRecommendation, listRecommendations } from "../../lib/recommendations/api";
-import type {
-  DecisionAction,
-  Recommendation,
-  RecommendationState,
-  RecommendationType,
-} from "../../lib/recommendations/types";
+import { useDemoData } from "../../lib/mock/DataProvider";
+import type { Recommendation, RecommendationState, RecommendationType } from "../../lib/mock/types";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { StatusChip, type ChipStatus } from "../../components/ui/StatusChip";
 import { formatDateTime } from "../../lib/format";
-import { DecisionModal, errorMessage } from "./DecisionModal";
+import { DecisionModal } from "./DecisionModal";
 import { RecommendationDetailPanel } from "./RecommendationDetailPanel";
 
 // F5.9 (MI-38): CLAUDE.md §24 -- state must always be visible and never
@@ -35,37 +28,31 @@ const TYPE_LABELS: Record<RecommendationType, string> = {
   post_event_validation: "Post-event validation",
 };
 
+type DecisionAction = "accepted" | "rejected";
+
 export function RecommendationsInboxPage() {
   const { user } = useAuth();
   const canDecide = user?.role === "quality_engineer" || user?.role === "admin";
+
+  const { recommendations, characteristics, parts, decideRecommendation } = useDemoData();
 
   const [stateFilter, setStateFilter] = useState<RecommendationState | "">("");
   const [typeFilter, setTypeFilter] = useState<RecommendationType | "">("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pendingDecision, setPendingDecision] = useState<{ id: string; action: DecisionAction } | null>(null);
-  const [decisionError, setDecisionError] = useState<string | null>(null);
-  const [deciding, setDeciding] = useState(false);
-
-  const list = useAsync(() => listRecommendations({ state: stateFilter || undefined }), [stateFilter]);
-  const items = list.data?.items ?? [];
-  const contexts = useCharacteristicContexts(items.map((item) => item.characteristic_id));
 
   const visibleItems = useMemo(
-    () => (typeFilter ? items.filter((item) => item.recommendation_type === typeFilter) : items),
-    [items, typeFilter],
+    () =>
+      recommendations.filter(
+        (rec) => (stateFilter ? rec.state === stateFilter : true) && (typeFilter ? rec.type === typeFilter : true)
+      ),
+    [recommendations, stateFilter, typeFilter]
   );
 
   function confirmDecision(comment: string) {
     if (!pendingDecision) return;
-    setDeciding(true);
-    setDecisionError(null);
-    decideRecommendation(pendingDecision.id, pendingDecision.action, comment)
-      .then(() => {
-        setPendingDecision(null);
-        list.refetch();
-      })
-      .catch((err: unknown) => setDecisionError(errorMessage(err)))
-      .finally(() => setDeciding(false));
+    decideRecommendation(pendingDecision.id, pendingDecision.action, user?.email ?? "unknown", comment);
+    setPendingDecision(null);
   }
 
   return (
@@ -106,15 +93,12 @@ export function RecommendationsInboxPage() {
         </select>
       </div>
 
-      {list.loading && list.data === null && <p className="text-sm text-text-secondary">Loading recommendations…</p>}
-      {list.error && <p className="text-sm text-status-nok">{list.error}</p>}
-      {list.data !== null && !list.error && visibleItems.length === 0 && (
-        <p className="text-sm text-text-secondary">No recommendations match these filters.</p>
-      )}
+      {visibleItems.length === 0 && <p className="text-sm text-text-secondary">No recommendations match these filters.</p>}
 
       <div className="space-y-3">
         {visibleItems.map((rec: Recommendation) => {
-          const context = contexts[rec.characteristic_id];
+          const characteristic = characteristics.find((c) => c.id === rec.characteristicId);
+          const part = characteristic ? parts.find((p) => p.id === characteristic.partId) : undefined;
           const chip = STATE_CHIP[rec.state];
           const expanded = expandedId === rec.id;
           return (
@@ -122,15 +106,15 @@ export function RecommendationsInboxPage() {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-xs text-text-secondary">
-                    {context ? `${context.part?.code ?? "—"} · ${context.characteristic.name}` : "Loading…"}
+                    {characteristic ? `${part?.code ?? "—"} · ${characteristic.name}` : "—"}
                   </p>
-                  <p className="font-medium text-text-primary">{TYPE_LABELS[rec.recommendation_type]}</p>
+                  <p className="font-medium text-text-primary">{TYPE_LABELS[rec.type]}</p>
                 </div>
                 <StatusChip status={chip.status} label={chip.label} />
               </div>
               <p className="mt-2 text-sm text-text-secondary">{rec.rationale}</p>
               <p className="mt-1 text-xs text-text-disabled">
-                {rec.engine_name} {rec.engine_version} · created {formatDateTime(rec.created_at)}
+                {rec.ruleVersion} · created {formatDateTime(rec.createdAt)}
               </p>
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -146,22 +130,10 @@ export function RecommendationsInboxPage() {
                 {rec.state === "pending" &&
                   (canDecide ? (
                     <div className="flex gap-2">
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setDecisionError(null);
-                          setPendingDecision({ id: rec.id, action: "accepted" });
-                        }}
-                      >
+                      <Button variant="primary" onClick={() => setPendingDecision({ id: rec.id, action: "accepted" })}>
                         Accept
                       </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() => {
-                          setDecisionError(null);
-                          setPendingDecision({ id: rec.id, action: "rejected" });
-                        }}
-                      >
+                      <Button variant="danger" onClick={() => setPendingDecision({ id: rec.id, action: "rejected" })}>
                         Reject
                       </Button>
                     </div>
@@ -174,7 +146,7 @@ export function RecommendationsInboxPage() {
 
               {expanded && (
                 <div className="mt-3 border-t border-border pt-3">
-                  <RecommendationDetailPanel recommendationId={rec.id} canRecordOutcome={canDecide} />
+                  <RecommendationDetailPanel recommendation={rec} canRecordOutcome={canDecide} />
                 </div>
               )}
             </Card>
@@ -185,13 +157,8 @@ export function RecommendationsInboxPage() {
       {pendingDecision && (
         <DecisionModal
           action={pendingDecision.action}
-          submitting={deciding}
-          error={decisionError}
           onConfirm={confirmDecision}
-          onCancel={() => {
-            setPendingDecision(null);
-            setDecisionError(null);
-          }}
+          onCancel={() => setPendingDecision(null)}
         />
       )}
     </div>

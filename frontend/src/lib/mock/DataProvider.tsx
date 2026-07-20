@@ -11,6 +11,7 @@ import {
 } from "./fixtures";
 import { simulateNewPoints } from "./generator";
 import type {
+  ActionOutcomeStatus,
   ImportedFileRecord,
   MeasurementPoint,
   MeasurementRunSummary,
@@ -33,6 +34,10 @@ interface DemoDataContextValue {
   importedFiles: ImportedFileRecord[];
   getSeries: (characteristicId: string) => MeasurementPoint[];
   decideRecommendation: (id: string, state: RecommendationState, decidedBy: string, comment: string) => void;
+  addActionTaken: (
+    recommendationId: string,
+    input: { description: string; outcomeStatus: ActionOutcomeStatus }
+  ) => void;
   importFile: (scenarioId: string) => string;
 }
 
@@ -63,6 +68,30 @@ export function DemoDataProvider({ children }: { children: ReactNode }) {
       prev.map((rec) =>
         rec.id === id
           ? { ...rec, state, decidedBy, decidedAt: new Date().toISOString(), decisionComment: comment }
+          : rec
+      )
+    );
+  };
+
+  const addActionTaken = (
+    recommendationId: string,
+    input: { description: string; outcomeStatus: ActionOutcomeStatus }
+  ) => {
+    setRecommendations((prev) =>
+      prev.map((rec) =>
+        rec.id === recommendationId
+          ? {
+              ...rec,
+              actionsTaken: [
+                ...rec.actionsTaken,
+                {
+                  id: `action-${recommendationId}-${rec.actionsTaken.length + 1}`,
+                  description: input.description,
+                  outcomeStatus: input.outcomeStatus,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            }
           : rec
       )
     );
@@ -150,6 +179,7 @@ export function DemoDataProvider({ children }: { children: ReactNode }) {
       importedFiles,
       getSeries,
       decideRecommendation,
+      addActionTaken,
       importFile,
     }),
     [recommendations, measurementRuns, importedFiles, seriesAppends]

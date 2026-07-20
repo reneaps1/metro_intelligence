@@ -258,6 +258,7 @@ export const RECOMMENDATIONS: Recommendation[] = CHARACTERISTIC_SEEDS.map((seed,
         : "Reviewed — outliers traced to a mismeasured sample, no action needed."
       : undefined,
     riskScore: risk.score,
+    actionsTaken: [],
   };
 });
 
