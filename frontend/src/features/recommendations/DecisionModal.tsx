@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
-import { ApiError } from "../../lib/api";
-import type { DecisionAction } from "../../lib/recommendations/types";
 
 // F5.9 (MI-38): no shared Modal exists yet (F5.2 hasn't built one) -- this is
 // a small overlay scoped to this feature rather than a premature ui/ addition
@@ -10,14 +8,10 @@ import type { DecisionAction } from "../../lib/recommendations/types";
 // decision (CLAUDE.md §24), not just another form submit.
 export function DecisionModal({
   action,
-  submitting,
-  error,
   onConfirm,
   onCancel,
 }: {
-  action: DecisionAction;
-  submitting: boolean;
-  error: string | null;
+  action: "accepted" | "rejected";
   onConfirm: (comment: string) => void;
   onCancel: () => void;
 }) {
@@ -75,17 +69,14 @@ export function DecisionModal({
           }
         />
 
-        {error && <p className="mt-2 text-sm text-status-nok">{error}</p>}
-
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onCancel} disabled={submitting}>
+          <Button variant="secondary" onClick={onCancel}>
             Cancel
           </Button>
           <Button
             variant={action === "accepted" ? "primary" : "danger"}
             onClick={() => onConfirm(trimmed)}
-            disabled={trimmed.length === 0 || submitting}
-            loading={submitting}
+            disabled={trimmed.length === 0}
           >
             Confirm {action === "accepted" ? "accept" : "reject"}
           </Button>
@@ -93,8 +84,4 @@ export function DecisionModal({
       </div>
     </div>
   );
-}
-
-export function errorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : "Something went wrong. Please try again.";
 }

@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { formatDateTime } from "../../lib/format";
-import { getRecommendation, recordActionTaken } from "../../lib/recommendations/api";
-import type { ActionOutcomeStatus, RecommendationDetail } from "../../lib/recommendations/types";
-import { errorMessage } from "./DecisionModal";
+import { useDemoData } from "../../lib/mock/DataProvider";
+import type { ActionOutcomeStatus, Recommendation } from "../../lib/mock/types";
 
 const OUTCOME_LABELS: Record<ActionOutcomeStatus, string> = {
   pending: "Pending",
@@ -13,50 +12,39 @@ const OUTCOME_LABELS: Record<ActionOutcomeStatus, string> = {
   not_applicable: "Not applicable",
 };
 
-// F5.9 (MI-38): evidence + decision history for one recommendation, fetched
-// on expand (GET /recommendations/{id} carries the risk_assessment + decision
-// nesting the list endpoint doesn't return).
+// F5.9 (MI-38): evidence + decision history for one recommendation. Reads
+// straight off the shared demo catalog (useDemoData) so the characteristic id
+// it links to always resolves on the Measurements/Trend page — recommendation,
+// characteristic, and risk data all come from the same mock fixtures.
 export function RecommendationDetailPanel({
-  recommendationId,
+  recommendation,
   canRecordOutcome,
 }: {
-  recommendationId: string;
+  recommendation: Recommendation;
   canRecordOutcome: boolean;
 }) {
-  const [detail, setDetail] = useState<RecommendationDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { characteristics, riskAssessments, addActionTaken } = useDemoData();
   const [recordingOutcome, setRecordingOutcome] = useState(false);
   const [outcomeDescription, setOutcomeDescription] = useState("");
   const [outcomeStatus, setOutcomeStatus] = useState<ActionOutcomeStatus>("effective");
-  const [submitting, setSubmitting] = useState(false);
 
-  const load = () => {
-    getRecommendation(recommendationId)
-      .then(setDetail)
-      .catch((err: unknown) => setError(errorMessage(err)));
-  };
-
-  useEffect(load, [recommendationId]);
-
-  if (error) return <p className="text-sm text-status-nok">{error}</p>;
-  if (!detail) return <p className="text-sm text-text-secondary">Loading evidence…</p>;
-
-  const { risk_assessment: risk, decision } = detail;
+  const risk = riskAssessments.find((r) => r.characteristicId === recommendation.characteristicId) ?? null;
+  const characteristicExists = characteristics.some((c) => c.id === recommendation.characteristicId);
 
   return (
     <div className="space-y-3 text-sm">
       <div>
         <p className="font-medium text-text-primary">Evidence</p>
-        <p className="mt-1 text-text-secondary">{detail.rationale}</p>
-        <p className="mt-1 text-xs text-text-disabled">
-          {detail.engine_name} · {detail.engine_version}
-        </p>
-        <Link
-          to={`/measurements/${detail.characteristic_id}`}
-          className="mt-1 inline-block text-xs text-brand-primary hover:underline"
-        >
-          View characteristic trend →
-        </Link>
+        <p className="mt-1 text-text-secondary">{recommendation.rationale}</p>
+        <p className="mt-1 text-xs text-text-disabled">{recommendation.ruleVersion}</p>
+        {characteristicExists && (
+          <Link
+            to={`/measurements/${recommendation.characteristicId}`}
+            className="mt-1 inline-block text-xs text-brand-primary hover:underline"
+          >
+            View characteristic trend →
+          </Link>
+        )}
       </div>
 
       {risk && (
@@ -65,34 +53,36 @@ export function RecommendationDetailPanel({
             Risk score {risk.score} · {risk.level}
           </p>
           <ul className="mt-1 list-inside list-disc text-text-secondary">
-            {Object.entries(risk.factors).map(([key, value]) => (
-              <li key={key}>
-                {key}: {String(value)}
+            {risk.factors.map((factor) => (
+              <li key={factor.label}>
+                {factor.label}: {factor.contribution}
               </li>
             ))}
           </ul>
           <p className="mt-1 text-xs text-text-disabled">
-            {risk.engine_name} · {risk.engine_version} · {formatDateTime(risk.computed_at)}
+            {risk.engineVersion} · {formatDateTime(risk.computedAt)}
           </p>
         </div>
       )}
 
-      {decision && (
+      {recommendation.decidedBy && (
         <div className="rounded border border-border p-3">
           <p className="font-medium text-text-primary">
-            {decision.action === "accepted" ? "Accepted" : "Rejected"} on {formatDateTime(decision.decided_at)}
+            {recommendation.state === "accepted" ? "Accepted" : "Rejected"} on{" "}
+            {formatDateTime(recommendation.decidedAt!)}
           </p>
-          {decision.comment && <p className="mt-1 text-text-secondary">"{decision.comment}"</p>}
+          {recommendation.decisionComment && (
+            <p className="mt-1 text-text-secondary">"{recommendation.decisionComment}"</p>
+          )}
 
           <p className="mt-3 text-xs font-medium text-text-secondary">Actions taken</p>
-          {decision.actions_taken.length === 0 ? (
+          {recommendation.actionsTaken.length === 0 ? (
             <p className="text-xs text-text-disabled">No outcomes recorded yet.</p>
           ) : (
             <ul className="mt-1 space-y-1">
-              {decision.actions_taken.map((action) => (
+              {recommendation.actionsTaken.map((action) => (
                 <li key={action.id} className="text-xs text-text-secondary">
-                  {action.description} — {OUTCOME_LABELS[action.outcome_status]} ({formatDateTime(action.created_at)}
-                  )
+                  {action.description} — {OUTCOME_LABELS[action.outcomeStatus]} ({formatDateTime(action.createdAt)})
                 </li>
               ))}
             </ul>
@@ -132,21 +122,14 @@ export function RecommendationDetailPanel({
                     Cancel
                   </Button>
                   <Button
-                    disabled={outcomeDescription.trim().length === 0 || submitting}
-                    loading={submitting}
+                    disabled={outcomeDescription.trim().length === 0}
                     onClick={() => {
-                      setSubmitting(true);
-                      recordActionTaken(decision.id, {
+                      addActionTaken(recommendation.id, {
                         description: outcomeDescription.trim(),
-                        outcome_status: outcomeStatus,
-                      })
-                        .then(() => {
-                          setRecordingOutcome(false);
-                          setOutcomeDescription("");
-                          load();
-                        })
-                        .catch((err: unknown) => setError(errorMessage(err)))
-                        .finally(() => setSubmitting(false));
+                        outcomeStatus,
+                      });
+                      setRecordingOutcome(false);
+                      setOutcomeDescription("");
                     }}
                   >
                     Save outcome

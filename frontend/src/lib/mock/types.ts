@@ -77,6 +77,15 @@ export type RecommendationType =
 
 export type RecommendationState = "pending" | "accepted" | "rejected" | "superseded" | "expired";
 
+export type ActionOutcomeStatus = "pending" | "effective" | "ineffective" | "not_applicable";
+
+export interface ActionTaken {
+  id: string;
+  description: string;
+  outcomeStatus: ActionOutcomeStatus;
+  createdAt: string;
+}
+
 export interface Recommendation {
   id: string;
   characteristicId: string;
@@ -90,6 +99,7 @@ export interface Recommendation {
   decidedAt?: string;
   decisionComment?: string;
   riskScore: number;
+  actionsTaken: ActionTaken[];
 }
 
 export interface MeasurementRunSummary {
