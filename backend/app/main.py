@@ -41,3 +41,40 @@ app.include_router(api_router)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+@app.on_event("startup")
+def create_demo_admin():
+    import os
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+    from app.core.password import hash_password
+    from app.models import User, Role, UserRole
+
+    password = os.getenv("SEED_DEMO_USER_PASSWORD")
+    if not password or settings.app_env == "production":
+        return
+
+    engine = create_engine(settings.database_url)
+
+    with Session(engine) as session:
+        existing = session.scalar(
+            select(User).where(User.email == "luis.torres@demo.local")
+        )
+        if existing:
+            return
+
+        role = session.scalar(
+            select(Role).where(Role.name == "admin")
+        )
+        if role is None:
+            raise RuntimeError("Admin role not found")
+
+        user = User(
+            email="luis.torres@demo.local",
+            display_name="Luis Torres",
+            password_hash=hash_password(password),
+            is_active=True,
+        )
+        user.roles.append(UserRole(role=role))
+        session.add(user)
+        session.commit()
