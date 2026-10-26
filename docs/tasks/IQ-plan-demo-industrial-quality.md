@@ -23,8 +23,8 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | Fase | Nombre | Estado | Rama / PR | Notas |
 |---|---|---|---|---|
 | F0 | Reconocimiento y decisiones | ✅ Hecho | — | Ver §1 y §2 |
-| F1 | Edición configurable, shell de demo, procedencia y recorrido | ⬜ Pendiente | | `APP_EDITION` + camino feliz navegable |
-| F2 | Generador IIoT determinista + API de señales | ⬜ Pendiente | | Backend + seed |
+| F1 | Edición configurable, shell de demo, procedencia y recorrido | ✅ Hecho | `feat/industrial-quality-demo` | Pasos 2,3,5,6,7 son placeholders honestos hasta sus fases |
+| F2 | Generador IIoT determinista + API de señales | ✅ Hecho | `feat/industrial-quality-demo` | Paso 4 muestra escenarios, inventario y eventos reales de la API |
 | F3 | Explorador de señales estilo iba | ⬜ Pendiente | | Pieza central del demo |
 | F4 | Correlación, regresión y caso sintético causal | ⬜ Pendiente | | Vista A / Vista B |
 | F5 | Dashboard de calidad dimensional (nidos) | ⬜ Pendiente | | KPIs, Pareto, heatmap |
@@ -89,7 +89,7 @@ Orden de ejecución: F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9.
 
 | ID | Decisión | Conflicto | Default propuesto (se aplica si no hay respuesta) |
 |---|---|---|---|
-| D1 | ¿Dónde viven el nombre del cliente y las cifras del informe? | CLAUDE.md §7/§16/§20 prohíben datos reales de clientes en el repo; el repo es público en GitHub. | Repo solo con **etiqueta genérica** ("Cliente demo") y **cifras placeholder ficticias** en un fixture versionado. Nombre real + cifras reales en `demo-private/client-profile.json` (**gitignored**), cargado si existe. Guía final como `docs/demo-industrial-quality.md`, no `demo-phossel.md`. |
+| D1 | ¿Dónde viven el nombre del cliente y las cifras del informe? | CLAUDE.md §7/§16/§20 prohíben datos reales de clientes en el repo; el repo es público en GitHub. | Repo solo con **etiqueta genérica** ("Cliente demo") y **cifras placeholder ficticias** en un fixture versionado. Nombre real vía variable de entorno `DEMO_CLIENT_LABEL` (solo en el `.env` del despliegue; implementado en F1). Cifras reales del informe en `demo-private/` (**gitignored**), a cargar en F7. Guía final como `docs/demo-industrial-quality.md` (ningún nombre de cliente en nombres de archivo). |
 | D2 | Persistencia de señales IIoT | Crear tablas de series exige migración y volumen. | **Sin tablas nuevas**: generador determinista puro que el backend evalúa bajo demanda (escenario + ventana + resolución). "Restaurar escenario" = reset de estado, nunca borra BD. |
 | D3 | Nido/cavidad en mediciones | No existe en el modelo. | Migración Alembic pequeña y reversible `0009`: columna nullable `cavity_code` en `measurement_runs` (+ índice). Sin tablas duplicadas. |
 | D4 | Permiso RBAC para endpoints nuevos | Añadir permisos requiere migración y actualizar `rbac.md`. | Reusar `live_monitor:read` (misma naturaleza: replay/simulación de solo lectura) para señales y analítica demo; `imports` existentes para el mapeo. Documentar en `rbac.md`. |
@@ -140,6 +140,14 @@ Archivos previstos: `frontend/src/features/demo/*`, `frontend/src/lib/demo/*`, `
 Pruebas: navegación del stepper, restaurar escenario, badge renderiza los 5 orígenes.
 Hecho cuando: DoD #1 se cumple con contenido en cada paso (aunque sea placeholder etiquetado).
 
+**Resultado F1 (26/oct/2026):**
+- Backend: `app_edition` / `demo_client_label` en `core/config.py`; `core/edition.py` (`require_industrial_edition` → 404 en metrology); `GET /api/v1/meta` (`api/v1/meta.py`, `schemas/meta.py`). Variables documentadas en `.env.example` y `backend/.env.example`.
+- Frontend: `lib/edition/` (`EditionProvider`, `useEdition`, `RequireEdition`; default fail-closed = metrology), entrada "Demo industrial" en `Sidebar` solo en industrial, rutas `/demo/industrial-quality` y `/:stepId` en `App.tsx`.
+- Demo: `features/demo/DemoShell.tsx` (stepper de 7 pasos, Anterior/Siguiente, "Restaurar escenario demo"), `DemoHomePage.tsx` ("Iniciar demo", 4 accesos rápidos, leyenda de procedencia), `DemoStepPage.tsx`, `steps/ContextStep.tsx` (flujo inyección→OK/NOK + estado de fuentes), `steps/StepPlaceholder.tsx` (contenido previsto por fase, sin gráficas falsas).
+- Procedencia: `lib/demo/origin.ts` + `components/ui/OriginBadge.tsx` (`OriginBadge`, `OriginLegend`).
+- Estado de demo: `lib/demo/DemoSessionProvider.tsx` (escenario activo; reset solo de estado del cliente).
+- Desviación: el nombre del cliente va por env var en lugar de JSON privado (más simple, mismo efecto D1).
+
 ### F2 — Generador IIoT determinista + API de señales
 
 **Objetivo:** señales de proceso simuladas verosímiles, reproducibles y servidas por ventana/resolución.
@@ -164,6 +172,16 @@ Entregables:
 
 Pruebas: determinismo (misma semilla → mismo hash), forma cíclica, cada escenario produce sus eventos, downsampling preserva extremos, API con auth/RBAC, límites de `max_points` y rango.
 Riesgos: volumen → nunca materializar más que la ventana pedida.
+
+**Resultado F2 (26/oct/2026):**
+- Ubicación final: `backend/app/engines/process_simulation/` (no `seed/`: la imagen Docker del backend solo copia `backend/`). Escenarios como datos Python versionados (`scenarios.py`), no YAML. README del módulo incluido. `GENERATOR_VERSION = "process-sim-1.0.0"`.
+- Modelo: línea de tiempo de ~980 ciclos (~29 s) en 8 h desde 2026-10-20T06:00Z, cacheada; fases cierre → llenado → mantenimiento → enfriamiento (con dosificación) → apertura. Ruido por hash del índice de muestra → el valor de un instante no cambia con el zoom.
+- 18 canales × 2 máquinas (`INY-01` con desviaciones de escenario, `INY-02` nominal como comparativo); 12 nidos en mesa rotativa; señales de control `ambient_humidity` y `aux_voltage` (`informative=false`).
+- Escenarios: `normal`, `thermal_drift` (+8 °C molde, alarma > 60 °C), `pressure_setpoint_change` (620 → 560 bar, más dispersión, 4 picos), `intermittent_fault_cavity_change` (5 fallos de accionamiento + paro de 20 min por cambio de inserto). `process_ok` sale solo de la ventana de proceso simulada (sin fuga).
+- Resolución: canales rápidos (10 Hz) en crudo hasta 6 000 muestras (~10 min) + vértices de cada ciclo; en ventanas largas, envolvente por ciclo. Canales lentos (1 Hz) en malla uniforme ≤ 6 000 + bordes de alarmas/paros. Después, min/max (`engines/timeseries/downsample.py`). 8 h completas de las 18 señales ≈ 1,1 s.
+- API `api/v1/industrial_signals.py`: `/tree`, `/scenarios`, `/series` (≤ 12 señales, `max_points` 50–5000, timestamps con zona horaria, puntos `[epoch_ms, valor]`), `/events`. Permiso `live_monitor.stream` (documentado en `docs/security/rbac.md`); 404 en metrology.
+- Frontend: `lib/industrial-signals/` (tipos + cliente) y `features/demo/steps/IiotSourcesStep.tsx` (selector de escenario, inventario por máquina/grupo, eventos con `T+hh:mm`).
+- Interfaz `SignalSource` reemplazable: **no** se creó como clase; el contrato reemplazable es la API REST (`source_type` en cada respuesta). Crear la abstracción cuando exista una segunda fuente real (CLAUDE.md §4: sin abstracciones especulativas).
 
 ### F3 — Explorador de señales estilo iba Analyzer
 
@@ -289,7 +307,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 - [ ] 5. Arrastrar/agregar 3 señales, tiempo común, zoom, quitar/ocultar; ejes por unidad. (F3)
 - [ ] 6. Cursores A/B con tiempo, valor y Δt. (F3)
 - [ ] 7. Scatter + regresión real con R²/coeficientes sobre datos alineados. (F4)
-- [ ] 8. Escenarios normal/deriva/anomalía reproducibles y restaurables sin borrar datos. (F2)
+- [x] 8. Escenarios normal/deriva/anomalía reproducibles y restaurables sin borrar datos. (F2)
 - [ ] 9. Lab ML/DL con cifras del informe, falsas alarmas y DL ≤ ML explícitos. (F7)
 - [ ] 10. Oleadas NOK no confunde rachas detectadas con episodios prevenidos. (F7)
 - [ ] 11. Cada pantalla distingue histórico / precalculado / simulado / experimental. (F8)
@@ -320,6 +338,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 |---|---|---|
 | 2026-10-26 | F0 | Reconocimiento hecho; rama `feat/industrial-quality-demo` creada desde `origin/main` `0f8ec0a`. PDFs e imágenes de referencia no encontrados localmente. Decisiones D1–D4 propuestas. |
 | 2026-10-26 | F0 | D5 decidido: un código + `APP_EDITION` (metrology/industrial) en lugar de dos ramas; añadida F9 (despliegue de dos ediciones). Protocolo de sesión añadido: una fase por chat. Contexto confidencial del prompt en `demo-private/client-brief.md` (gitignored). |
+| 2026-10-26 | F1+F2 | El usuario pidió avanzar el 25 % en una sola sesión → F1 y F2 hechas juntas. Pruebas: backend 1036 passed / 4 skipped (suite completa, Postgres local en :5433); frontend 120 passed (vitest), `tsc -b` limpio, `npm run build` OK. Arreglo de infraestructura de pruebas: `tests/conftest.py` reinicia el rate limiter de slowapi por prueba — en `origin/main` 40 pruebas fallaban por agotar el límite de 30 logins/min en la suite completa. DoD #8 ✅; DoD #4 parcial (árbol en API, explorador visual en F3). Siguiente: **F3**. |
 
 ---
 
@@ -328,3 +347,6 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 - Recibir del usuario los PDF de los informes y las 4 imágenes de referencia → guardarlos en `demo-private/` (gitignored) y verificar cifras de `client-brief.md`.
 - Vista por ciclo de inyección / comparativo de ciclos OK vs. NOK (opcional del prompt; solo si F3 queda estable).
 - Importación offline por lotes para archivos de decenas de millones de filas (F6 solo hace muestra).
+- Deuda previa (no introducida aquí): `ruff check app` reporta ~25 errores en archivos existentes (`demo_data.py`, `main.py`, `core/security.py`, `services/audit_service.py`…) y `ruff format` reformatearía ~15 archivos previos. Los archivos nuevos de IQ pasan ruff. El CI actual solo corre pruebas de `seed/`; los jobs backend/frontend siguen como comentario en `ci.yml`.
+- Aviso de Vite: bundle > 500 kB (previo). En F8 considerar `lazy()` para las rutas de la demo.
+- `.pyc` antiguos muestran rutas `C:\Users\renea\Proyectos\...` en tracebacks; es cosmético (borrar `__pycache__` si molesta).

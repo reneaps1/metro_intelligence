@@ -118,6 +118,8 @@ Role abbreviations used below:
 | `live_monitor` | `Stream` | M, QE, AD, AU | none | none | none | AD | WebSocket replay of already-seeded measurements (`docs/design/live-monitor-panel.md`); read-only, same auth as any REST endpoint, never writes to `measurement_results`. |
 | `live_monitor` | `Control` | none | none | QE, AD | none | AD | Presenter controls (pause/resume/speed/scenario, LM.3) -- distinct from `Stream`: any viewer can watch, only QE/AD can steer the session. Uses the existing `update` action ("modify a mutable current-state resource") rather than inventing a new action verb -- a live replay session is exactly that kind of mutable, ephemeral state. |
 
+Industrial edition (IQ-F2): `GET /api/v1/industrial-signals/*` (simulated process signals, scenarios and events) reuses the `live_monitor.stream` token -- same nature as the Live Monitor replay (read-only, replayed/simulated, never written to measurement history), so same role set (M, QE, AD, AU) and no new permission migration. These routes return 404 when `APP_EDITION=metrology`. `GET /api/v1/meta` (edition + demo label) needs any authenticated session and no specific permission.
+
 ## Minimum Demo Permissions
 
 The client-facing demo needs only this path:

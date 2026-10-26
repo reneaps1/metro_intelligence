@@ -10,6 +10,7 @@ environment variables directly, never through this file."""
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,6 +24,15 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     cors_origins: str
+
+    # --- Edition (IQ-F1, docs/tasks/IQ-plan-demo-industrial-quality.md D5) ---
+    # "metrology" = measurement monitoring only (the original product);
+    # "industrial" = adds the industrial-quality demo, IIoT signals and AI lab.
+    # Defaults to metrology so a missing variable never exposes new modules.
+    app_edition: Literal["metrology", "industrial"] = "metrology"
+    # Customer-facing label shown by the industrial demo. The real customer
+    # name is only ever set in the deployment environment, never in the repo.
+    demo_client_label: str = "Cliente demo"
 
     # --- Database (PostgreSQL 16) ---
     postgres_host: str

@@ -449,9 +449,120 @@ export const liveMonitorHandlers = [
   ),
 ];
 
+// IQ-F1: /meta defaults to the metrology edition so every pre-existing test
+// sees the original navigation; industrial tests override with server.use(...).
+export const META_METROLOGY_FIXTURE = { edition: "metrology", client_label: null, modules: [] };
+export const META_INDUSTRIAL_FIXTURE = {
+  edition: "industrial",
+  client_label: "Cliente demo",
+  modules: ["industrial_demo", "industrial_signals"],
+};
+
+export const metaHandlers = [http.get(`${API_BASE_URL}/meta`, () => HttpResponse.json(META_METROLOGY_FIXTURE))];
+
+export function industrialMetaHandler() {
+  return http.get(`${API_BASE_URL}/meta`, () => HttpResponse.json(META_INDUSTRIAL_FIXTURE));
+}
+
+// IQ-F2: fixtures mirroring backend/app/schemas/industrial_signals.py.
+const SIGNAL_LEAF = (machine: string, key: string, name: string, unit: string, valueType: string) => ({
+  id: `L1.${machine}.${key}`,
+  name,
+  node_type: "signal",
+  children: [],
+  signal: {
+    signal_id: `L1.${machine}.${key}`,
+    key,
+    machine_code: machine,
+    name,
+    unit,
+    value_type: valueType,
+    sampling: "continuous",
+    rate_hz: 1,
+    informative: true,
+    description: name,
+    source_type: "SIMULATED",
+  },
+});
+
+export const SIGNAL_TREE_FIXTURE = {
+  source_type: "SIMULATED",
+  generator_version: "process-sim-1.0.0",
+  root: {
+    id: "PLANTA-DEMO",
+    name: "Planta demo (ficticia)",
+    node_type: "plant",
+    signal: null,
+    children: [
+      {
+        id: "L1.INY-01",
+        name: "Inyectora 01",
+        node_type: "machine",
+        signal: null,
+        children: [
+          {
+            id: "L1.INY-01.temperatures",
+            name: "Temperaturas",
+            node_type: "group",
+            signal: null,
+            children: [SIGNAL_LEAF("INY-01", "mold_temp", "Temperatura de molde", "°C", "analog")],
+          },
+          {
+            id: "L1.INY-01.state",
+            name: "Estado de máquina",
+            node_type: "group",
+            signal: null,
+            children: [SIGNAL_LEAF("INY-01", "alarm", "Alarma activa", "0/1", "digital")],
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const SCENARIO_WINDOW = { start: "2026-10-20T06:00:00Z", end: "2026-10-20T14:00:00Z" };
+
+export const SCENARIOS_FIXTURE = {
+  source_type: "SIMULATED",
+  generator_version: "process-sim-1.0.0",
+  items: [
+    { id: "normal", name: "Operación normal estable", description: "Referencia.", event_count: 1, ...SCENARIO_WINDOW },
+    { id: "thermal_drift", name: "Deriva térmica del molde", description: "Molde +8 °C.", event_count: 2, ...SCENARIO_WINDOW },
+  ],
+};
+
+const EVENTS_BY_SCENARIO: Record<string, { label: string; start: string; severity: string; event_type: string }[]> = {
+  normal: [
+    { label: "Cambio de lote de material", start: "2026-10-20T08:00:00Z", severity: "info", event_type: "batch_change" },
+  ],
+  thermal_drift: [
+    { label: "Cambio de lote de material", start: "2026-10-20T08:00:00Z", severity: "info", event_type: "batch_change" },
+    { label: "Alarma: temperatura de molde > 60 °C", start: "2026-10-20T10:52:30Z", severity: "critical", event_type: "alarm" },
+  ],
+};
+
+export const industrialSignalsHandlers = [
+  http.get(`${API_BASE_URL}/industrial-signals/tree`, () => HttpResponse.json(SIGNAL_TREE_FIXTURE)),
+  http.get(`${API_BASE_URL}/industrial-signals/scenarios`, () => HttpResponse.json(SCENARIOS_FIXTURE)),
+  http.get(`${API_BASE_URL}/industrial-signals/events`, ({ request }) => {
+    const scenario = new URL(request.url).searchParams.get("scenario") ?? "";
+    const items = (EVENTS_BY_SCENARIO[scenario] ?? []).map((event, index) => ({
+      id: `${scenario}-${index}`,
+      scenario_id: scenario,
+      machine_code: "INY-01",
+      end: null,
+      signal_ids: [],
+      ...event,
+    }));
+    return HttpResponse.json({ scenario_id: scenario, source_type: "SIMULATED", items });
+  }),
+];
+
 export const server = setupServer(
   ...handlers,
   ...catalogHandlers,
   ...recommendationsHandlers,
   ...liveMonitorHandlers,
+  ...metaHandlers,
+  ...industrialSignalsHandlers,
 );
