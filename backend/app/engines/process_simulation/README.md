@@ -14,6 +14,20 @@ plant, machine or customer.
   `intermittent_fault_cavity_change`, each with annotated events.
 - `generator.py` — cycle timeline (seeded RNG, cached) + pure evaluation of any
   channel at any instant, and windowed series with min/max downsampling.
+- `alignment.py` (IQ-F4) — pairs two channels per cycle (simulated
+  traceability) or per time with a lag (no traceability), fits OLS via
+  `app/engines/statistics`, and scans lags.
+
+## "Vista B": synthetic quality with an imposed mechanism
+
+`dim_pins_length` / `dim_nok` (group `quality_sim`, `causal_imposed=true`) are
+a synthetic dimension built *from* the process on purpose, to demonstrate the
+analysis on known ground truth:
+`12.000 + 0.006·Δmold_temp − 0.0006·(hold_pressure − 620) + nest offset + noise`,
+tolerance ±0.050 mm, published 300 s after the cycle (inspection delay). In
+`intermittent_fault_cavity_change` nest 7 carries a worn insert (+0.04 mm)
+until the insert change. Process channels never read this layer (separate RNG
+stream), so there is no leakage from quality into process signals.
 
 ## Guarantees
 

@@ -22,6 +22,7 @@ class SignalInfo(BaseModel):
     informative: bool
     description: str
     source_type: SourceType
+    causal_imposed: bool
 
 
 class SignalTreeNode(BaseModel):
@@ -92,3 +93,39 @@ class ProcessEventListResponse(BaseModel):
     scenario_id: str
     source_type: SourceType
     items: list[ProcessEventOut]
+
+
+class CorrelationSignal(BaseModel):
+    signal_id: str
+    name: str
+    unit: str
+    causal_imposed: bool
+
+
+class LagScoreOut(BaseModel):
+    lag: float
+    n: int
+    pearson_r: float | None
+
+
+class CorrelationResponse(BaseModel):
+    scenario_id: str
+    source_type: SourceType
+    generator_version: str
+    x: CorrelationSignal
+    y: CorrelationSignal
+    mode: Literal["time", "cycle"]
+    lag: float
+    lag_unit: Literal["s", "cycles"]
+    start: datetime
+    end: datetime
+    n: int
+    pearson_r: float | None
+    slope: float | None
+    intercept: float | None
+    r_squared: float | None
+    # [x, y] scatter pairs, evenly thinned for the browser.
+    points: list[tuple[float, float]]
+    lag_scan: list[LagScoreOut]
+    best_lag: float | None
+    causal_imposed: bool

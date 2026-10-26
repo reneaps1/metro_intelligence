@@ -34,6 +34,9 @@ class SignalDefinition:
     # False for negative-control channels that carry no process information.
     informative: bool
     description: str
+    # IQ-F4 "Vista B": synthetic quality channel whose dependence on process
+    # signals was imposed on purpose to demonstrate the analysis technique.
+    causal_imposed: bool = False
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,7 @@ GROUPS: dict[str, str] = {
     "state": "Estado de máquina",
     "counters": "Ciclo y contadores",
     "ambient": "Ambiente (señales de control)",
+    "quality_sim": "Calidad sintética (Vista B · causalidad impuesta)",
 }
 
 SIGNALS: tuple[SignalDefinition, ...] = (
@@ -264,6 +268,31 @@ SIGNALS: tuple[SignalDefinition, ...] = (
         False,
         "Señal de control: alimentación auxiliar estable, no informativa.",
     ),
+    SignalDefinition(
+        "dim_pins_length",
+        "Longitud de pin (sintética)",
+        "quality_sim",
+        "mm",
+        "analog",
+        "per_cycle",
+        None,
+        True,
+        "Cota sintética inspeccionada 5 min después de cada ciclo. Mecanismo impuesto: depende de la "
+        "temperatura de molde, la presión de mantenimiento y el nido. Tolerancia 12.000 ± 0.050 mm.",
+        causal_imposed=True,
+    ),
+    SignalDefinition(
+        "dim_nok",
+        "NOK dimensional (sintético)",
+        "quality_sim",
+        "0/1",
+        "digital",
+        "per_cycle",
+        None,
+        True,
+        "1 si la longitud sintética queda fuera de tolerancia. Disponible 5 min después del ciclo.",
+        causal_imposed=True,
+    ),
 )
 
 _SIGNALS_BY_KEY = {s.key: s for s in SIGNALS}
@@ -309,6 +338,7 @@ def _signal_leaf(machine: MachineDefinition, signal: SignalDefinition) -> dict[s
             "informative": signal.informative,
             "description": signal.description,
             "source_type": SOURCE_TYPE,
+            "causal_imposed": signal.causal_imposed,
         },
     }
 

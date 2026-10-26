@@ -15,6 +15,7 @@ Every payload carries `source_type="SIMULATED"`: nothing here was measured.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -33,8 +34,16 @@ from app.engines.process_simulation import (
     scenario_events,
     signal_id,
 )
+from app.engines.process_simulation.alignment import (
+    DEFAULT_CYCLE_LAGS,
+    DEFAULT_TIME_LAGS_S,
+    correlate,
+)
 from app.models.security import User
 from app.schemas.industrial_signals import (
+    CorrelationResponse,
+    CorrelationSignal,
+    LagScoreOut,
     ProcessEventListResponse,
     ProcessEventOut,
     ScenarioListResponse,
@@ -57,6 +66,9 @@ MAX_SIGNALS_PER_REQUEST = 12
 MIN_POINTS = 50
 MAX_POINTS = 5000
 DEFAULT_POINTS = 1500
+
+MAX_TIME_LAG_S = 3600.0
+MAX_CYCLE_LAG = 50
 
 _SCENARIO_END = SCENARIO_START + timedelta(seconds=SCENARIO_DURATION_S)
 _PRIMARY_MACHINE = next(m.code for m in MACHINES if m.primary)
@@ -203,3 +215,83 @@ def list_events(
             )
         )
     return ProcessEventListResponse(scenario_id=scenario, source_type="SIMULATED", items=items)
+
+
+@router.get("/correlation", response_model=CorrelationResponse)
+def read_correlation(
+    scenario: str = Query(..., max_length=64),
+    x: str = Query(..., max_length=128),
+    y: str = Query(..., max_length=128),
+    mode: Literal["time", "cycle"] = "cycle",
+    lag: float = 0.0,
+    scan: bool = True,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    _user: User = Depends(_read),
+) -> CorrelationResponse:
+    """Pair two channels and fit y = intercept + slope * x (IQ-F4).
+
+    ``lag`` is in seconds for ``mode=time`` and in cycles for ``mode=cycle``;
+    with ``scan`` the Pearson r over a range of lags is returned as well.
+    """
+    _scenario_or_404(scenario)
+    try:
+        _, x_signal = parse_signal_id(x)
+        _, y_signal = parse_signal_id(y)
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Signal not found.") from None
+
+    if mode == "cycle":
+        if lag != int(lag) or abs(lag) > MAX_CYCLE_LAG:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"In cycle mode the lag must be a whole number of cycles up to ±{MAX_CYCLE_LAG}.",
+            )
+    elif abs(lag) > MAX_TIME_LAG_S:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"The lag must be within ±{int(MAX_TIME_LAG_S)} s."
+        )
+
+    start_s = _offset(start, 0.0)
+    end_s = _offset(end, SCENARIO_DURATION_S)
+    if start_s >= end_s:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The requested window is empty or outside the scenario.",
+        )
+
+    scan_lags = (DEFAULT_CYCLE_LAGS if mode == "cycle" else DEFAULT_TIME_LAGS_S) if scan else None
+    try:
+        result = correlate(scenario, x, y, start_s, end_s, mode, lag, scan_lags)
+    except ValueError:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Cycle alignment needs both signals from the same machine.",
+        ) from None
+
+    fit = result.fit
+    return CorrelationResponse(
+        scenario_id=scenario,
+        source_type="SIMULATED",
+        generator_version=GENERATOR_VERSION,
+        x=CorrelationSignal(
+            signal_id=x, name=x_signal.name, unit=x_signal.unit, causal_imposed=x_signal.causal_imposed
+        ),
+        y=CorrelationSignal(
+            signal_id=y, name=y_signal.name, unit=y_signal.unit, causal_imposed=y_signal.causal_imposed
+        ),
+        mode=mode,
+        lag=result.lag,
+        lag_unit="cycles" if mode == "cycle" else "s",
+        start=_at(start_s),
+        end=_at(end_s),
+        n=fit.n,
+        pearson_r=fit.pearson_r,
+        slope=fit.slope,
+        intercept=fit.intercept,
+        r_squared=fit.r_squared,
+        points=[(round(a, 6), round(b, 6)) for a, b in result.pairs],
+        lag_scan=[LagScoreOut(lag=s.lag, n=s.n, pearson_r=s.pearson_r) for s in result.scan],
+        best_lag=result.best_lag,
+        causal_imposed=result.causal_imposed,
+    )

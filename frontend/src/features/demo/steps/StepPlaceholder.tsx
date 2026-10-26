@@ -22,15 +22,6 @@ const PLANNED: Record<string, { phase: string; items: string[] }> = {
       "Carga de CSV con mapeo de columnas",
     ],
   },
-  correlation: {
-    phase: "F4",
-    items: [
-      "Dispersión entre dos canales alineados en el tiempo",
-      "Regresión lineal: ecuación, R², r de Pearson y número de pares",
-      "Barrido de desfase temporal (lag)",
-      "Variables informativas frente a no informativas",
-    ],
-  },
   ai: {
     phase: "F7",
     items: [

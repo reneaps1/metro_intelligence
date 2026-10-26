@@ -2,12 +2,14 @@ import { Navigate, useParams } from "react-router-dom";
 import { OriginBadge } from "../../components/ui/OriginBadge";
 import { DEMO_BASE_PATH, DEMO_STEPS, type DemoStep } from "../../lib/demo/steps";
 import { ContextStep } from "./steps/ContextStep";
-import { IiotSourcesStep } from "./steps/IiotSourcesStep";
+import { CorrelationStep } from "./steps/CorrelationStep";
+import { IiotLabStep } from "./steps/IiotLabStep";
 import { StepPlaceholder } from "./steps/StepPlaceholder";
 
 function StepContent({ step }: { step: DemoStep }) {
   if (step.id === "context") return <ContextStep />;
-  if (step.id === "iiot") return <IiotSourcesStep />;
+  if (step.id === "iiot") return <IiotLabStep />;
+  if (step.id === "correlation") return <CorrelationStep />;
   return <StepPlaceholder stepId={step.id} />;
 }
 

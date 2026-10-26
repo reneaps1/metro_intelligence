@@ -1,5 +1,7 @@
 import { apiFetch } from "../api";
 import type {
+  AlignMode,
+  CorrelationResponse,
   ProcessEventListResponse,
   ScenarioListResponse,
   SeriesResponse,
@@ -37,6 +39,20 @@ export function fetchSeries({ scenarioId, signalIds, start, end, maxPoints }: Se
   if (end) params.set("end", end);
   if (maxPoints) params.set("max_points", String(maxPoints));
   return apiFetch<SeriesResponse>(`/industrial-signals/series?${params.toString()}`);
+}
+
+export interface CorrelationQuery {
+  scenarioId: string;
+  x: string;
+  y: string;
+  mode: AlignMode;
+  lag: number;
+  scan?: boolean;
+}
+
+export function fetchCorrelation({ scenarioId, x, y, mode, lag, scan = true }: CorrelationQuery): Promise<CorrelationResponse> {
+  const params = new URLSearchParams({ scenario: scenarioId, x, y, mode, lag: String(lag), scan: String(scan) });
+  return apiFetch<CorrelationResponse>(`/industrial-signals/correlation?${params.toString()}`);
 }
 
 /** Signal leaves under a node, depth-first. */

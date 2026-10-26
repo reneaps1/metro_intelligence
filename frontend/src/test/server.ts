@@ -465,7 +465,14 @@ export function industrialMetaHandler() {
 }
 
 // IQ-F2: fixtures mirroring backend/app/schemas/industrial_signals.py.
-const SIGNAL_LEAF = (machine: string, key: string, name: string, unit: string, valueType: string) => ({
+const SIGNAL_LEAF = (
+  machine: string,
+  key: string,
+  name: string,
+  unit: string,
+  valueType: string,
+  causalImposed = false,
+) => ({
   id: `L1.${machine}.${key}`,
   name,
   node_type: "signal",
@@ -482,6 +489,7 @@ const SIGNAL_LEAF = (machine: string, key: string, name: string, unit: string, v
     informative: true,
     description: name,
     source_type: "SIMULATED",
+    causal_imposed: causalImposed,
   },
 });
 
@@ -508,11 +516,28 @@ export const SIGNAL_TREE_FIXTURE = {
             children: [SIGNAL_LEAF("INY-01", "mold_temp", "Temperatura de molde", "°C", "analog")],
           },
           {
+            id: "L1.INY-01.pressures",
+            name: "Presiones",
+            node_type: "group",
+            signal: null,
+            children: [
+              SIGNAL_LEAF("INY-01", "injection_pressure", "Presión de inyección", "bar", "analog"),
+              SIGNAL_LEAF("INY-01", "holding_pressure", "Presión de mantenimiento (media por ciclo)", "bar", "analog"),
+            ],
+          },
+          {
             id: "L1.INY-01.state",
             name: "Estado de máquina",
             node_type: "group",
             signal: null,
             children: [SIGNAL_LEAF("INY-01", "alarm", "Alarma activa", "0/1", "digital")],
+          },
+          {
+            id: "L1.INY-01.quality_sim",
+            name: "Calidad sintética (Vista B · causalidad impuesta)",
+            node_type: "group",
+            signal: null,
+            children: [SIGNAL_LEAF("INY-01", "dim_pins_length", "Longitud de pin (sintética)", "mm", "analog", true)],
           },
         ],
       },
@@ -555,6 +580,79 @@ export const industrialSignalsHandlers = [
       ...event,
     }));
     return HttpResponse.json({ scenario_id: scenario, source_type: "SIMULATED", items });
+  }),
+  // IQ-F3: three points per requested signal across the requested window
+  // (value = 100 + index), enough to exercise cursors, stats and tracks.
+  http.get(`${API_BASE_URL}/industrial-signals/series`, ({ request }) => {
+    const url = new URL(request.url);
+    const ids = (url.searchParams.get("signals") ?? "").split(",").filter(Boolean);
+    const start = Date.parse(url.searchParams.get("start") ?? SCENARIO_WINDOW.start);
+    const end = Date.parse(url.searchParams.get("end") ?? SCENARIO_WINDOW.end);
+    const mid = (start + end) / 2;
+    return HttpResponse.json({
+      scenario_id: url.searchParams.get("scenario"),
+      source_type: "SIMULATED",
+      generator_version: "process-sim-1.1.0",
+      start: new Date(start).toISOString(),
+      end: new Date(end).toISOString(),
+      series: ids.map((id, i) => ({
+        signal_id: id,
+        name: id,
+        unit: "u",
+        value_type: "analog",
+        sampling: "continuous",
+        native_points: 3,
+        returned_points: 3,
+        downsampled: false,
+        mode: "raw",
+        points: [
+          [start, 100 + i],
+          [mid, 110 + i],
+          [end, 120 + i],
+        ],
+      })),
+    });
+  }),
+  http.get(`${API_BASE_URL}/industrial-signals/correlation`, ({ request }) => {
+    const url = new URL(request.url);
+    const mode = url.searchParams.get("mode") ?? "cycle";
+    const x = url.searchParams.get("x") ?? "";
+    const y = url.searchParams.get("y") ?? "";
+    const causal = y.endsWith("dim_pins_length") || x.endsWith("dim_pins_length");
+    return HttpResponse.json({
+      scenario_id: url.searchParams.get("scenario"),
+      source_type: "SIMULATED",
+      generator_version: "process-sim-1.1.0",
+      x: { signal_id: x, name: "X", unit: "bar", causal_imposed: false },
+      y: { signal_id: y, name: "Y", unit: "mm", causal_imposed: causal },
+      mode,
+      lag: Number(url.searchParams.get("lag") ?? 0),
+      lag_unit: mode === "cycle" ? "cycles" : "s",
+      start: SCENARIO_WINDOW.start,
+      end: SCENARIO_WINDOW.end,
+      n: 983,
+      pearson_r: -0.914,
+      slope: -0.000592,
+      intercept: 12.37,
+      r_squared: 0.835,
+      points: [
+        [560, 12.03],
+        [620, 12.0],
+      ],
+      lag_scan:
+        mode === "cycle"
+          ? [
+              { lag: -1, n: 982, pearson_r: -0.1 },
+              { lag: 0, n: 983, pearson_r: -0.914 },
+              { lag: 1, n: 982, pearson_r: -0.1 },
+            ]
+          : [
+              { lag: 0, n: 600, pearson_r: -0.01 },
+              { lag: 300, n: 590, pearson_r: -0.31 },
+            ],
+      best_lag: mode === "cycle" ? 0 : 300,
+      causal_imposed: causal,
+    });
   }),
 ];
 

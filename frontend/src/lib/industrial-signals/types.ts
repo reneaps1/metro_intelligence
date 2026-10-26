@@ -13,6 +13,8 @@ export interface SignalInfo {
   informative: boolean;
   description: string;
   source_type: SignalSourceType;
+  /** IQ-F4 "Vista B": synthetic quality channel with an imposed causal mechanism. */
+  causal_imposed: boolean;
 }
 
 export interface SignalTreeNode {
@@ -85,4 +87,42 @@ export interface ProcessEventListResponse {
   scenario_id: string;
   source_type: SignalSourceType;
   items: ProcessEvent[];
+}
+
+export type AlignMode = "time" | "cycle";
+
+export interface CorrelationSignal {
+  signal_id: string;
+  name: string;
+  unit: string;
+  causal_imposed: boolean;
+}
+
+export interface LagScore {
+  lag: number;
+  n: number;
+  pearson_r: number | null;
+}
+
+export interface CorrelationResponse {
+  scenario_id: string;
+  source_type: SignalSourceType;
+  generator_version: string;
+  x: CorrelationSignal;
+  y: CorrelationSignal;
+  mode: AlignMode;
+  lag: number;
+  lag_unit: "s" | "cycles";
+  start: string;
+  end: string;
+  n: number;
+  pearson_r: number | null;
+  slope: number | null;
+  intercept: number | null;
+  r_squared: number | null;
+  /** [x, y] pairs */
+  points: [number, number][];
+  lag_scan: LagScore[];
+  best_lag: number | null;
+  causal_imposed: boolean;
 }

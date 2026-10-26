@@ -25,8 +25,8 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F0 | Reconocimiento y decisiones | ✅ Hecho | — | Ver §1 y §2 |
 | F1 | Edición configurable, shell de demo, procedencia y recorrido | ✅ Hecho | `feat/industrial-quality-demo` | Pasos 2,3,5,6,7 son placeholders honestos hasta sus fases |
 | F2 | Generador IIoT determinista + API de señales | ✅ Hecho | `feat/industrial-quality-demo` | Paso 4 muestra escenarios, inventario y eventos reales de la API |
-| F3 | Explorador de señales estilo iba | ⬜ Pendiente | | Pieza central del demo |
-| F4 | Correlación, regresión y caso sintético causal | ⬜ Pendiente | | Vista A / Vista B |
+| F3 | Explorador de señales estilo iba | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador (Edge headless, Playwright) |
+| F4 | Correlación, regresión y caso sintético causal | ✅ Hecho | `feat/industrial-quality-demo` | Vista B completa; Vista A depende de F5/F6 |
 | F5 | Dashboard de calidad dimensional (nidos) | ⬜ Pendiente | | KPIs, Pareto, heatmap |
 | F6 | Importación CSV con mapeo de columnas | ⬜ Pendiente | | Ancho/largo, muestra |
 | F7 | Laboratorio ML/DL y oleadas NOK | ⬜ Pendiente | | Cifras precalculadas |
@@ -201,6 +201,14 @@ Entregables (`frontend/src/features/industrial-analytics/`, `frontend/src/lib/in
 Pruebas: lógica de cursores (Δt), asignación de ejes por unidad, reducer de estado del explorador (agregar/quitar/ocultar), hook de carga de series con MSW.
 Hecho cuando: DoD #4, #5, #6.
 
+**Resultado F3 (26/oct/2026):**
+- `frontend/src/features/industrial-analytics/`: `SignalExplorer.tsx` (orquesta), `SignalTree.tsx` (búsqueda, expandir/colapsar, DnD con MIME `application/x-mi-signal` + botón «+» accesible; grupos de la máquina principal abiertos por defecto), `TrackChart.tsx` (Recharts, eje X común, un eje Y por unidad, brush-zoom, clic = cursor, eventos como franjas/líneas con marcadores `E<n>`, `syncId` para tooltip sincronizado), `SignalTable.tsx` (ver/color/unidad/A/B/Δ/mín./máx./muestras, subir/bajar/quitar). README del módulo.
+- Lógica pura en `lib/industrial-signals/explorer.ts` (reducer ≤ 8 trazas, agrupación por unidad, `valueAt` lineal o escalón, zoom/pan con límites, formatos) + `useSeries.ts` (debounce 120 ms, descarta respuestas viejas, re-pide resolución al hacer zoom).
+- Distribución «Pistas por unidad» (default) o «Superpuesto» (ejes múltiples, aviso si > 3 unidades); presets Todo/1 h/10 min/1 min; replay ×10/×60/×300 rotulado «Replay de simulación»; «Ir» a evento (ventana ±5 min + cursor A); «Vista sugerida para este escenario» para no abrir vacío.
+- Honestidad: en series en modo envolvente, los valores de cursor se muestran como `≈` con aviso de hacer zoom.
+- Paso 4 de la demo = `steps/IiotLabStep.tsx` (+ `steps/ScenarioPicker.tsx` compartido). Se eliminó `IiotSourcesStep.tsx` (lo reemplaza el explorador).
+- **Verificación en navegador** (Edge headless vía `playwright-core` en scratchpad, backend `APP_EDITION=industrial` contra BD desechable `metro_iq_e2e`, borrada al terminar): 17/17 comprobaciones — login, recorrido 1→7, vista sugerida, zoom por barra y por arrastre, cursores A/B con Δt, DnD desde el árbol, ir a evento, superpuesto con 3 ejes, replay, presets de correlación, desfase óptimo, dispersión, reset; 0 errores de consola, 0 excepciones, 0 HTTP ≥ 400. Modo oscuro revisado por captura. Hallazgos corregidos en la misma sesión: valores `≈` en envolvente, etiquetas de eventos encimadas → marcadores `E<n>`, celdas que se partían.
+
 ### F4 — Correlación, regresión y caso sintético causal
 
 **Objetivo:** cálculos reales, no decorativos.
@@ -214,6 +222,15 @@ Entregables:
 
 Pruebas: regresión contra vectores calculados a mano (y=2x+1 → R²=1), r de series independientes ≈ 0, alineación con desfase conocido recupera el lag, determinismo de Vista B.
 Hecho cuando: DoD #7.
+
+**Resultado F4 (26/oct/2026):**
+- Motor puro `backend/app/engines/statistics/regression.py` (`linear_fit`: OLS + Pearson con `fsum`; `None` si n < 3 o varianza cero).
+- `process_simulation/alignment.py`: modo `cycle` (un par por disparo = trazabilidad simulada; perfil → pico del ciclo, continuas → media en el ciclo) y modo `time` (x(t) vs y(t+lag), malla de 1 200 puntos); barrido de desfase (−600…900 s cada 30 s, o −10…10 ciclos); dispersión adelgazada a ≤ 1 500 pares.
+- **Vista B** (generador 1.1.0): canales `dim_pins_length` / `dim_nok` (grupo «Calidad sintética · causalidad impuesta», `causal_imposed=true`): `12.000 + 0.006·ΔT_molde − 0.0006·(P_mant − 620) + offset de nido + ruido`, tolerancia ±0.050 mm, publicados 300 s después del ciclo; nido 7 con inserto desgastado (+0.04 mm) hasta el cambio de inserto. RNG separado → las señales de proceso no cambian (sin fuga).
+- Resultados reproducibles: P_mant→longitud (cambio de setpoint) r = −0.91, R² = 0.83, pendiente −0.00059 mm/bar; T_molde→longitud (deriva) r = 0.90, pendiente 0.0061 mm/°C; humedad (control) r = 0.05; unión por tiempo sin desfase r ≈ −0.01 → con el desfase óptimo 300 s r = −0.31.
+- API `GET /api/v1/industrial-signals/correlation` (`mode`, `lag`, `scan`, ventana; 422 si `cycle` mezcla máquinas o lag fuera de rango).
+- UI `CorrelationPanel.tsx` + paso 5 `steps/CorrelationStep.tsx`: 4 presets, selectores X/Y, modo por ciclo/por tiempo, desfase, tarjetas n / r / R² / ecuación / desfase, frase en lenguaje de «asociación», dispersión + recta, barrido con «Usar desfase óptimo», banner «Simulación: relación causal impuesta» cuando aplica, tarjeta de **Vista A pendiente** (requiere datos dimensionales de F5/F6).
+- Pendiente para F5/F6: Vista A (mediciones históricas + sensores simulados, unión ilustrativa por tiempo).
 
 ### F5 — Dashboard de calidad dimensional (nidos)
 
@@ -303,10 +320,10 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 - [ ] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
 - [ ] 2. Dashboard con KPIs y varias gráficas coherentes, dataset rotulado. (F5)
 - [ ] 3. Se carga un CSV representativo, se ve el mapeo y ≥ 2 analíticas cambian. (F6)
-- [ ] 4. Árbol IIoT con señales analógicas/digitales, unidades y estado ficticio. (F2/F3)
-- [ ] 5. Arrastrar/agregar 3 señales, tiempo común, zoom, quitar/ocultar; ejes por unidad. (F3)
-- [ ] 6. Cursores A/B con tiempo, valor y Δt. (F3)
-- [ ] 7. Scatter + regresión real con R²/coeficientes sobre datos alineados. (F4)
+- [x] 4. Árbol IIoT con señales analógicas/digitales, unidades y estado ficticio. (F2/F3)
+- [x] 5. Arrastrar/agregar 3 señales, tiempo común, zoom, quitar/ocultar; ejes por unidad. (F3)
+- [x] 6. Cursores A/B con tiempo, valor y Δt. (F3)
+- [x] 7. Scatter + regresión real con R²/coeficientes sobre datos alineados. (F4)
 - [x] 8. Escenarios normal/deriva/anomalía reproducibles y restaurables sin borrar datos. (F2)
 - [ ] 9. Lab ML/DL con cifras del informe, falsas alarmas y DL ≤ ML explícitos. (F7)
 - [ ] 10. Oleadas NOK no confunde rachas detectadas con episodios prevenidos. (F7)
@@ -339,6 +356,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 | 2026-10-26 | F0 | Reconocimiento hecho; rama `feat/industrial-quality-demo` creada desde `origin/main` `0f8ec0a`. PDFs e imágenes de referencia no encontrados localmente. Decisiones D1–D4 propuestas. |
 | 2026-10-26 | F0 | D5 decidido: un código + `APP_EDITION` (metrology/industrial) en lugar de dos ramas; añadida F9 (despliegue de dos ediciones). Protocolo de sesión añadido: una fase por chat. Contexto confidencial del prompt en `demo-private/client-brief.md` (gitignored). |
 | 2026-10-26 | F1+F2 | El usuario pidió avanzar el 25 % en una sola sesión → F1 y F2 hechas juntas. Pruebas: backend 1036 passed / 4 skipped (suite completa, Postgres local en :5433); frontend 120 passed (vitest), `tsc -b` limpio, `npm run build` OK. Arreglo de infraestructura de pruebas: `tests/conftest.py` reinicia el rate limiter de slowapi por prueba — en `origin/main` 40 pruebas fallaban por agotar el límite de 30 logins/min en la suite completa. DoD #8 ✅; DoD #4 parcial (árbol en API, explorador visual en F3). Siguiente: **F3**. |
+| 2026-10-26 | F3+F4 | El usuario pidió llegar al 50 % → F3 y F4 en esta sesión, y verificar con navegador real («Playwright»): no hay skill con ese nombre, se usó la skill `run` con `playwright-core` + Edge instalado. Pruebas: backend 1064 passed / 4 skipped; frontend 141 passed, `tsc -b` limpio, build OK; navegador 17/17, sin errores de consola. DoD #4, #5, #6, #7 ✅. Pendiente de decisión del usuario: commit `5476a23` contiene el nombre del cliente en el historial de la rama (ya eliminado del archivo). Siguiente: **F5**. |
 
 ---
 
@@ -349,4 +367,5 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 - Importación offline por lotes para archivos de decenas de millones de filas (F6 solo hace muestra).
 - Deuda previa (no introducida aquí): `ruff check app` reporta ~25 errores en archivos existentes (`demo_data.py`, `main.py`, `core/security.py`, `services/audit_service.py`…) y `ruff format` reformatearía ~15 archivos previos. Los archivos nuevos de IQ pasan ruff. El CI actual solo corre pruebas de `seed/`; los jobs backend/frontend siguen como comentario en `ci.yml`.
 - Aviso de Vite: bundle > 500 kB (previo). En F8 considerar `lazy()` para las rutas de la demo.
+- Verificación en navegador reutilizable: no hay skill de proyecto para levantar la app. Receta usada (F3/F4): BD desechable migrada + usuario metrólogo ficticio, `uvicorn` con `APP_EDITION=industrial POSTGRES_DB=<desechable>`, `npx vite`, `playwright-core` con `channel: "msedge"`; la sesión vive en memoria, así que se navega dentro de la SPA sin recargar. Considerar `/run-skill-generator` para guardarla como skill del proyecto.
 - `.pyc` antiguos muestran rutas `C:\Users\renea\Proyectos\...` en tracebacks; es cosmético (borrar `__pycache__` si molesta).

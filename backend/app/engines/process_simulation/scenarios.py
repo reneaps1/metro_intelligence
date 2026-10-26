@@ -54,6 +54,8 @@ class Scenario:
     alarm_windows: tuple[tuple[float, float], ...] = ()
     # Machine stopped, no cycles (offset_s, duration_s).
     downtimes: tuple[tuple[float, float], ...] = ()
+    # Vista B only: worn insert in one nest, (nest, length offset mm, until offset_s).
+    worn_nest: tuple[int, float, float] | None = None
     events: tuple[ScenarioEvent, ...] = field(default=())
 
 
@@ -158,6 +160,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         fault_windows=_FAULTS,
         downtimes=(_INSERT_CHANGE,),
+        worn_nest=(7, 0.04, _INSERT_CHANGE[0] + _INSERT_CHANGE[1]),
         events=(
             _BATCH_CHANGE,
             *(

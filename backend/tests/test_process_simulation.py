@@ -16,7 +16,10 @@ from app.engines.process_simulation import (
     signal_id,
 )
 from app.engines.process_simulation.generator import (
+    DIM_HOLD_COEF_MM_PER_BAR,
+    DIM_MOLD_COEF_MM_PER_C,
     HOLD_WINDOW_BAR,
+    INSPECTION_DELAY_S,
     MOLD_TEMP_C,
     NEST_COUNT,
     PEAK_WINDOW_BAR,
@@ -254,3 +257,107 @@ def test_minmax_downsample_passthrough_and_validation() -> None:
     assert minmax_downsample(points, 10) == points
     with pytest.raises(ValueError):
         minmax_downsample(points, 1)
+
+
+# --- IQ-F4: synthetic quality layer (Vista B) and alignment ------------------------------
+
+
+def test_synthetic_dimension_follows_the_imposed_mechanism() -> None:
+    from app.engines.process_simulation.alignment import correlate
+
+    thermal = correlate(
+        "thermal_drift", _sid("mold_temp"), _sid("dim_pins_length"), 0.0, SCENARIO_DURATION_S, "cycle", 0
+    )
+    assert thermal.fit.slope == pytest.approx(DIM_MOLD_COEF_MM_PER_C, rel=0.1)
+    assert (thermal.fit.r_squared or 0) > 0.6
+    pressure = correlate(
+        "pressure_setpoint_change",
+        _sid("holding_pressure"),
+        _sid("dim_pins_length"),
+        0.0,
+        SCENARIO_DURATION_S,
+        "cycle",
+        0,
+    )
+    assert pressure.fit.slope == pytest.approx(DIM_HOLD_COEF_MM_PER_BAR, rel=0.1)
+    assert thermal.causal_imposed and pressure.causal_imposed
+
+
+def test_negative_control_does_not_explain_the_dimension() -> None:
+    from app.engines.process_simulation.alignment import correlate
+
+    result = correlate(
+        "normal", _sid("ambient_humidity"), _sid("dim_pins_length"), 0.0, SCENARIO_DURATION_S, "cycle", 0
+    )
+    assert abs(result.fit.pearson_r or 0) < 0.1
+
+
+def test_time_join_recovers_the_inspection_delay() -> None:
+    from app.engines.process_simulation.alignment import DEFAULT_TIME_LAGS_S, correlate
+
+    result = correlate(
+        "normal",
+        _sid("holding_pressure"),
+        _sid("dim_pins_length"),
+        0.0,
+        SCENARIO_DURATION_S,
+        "time",
+        0,
+        DEFAULT_TIME_LAGS_S,
+    )
+    # Joined naively by time (lag 0) the relation disappears; at the inspection delay it is back.
+    assert abs(result.fit.pearson_r or 0) < 0.1
+    assert result.best_lag == INSPECTION_DELAY_S
+    at_delay = next(s for s in result.scan if s.lag == INSPECTION_DELAY_S)
+    assert (at_delay.pearson_r or 0) < -0.2
+
+
+def test_cycle_lag_scan_peaks_at_zero_for_independent_cycles() -> None:
+    from app.engines.process_simulation.alignment import DEFAULT_CYCLE_LAGS, correlate
+
+    result = correlate(
+        "normal",
+        _sid("holding_pressure"),
+        _sid("dim_pins_length"),
+        0.0,
+        SCENARIO_DURATION_S,
+        "cycle",
+        0,
+        DEFAULT_CYCLE_LAGS,
+    )
+    assert result.best_lag == 0
+    assert len(result.pairs) <= 1500
+
+
+def test_cycle_mode_rejects_different_machines() -> None:
+    from app.engines.process_simulation.alignment import correlate
+
+    with pytest.raises(ValueError):
+        correlate("normal", _sid("mold_temp"), _sid("mold_temp", "INY-02"), 0.0, 3600.0, "cycle", 0)
+
+
+def test_worn_nest_concentrates_synthetic_nok_until_insert_change() -> None:
+    cycles = build_timeline("intermittent_fault_cavity_change", PRIMARY).cycles
+    nok = [c for c in cycles if c.dim_nok]
+    assert nok and all(c.cavity == 7 and c.start < 4 * H for c in nok)
+    assert not [c for c in build_timeline("normal", PRIMARY).cycles if c.dim_nok]
+
+
+def test_inspection_result_is_published_after_the_delay() -> None:
+    timeline = build_timeline("normal", PRIMARY)
+    c = timeline.cycles[200]
+    series = generate_series(
+        "normal", _sid("dim_pins_length"), c.start, c.start + 2 * INSPECTION_DELAY_S, 2000
+    )
+    assert (c.start + INSPECTION_DELAY_S, pytest.approx(c.dim_length)) in [
+        (t, pytest.approx(v)) for t, v in series.points
+    ]
+
+
+def test_process_signals_do_not_depend_on_the_quality_layer() -> None:
+    # Leakage guard: process values are drawn from their own RNG stream.
+    timeline = build_timeline("thermal_drift", PRIMARY)
+    first = [(c.peak_pressure, c.hold_pressure) for c in timeline.cycles[:50]]
+    build_timeline.cache_clear()
+    again = [(c.peak_pressure, c.hold_pressure) for c in build_timeline("thermal_drift", PRIMARY).cycles[:50]]
+    assert first == again

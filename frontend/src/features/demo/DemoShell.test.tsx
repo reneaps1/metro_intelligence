@@ -12,7 +12,7 @@ import { render } from "@testing-library/react";
 import { DemoShell } from "./DemoShell";
 import { DemoHomePage } from "./DemoHomePage";
 import { DemoStepPage } from "./DemoStepPage";
-import { formatOffset } from "./steps/IiotSourcesStep";
+import { formatRelative } from "../../lib/industrial-signals/explorer";
 
 const CREDS = { email: METROLOGIST_EMAIL, password: METROLOGIST_PASSWORD };
 
@@ -132,9 +132,11 @@ describe("OriginBadge", () => {
   });
 });
 
-describe("formatOffset", () => {
+describe("formatRelative", () => {
   it("formats the offset from the scenario start", () => {
-    expect(formatOffset("2026-10-20T06:00:00Z", "2026-10-20T08:05:00Z")).toBe("T+02:05");
-    expect(formatOffset("2026-10-20T06:00:00Z", "2026-10-20T06:00:00Z")).toBe("T+00:00");
+    const origin = Date.parse("2026-10-20T06:00:00Z");
+    expect(formatRelative(Date.parse("2026-10-20T08:05:00Z"), origin)).toBe("T+02:05");
+    expect(formatRelative(origin, origin)).toBe("T+00:00");
+    expect(formatRelative(Date.parse("2026-10-20T10:52:30Z"), origin, true)).toBe("T+04:52:30");
   });
 });

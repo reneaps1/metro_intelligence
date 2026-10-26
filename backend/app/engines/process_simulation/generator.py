@@ -35,7 +35,7 @@ from app.engines.process_simulation.catalog import (
 from app.engines.process_simulation.scenarios import Scenario, ScenarioEvent, get_scenario
 from app.engines.timeseries.downsample import minmax_downsample
 
-GENERATOR_VERSION = "process-sim-1.0.0"
+GENERATOR_VERSION = "process-sim-1.1.0"
 BASE_SEED = 20261026
 SCENARIO_START = datetime(2026, 10, 20, 6, 0, tzinfo=UTC)
 SCENARIO_DURATION_S = 8 * 3600.0
@@ -57,6 +57,18 @@ COOLING_TIME_S = 18.0
 PEAK_WINDOW_BAR = (1000.0, 1200.0)
 HOLD_WINDOW_BAR = (540.0, 680.0)
 MOLD_TEMP_MAX_C = 60.0
+
+# IQ-F4 "Vista B": synthetic dimension with an IMPOSED causal mechanism, used
+# only to demonstrate correlation/regression/lag analysis on known ground
+# truth. Process channels never depend on it (no leakage the other way).
+INSPECTION_DELAY_S = 300.0
+DIM_NOMINAL_MM = 12.0
+DIM_TOL_MM = 0.05
+DIM_MOLD_COEF_MM_PER_C = 0.006
+DIM_HOLD_COEF_MM_PER_BAR = -0.0006
+DIM_NOISE_MM = 0.007
+HOLD_REFERENCE_BAR = 620.0
+DIM_KEYS = frozenset({"dim_pins_length", "dim_nok"})
 
 # Above this many native samples in the requested window, profile channels
 # switch to a per-cycle envelope and slow channels to a coarser uniform grid.
@@ -83,6 +95,8 @@ class Cycle:
     fault: bool
     alarm: bool
     process_ok: bool
+    dim_length: float
+    dim_nok: bool
 
     @property
     def fill_start(self) -> float:
@@ -242,6 +256,10 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
     machine = _machine(machine_code)
     effective = scenario if machine.primary else get_scenario("normal")
     rng = random.Random(f"{BASE_SEED}:{scenario.id}:{machine.code}")
+    # Separate streams so the synthetic quality layer never perturbs process values.
+    rng_quality = random.Random(f"{BASE_SEED}:{scenario.id}:{machine.code}:quality")
+    nest_rng = random.Random(f"{BASE_SEED}:nests:{machine.code}")
+    nest_offsets = [nest_rng.gauss(0.0, 0.003) for _ in range(NEST_COUNT)]
     seed = _splitmix64(BASE_SEED ^ zlib.crc32(f"{scenario.id}:{machine.code}".encode()))
 
     cycles: list[Cycle] = []
@@ -279,6 +297,18 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
             and MOLD_TEMP_C + mold_delta <= MOLD_TEMP_MAX_C
             and not fault
         )
+        cavity = shot % NEST_COUNT + 1
+        nest_offset = nest_offsets[cavity - 1]
+        worn = effective.worn_nest
+        if worn is not None and cavity == worn[0] and t < worn[2]:
+            nest_offset += worn[1]
+        dim_length = (
+            DIM_NOMINAL_MM
+            + DIM_MOLD_COEF_MM_PER_C * mold_delta
+            + DIM_HOLD_COEF_MM_PER_BAR * (hold_pressure - HOLD_REFERENCE_BAR)
+            + nest_offset
+            + rng_quality.gauss(0.0, DIM_NOISE_MM)
+        )
         cycles.append(
             Cycle(
                 index=len(cycles),
@@ -292,11 +322,13 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
                 hold_pressure=hold_pressure,
                 fill_speed=SHOT_STROKE_MM / (fill_s - SPEED_RAMP_S),
                 cushion=cushion,
-                cavity=shot % NEST_COUNT + 1,
+                cavity=cavity,
                 shot=shot,
                 fault=fault,
                 alarm=fault or spiked,
                 process_ok=process_ok,
+                dim_length=dim_length,
+                dim_nok=abs(dim_length - DIM_NOMINAL_MM) > DIM_TOL_MM,
             )
         )
         shot += 1
@@ -328,7 +360,16 @@ def _per_cycle_value(key: str, c: Cycle) -> float:
         return float(c.shot)
     if key == "process_ok":
         return 1.0 if c.process_ok else 0.0
+    if key == "dim_pins_length":
+        return c.dim_length
+    if key == "dim_nok":
+        return 1.0 if c.dim_nok else 0.0
     raise KeyError(key)
+
+
+def report_time(key: str, c: Cycle) -> float:
+    """When a per-cycle value becomes available: at cycle start, or after inspection."""
+    return c.start + (INSPECTION_DELAY_S if key in DIM_KEYS else 0.0)
 
 
 def _injection_pressure(c: Cycle | None, p: float, n: float) -> float:
@@ -402,7 +443,9 @@ def evaluate(timeline: Timeline, key: str, t: float) -> float:
     """Value of channel ``key`` at offset ``t`` seconds from the scenario start."""
     signal = get_signal(key)
     if signal.sampling == "per_cycle":
-        c = timeline.last_cycle_before(t) or timeline.cycles[0]
+        # Inspection results are only known INSPECTION_DELAY_S after the cycle.
+        lookup = t - INSPECTION_DELAY_S if key in DIM_KEYS else t
+        c = timeline.last_cycle_before(lookup) or timeline.cycles[0]
         return _per_cycle_value(key, c)
 
     rate = signal.rate_hz or 1.0
@@ -505,7 +548,11 @@ def generate_series(
     mode: Mode = "raw"
 
     if signal.sampling == "per_cycle":
-        points = [(c.start, _per_cycle_value(key, c)) for c in in_window if c.start >= start_s]
+        points = [
+            (report_time(key, c), _per_cycle_value(key, c))
+            for c in timeline.cycles
+            if start_s <= report_time(key, c) <= end_s
+        ]
         if not points or points[0][0] > start_s:
             points.insert(0, (start_s, evaluate(timeline, key, start_s)))
         native = len(points)

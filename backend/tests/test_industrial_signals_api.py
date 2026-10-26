@@ -241,3 +241,113 @@ def test_events_payload_and_filter(client: TestClient, as_role, edition) -> None
         headers=as_role("admin"),
     ).json()
     assert [e["event_type"] for e in early["items"]] == ["batch_change"]
+
+
+# --- IQ-F4: correlation endpoint ---------------------------------------------------------------
+
+
+def _corr(client: TestClient, as_role, **params):
+    return client.get("/api/v1/industrial-signals/correlation", params=params, headers=as_role("metrologist"))
+
+
+def test_correlation_cycle_mode_payload(client: TestClient, as_role, edition) -> None:
+    edition("industrial")
+    response = _corr(
+        client,
+        as_role,
+        scenario="pressure_setpoint_change",
+        x="L1.INY-01.holding_pressure",
+        y="L1.INY-01.dim_pins_length",
+        mode="cycle",
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["source_type"] == "SIMULATED"
+    assert body["causal_imposed"] is True
+    assert body["lag_unit"] == "cycles"
+    assert body["y"]["unit"] == "mm"
+    assert body["r_squared"] > 0.6
+    assert body["slope"] < 0
+    assert 0 < len(body["points"]) <= 1500
+    assert [s["lag"] for s in body["lag_scan"]] == list(range(-10, 11))
+
+
+def test_correlation_time_mode_finds_inspection_delay(client: TestClient, as_role, edition) -> None:
+    edition("industrial")
+    body = _corr(
+        client,
+        as_role,
+        scenario="normal",
+        x="L1.INY-01.holding_pressure",
+        y="L1.INY-01.dim_pins_length",
+        mode="time",
+    ).json()
+    assert body["lag_unit"] == "s"
+    assert body["best_lag"] == 300
+
+
+def test_correlation_without_scan_and_window(client: TestClient, as_role, edition) -> None:
+    edition("industrial")
+    body = _corr(
+        client,
+        as_role,
+        scenario="normal",
+        x="L1.INY-01.ambient_humidity",
+        y="L1.INY-01.dim_pins_length",
+        scan="false",
+        start="2026-10-20T06:00:00Z",
+        end="2026-10-20T08:00:00Z",
+    ).json()
+    assert body["lag_scan"] == [] and body["best_lag"] is None
+    assert body["causal_imposed"] is True  # y is the synthetic dimension
+    assert abs(body["pearson_r"]) < 0.2
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({"scenario": "nope", "x": "L1.INY-01.mold_temp", "y": "L1.INY-01.dim_pins_length"}, 404),
+        ({"scenario": "normal", "x": "L1.INY-01.nope", "y": "L1.INY-01.dim_pins_length"}, 404),
+        (
+            {"scenario": "normal", "x": "L1.INY-01.mold_temp", "y": "L1.INY-02.mold_temp", "mode": "cycle"},
+            422,
+        ),
+        ({"scenario": "normal", "x": "L1.INY-01.mold_temp", "y": "L1.INY-01.mold_temp", "lag": 1.5}, 422),
+        ({"scenario": "normal", "x": "L1.INY-01.mold_temp", "y": "L1.INY-01.mold_temp", "lag": 99}, 422),
+        (
+            {
+                "scenario": "normal",
+                "x": "L1.INY-01.mold_temp",
+                "y": "L1.INY-01.mold_temp",
+                "mode": "time",
+                "lag": 4000,
+            },
+            422,
+        ),
+        (
+            {"scenario": "normal", "x": "L1.INY-01.mold_temp", "y": "L1.INY-01.mold_temp", "mode": "bogus"},
+            422,
+        ),
+    ],
+)
+def test_correlation_validation(client: TestClient, as_role, edition, params: dict, expected: int) -> None:
+    edition("industrial")
+    response = client.get("/api/v1/industrial-signals/correlation", params=params, headers=as_role("admin"))
+    assert response.status_code == expected, response.text
+
+
+def test_correlation_hidden_in_metrology(client: TestClient, as_role, edition) -> None:
+    edition("metrology")
+    response = _corr(client, as_role, scenario="normal", x="L1.INY-01.mold_temp", y="L1.INY-01.mold_temp")
+    assert response.status_code == 404
+
+
+def test_tree_exposes_causal_imposed_flag(client: TestClient, as_role, edition) -> None:
+    edition("industrial")
+    body = client.get("/api/v1/industrial-signals/tree", headers=as_role("metrologist")).json()
+
+    def leaves(node: dict) -> list[dict]:
+        return [node] if node["node_type"] == "signal" else [x for c in node["children"] for x in leaves(c)]
+
+    flagged = {leaf["signal"]["key"] for leaf in leaves(body["root"]) if leaf["signal"]["causal_imposed"]}
+    assert flagged == {"dim_pins_length", "dim_nok"}
