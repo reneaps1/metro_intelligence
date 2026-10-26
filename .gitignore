@@ -36,6 +36,7 @@ pgdata/
 minio-data/
 data/raw/
 data/imports/
+demo-private/
 *.bak
 
 # IDE / OS
