@@ -78,7 +78,7 @@ describe("DemoShell walkthrough", () => {
 
     await user.click(screen.getByRole("button", { name: /siguiente: diagnóstico de calidad/i }));
     expect(await screen.findByRole("heading", { name: "Diagnóstico de calidad" })).toBeInTheDocument();
-    expect(screen.getByText(/en construcción/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText("Indicadores de calidad")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /anterior/i }));
     expect(await screen.findByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();

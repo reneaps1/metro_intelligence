@@ -32,7 +32,9 @@ export function ScenarioPicker({ scenarios }: { scenarios: AsyncState<ScenarioLi
           >
             <span className="block text-sm font-semibold text-text-primary">{scenario.name}</span>
             <span className="block text-xs text-text-secondary">{scenario.description}</span>
-            <span className="mt-1 block text-xs text-text-secondary">{scenario.event_count} eventos anotados</span>
+            <span className="mt-1 block text-xs text-text-secondary">
+              {scenario.event_count} {scenario.event_count === 1 ? "evento anotado" : "eventos anotados"}
+            </span>
           </button>
         ))}
       </div>

@@ -25,14 +25,14 @@ export const DEMO_STEPS: DemoStep[] = [
     number: 2,
     title: "Diagnóstico de calidad",
     summary: "KPIs, tendencia de NOK, Pareto y el nido crítico.",
-    origins: ["HISTORICAL", "PRECOMPUTED"],
+    origins: ["SIMULATED", "PRECOMPUTED"],
   },
   {
     id: "dimensional",
     number: 3,
     title: "Exploración dimensional",
     summary: "Variables, distribución, tolerancias y control estadístico por nido, turno y máquina.",
-    origins: ["HISTORICAL", "REAL"],
+    origins: ["SIMULATED"],
   },
   {
     id: "iiot",

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Customer-facing label shown by the industrial demo. The real customer
     # name is only ever set in the deployment environment, never in the repo.
     demo_client_label: str = "Cliente demo"
+    # IQ-F5: optional path to a PRIVATE JSON with the customer's historical
+    # report summary (kept outside the repo). Unset = illustrative placeholder.
+    demo_report_summary_path: str | None = None
 
     # --- Database (PostgreSQL 16) ---
     postgres_host: str

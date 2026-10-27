@@ -27,9 +27,9 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F2 | Generador IIoT determinista + API de señales | ✅ Hecho | `feat/industrial-quality-demo` | Paso 4 muestra escenarios, inventario y eventos reales de la API |
 | F3 | Explorador de señales estilo iba | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador (Edge headless, Playwright) |
 | F4 | Correlación, regresión y caso sintético causal | ✅ Hecho | `feat/industrial-quality-demo` | Vista B completa; Vista A depende de F5/F6 |
-| F5 | Dashboard de calidad dimensional (nidos) | ⬜ Pendiente | | KPIs, Pareto, heatmap |
+| F5 | Dashboard de calidad dimensional (nidos) | ✅ Hecho | `feat/industrial-quality-demo` | Dataset sintético + informe privado; verificado en navegador |
 | F6 | Importación CSV con mapeo de columnas | ⬜ Pendiente | | Ancho/largo, muestra |
-| F7 | Laboratorio ML/DL y oleadas NOK | ⬜ Pendiente | | Cifras precalculadas |
+| F7 | Laboratorio ML/DL, oleadas NOK y predicción de alarmas | ⬜ Pendiente | | Cifras precalculadas + F7.b alarmas (experimental, simulado) |
 | F8 | Oportunidad de integración, pulido, guía y handoff | ⬜ Pendiente | | Docs, pruebas, PR |
 | F9 | Despliegue de dos ediciones (metrology + industrial) | ⬜ Pendiente | | Requiere autorización para tocar VPS/deploy |
 
@@ -91,7 +91,7 @@ Orden de ejecución: F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9.
 |---|---|---|---|
 | D1 | ¿Dónde viven el nombre del cliente y las cifras del informe? | CLAUDE.md §7/§16/§20 prohíben datos reales de clientes en el repo; el repo es público en GitHub. | Repo solo con **etiqueta genérica** ("Cliente demo") y **cifras placeholder ficticias** en un fixture versionado. Nombre real vía variable de entorno `DEMO_CLIENT_LABEL` (solo en el `.env` del despliegue; implementado en F1). Cifras reales del informe en `demo-private/` (**gitignored**), a cargar en F7. Guía final como `docs/demo-industrial-quality.md` (ningún nombre de cliente en nombres de archivo). |
 | D2 | Persistencia de señales IIoT | Crear tablas de series exige migración y volumen. | **Sin tablas nuevas**: generador determinista puro que el backend evalúa bajo demanda (escenario + ventana + resolución). "Restaurar escenario" = reset de estado, nunca borra BD. |
-| D3 | Nido/cavidad en mediciones | No existe en el modelo. | Migración Alembic pequeña y reversible `0009`: columna nullable `cavity_code` en `measurement_runs` (+ índice). Sin tablas duplicadas. |
+| D3 | Nido/cavidad en mediciones | No existe en el modelo. | Migración Alembic pequeña y reversible `0009`: columna nullable `cavity_code` en `measurement_runs` (+ índice). Sin tablas duplicadas. **Actualización F5:** no hizo falta para el dataset sintético (stateless). Se decide en F6 según cómo se persistan los CSV importados. |
 | D4 | Permiso RBAC para endpoints nuevos | Añadir permisos requiere migración y actualizar `rbac.md`. | Reusar `live_monitor:read` (misma naturaleza: replay/simulación de solo lectura) para señales y analítica demo; `imports` existentes para el mapeo. Documentar en `rbac.md`. |
 
 D1–D4: el usuario no objetó → se aplican los defaults propuestos. Reabrir solo si aparece un bloqueo.
@@ -248,6 +248,15 @@ Entregables:
 Pruebas: agregados con dataset pequeño conocido, filtros cambian resultados, Cpk ausente sin tolerancias.
 Hecho cuando: DoD #2.
 
+**Resultado F5 (26/oct/2026):**
+- Motor puro `backend/app/engines/quality_analytics/` (README): `DimensionalDataset` columnar e independiente de la fuente (F6 solo debe producir uno), `synthetic.py` (SIMULADO, semilla fija, 7 días × 2 máquinas × 12 nidos × 10 cotas = 60 480 piezas; mecanismos documentados: nido crítico `DEMO_CRITICAL_NEST` (default 4), 4 oleadas NOK, desgaste de herramienta + cambio en día 3.5, dispersión en turno C, contracción en lote MAT-C, coplanaridad INY-02) y `analytics.py` (KPIs con denominadores, IC de Wilson, riesgo relativo, tendencia día/hora/turno, Pareto con ↑/↓, heatmap, histograma, boxplots, Cp/Cpk e I-MR con los motores SPC existentes, Cpk diario). Resultado por defecto: tasa NOK 1.59 %, nido 4 9.2 % (RR ≈ 10×).
+- Sin migración: el dataset demo es stateless (D3 se pospone a F6).
+- Resumen del informe (PRECALCULADO) vía `DEMO_REPORT_SUMMARY_PATH` (`services/report_summary_service.py`): JSON privado validado (≤ 256 KB); si falta o es inválido, ejemplo ficticio marcado «Ejemplo ilustrativo». Cifras reales en `demo-private/report-summary.json` (gitignored).
+- API `api/v1/quality_analytics.py`: `/datasets`, `/overview`, `/variable`, `/report-summary` (permiso `measurement.measurement_result.read`, 404 en metrology). Variables nuevas en `.env.example`.
+- Frontend `features/quality-analytics/` (README): pasos 2 y 3 con filtros coordinados persistentes en la sesión de demo (se limpian con «Restaurar escenario»), filtros no soportados deshabilitados con explicación, CSV agregado por nido, «Verdad conocida del dataset sintético». Procedencia de pasos 2/3 corregida a SIMULADO (+ PRECALCULADO en el informe) y tabla de fuentes del paso 1 actualizada.
+- Verificación en navegador: 9/9 (KPIs, filtro por nido cambia datos, tendencia horaria, informe privado cargado, Cpk, boxplot por turno, Cp unilateral explicado, filtros persisten y se reinician) + regresión F1–F4 17/17, 0 errores de consola. Hallazgos corregidos: heatmap cortaba el nido 12, etiquetas del Pareto cortadas, Cpk «1» → «1.00», plural de eventos, distribución de tarjetas.
+- **Coherencia narrativa:** con el informe privado cargado, hay que desplegar con `DEMO_CRITICAL_NEST` igual al nido crítico del informe (valor en `demo-private/client-brief.md`); si no, el sintético y el informe señalan nidos distintos. Incluido en F9.
+
 ### F6 — Importación CSV con mapeo de columnas
 
 **Objetivo:** subir un CSV con formato distinto y ver analíticas que cambian.
@@ -279,8 +288,16 @@ Entregables (`frontend/src/features/predictive/`):
 - Umbral precisión/recall interactivo **solo** si hay resultados por umbral reales/precalculados; si no, se omite.
 - Lenguaje: indicio, asociación, hipótesis, requiere validación en planta.
 
-Pruebas: render del fixture, evaluación por episodio (alerta antes del inicio cuenta, durante no), CUSUM sobre vector conocido.
-Hecho cuando: DoD #9, #10.
+**F7.b — Predicción experimental de alarmas/fallas de máquina** (añadido 26/oct/2026 a petición del usuario; ~½ fase extra):
+- Historial simulado largo (semanas, varias semillas) en el simulador de proceso: fallas aleatorias (proceso de Poisson con tasa que cambia por desgaste/mantenimiento) con **precursores** físicos (p. ej. vibración y corriente que suben horas antes), más mantenimientos que resetean el riesgo. Fallas sin precursor también existen (no todo es predecible).
+- Features por ventana: frecuencia de fallas/alarmas recientes (1 h, 8 h, 24 h), tiempo desde la última falla/mantenimiento, tendencia de vibración/corriente.
+- Modelo simple y explicable (regresión logística, pura en Python) con partición temporal train/test, comparado contra **líneas base**: «si hubo falla en la última hora → alertar» y tasa constante.
+- Evaluación honesta: por episodio de falla, tiempo de anticipación, falsas alarmas por turno, matriz de confusión, curva precisión/recall por umbral (calculada sobre scores reales del modelo simulado). Coeficientes visibles (qué feature pesa).
+- UI en paso 6: timeline de fallas reales-simuladas vs. alertas del modelo, umbral interactivo, tarjeta de limitaciones. Rotulado **EXPERIMENTAL · datos simulados**; nota de qué haría falta en planta: historial de alarmas del PLC, registro de paros y mantenimiento, etiquetado de causas.
+- Sin fuga: el label (falla en las próximas N horas) nunca entra como feature; validación sobre semillas/periodos no vistos.
+
+Pruebas: render del fixture, evaluación por episodio (alerta antes del inicio cuenta, durante no), CUSUM sobre vector conocido; F7.b: regresión logística contra vector conocido, ventana de features sin información futura, la línea base y el modelo se evalúan sobre el mismo test.
+Hecho cuando: DoD #9, #10 (+ F7.b con métricas por episodio y comparación contra línea base).
 
 ### F8 — Oportunidad de integración, pulido, guía y handoff
 
@@ -305,6 +322,7 @@ Entregables:
 - `docker-compose.vps.yml` parametrizado: nombre de proyecto (`-p`), puertos, volúmenes y `APP_EDITION` por instancia; sin nombres de contenedor fijos.
 - Base de datos y bucket MinIO **separados** por edición (la industrial no toca datos de la actual).
 - Archivos de entorno por instancia en el VPS (`.env.metrology`, `.env.industrial`), nunca en el repo; placeholders en `.env.example`.
+- Instancia industrial del cliente: `DEMO_CLIENT_LABEL`, `DEMO_CRITICAL_NEST` (coherente con el informe) y `DEMO_REPORT_SUMMARY_PATH` apuntando a una copia privada del JSON en el VPS (fuera del repo y de la imagen). Valores en `demo-private/client-brief.md`.
 - Workflow: un job (matrix) que despliega ambas instancias tras push a `main`, o disparo manual (`workflow_dispatch`) para la industrial durante las demos.
 - Proxy/Nginx: dos subdominios (p. ej. `metro.<dominio>` y `industrial.<dominio>`), TLS en ambos.
 - Seed: la instancia industrial carga escenarios demo de forma idempotente al arrancar (patrón de `backend/app/demo_data.py` con advisory lock), sin crear/borrar usuarios.
@@ -318,7 +336,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 ## 4. Definition of Done (checklist de aceptación)
 
 - [ ] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
-- [ ] 2. Dashboard con KPIs y varias gráficas coherentes, dataset rotulado. (F5)
+- [x] 2. Dashboard con KPIs y varias gráficas coherentes, dataset rotulado. (F5)
 - [ ] 3. Se carga un CSV representativo, se ve el mapeo y ≥ 2 analíticas cambian. (F6)
 - [x] 4. Árbol IIoT con señales analógicas/digitales, unidades y estado ficticio. (F2/F3)
 - [x] 5. Arrastrar/agregar 3 señales, tiempo común, zoom, quitar/ocultar; ejes por unidad. (F3)
@@ -357,6 +375,8 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 | 2026-10-26 | F0 | D5 decidido: un código + `APP_EDITION` (metrology/industrial) en lugar de dos ramas; añadida F9 (despliegue de dos ediciones). Protocolo de sesión añadido: una fase por chat. Contexto confidencial del prompt en `demo-private/client-brief.md` (gitignored). |
 | 2026-10-26 | F1+F2 | El usuario pidió avanzar el 25 % en una sola sesión → F1 y F2 hechas juntas. Pruebas: backend 1036 passed / 4 skipped (suite completa, Postgres local en :5433); frontend 120 passed (vitest), `tsc -b` limpio, `npm run build` OK. Arreglo de infraestructura de pruebas: `tests/conftest.py` reinicia el rate limiter de slowapi por prueba — en `origin/main` 40 pruebas fallaban por agotar el límite de 30 logins/min en la suite completa. DoD #8 ✅; DoD #4 parcial (árbol en API, explorador visual en F3). Siguiente: **F3**. |
 | 2026-10-26 | F3+F4 | El usuario pidió llegar al 50 % → F3 y F4 en esta sesión, y verificar con navegador real («Playwright»): no hay skill con ese nombre, se usó la skill `run` con `playwright-core` + Edge instalado. Pruebas: backend 1064 passed / 4 skipped; frontend 141 passed, `tsc -b` limpio, build OK; navegador 17/17, sin errores de consola. DoD #4, #5, #6, #7 ✅. Pendiente de decisión del usuario: commit `5476a23` contiene el nombre del cliente en el historial de la rama (ya eliminado del archivo). Siguiente: **F5**. |
+| 2026-10-26 | F7 (plan) | A petición del usuario se añadió **F7.b**: predicción experimental de alarmas/fallas por frecuencia de fallas y precursores, sobre historial simulado, con línea base y evaluación por episodio. |
+| 2026-10-26 | F5 | Hecho en esta sesión. Pruebas: backend 1095 passed / 4 skipped; frontend 152 passed, `tsc -b` limpio; navegador F5 9/9 + regresión F1–F4 17/17, sin errores de consola. DoD #2 ✅. Siguiente: **F6** (importación CSV con mapeo; Vista A de F4 depende de ella). |
 
 ---
 

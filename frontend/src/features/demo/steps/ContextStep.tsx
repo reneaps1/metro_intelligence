@@ -40,11 +40,18 @@ const SOURCES: {
   note: string;
 }[] = [
   {
-    source: "Mediciones dimensionales (CSV / informe)",
-    origin: "HISTORICAL",
+    source: "Informe histórico de mediciones dimensionales",
+    origin: "PRECOMPUTED",
     status: "ok",
-    statusLabel: "Disponible",
-    note: "Período cerrado. Base del diagnóstico de los pasos 2 y 3.",
+    statusLabel: "Resumen disponible",
+    note: "Cifras del estudio previo (período cerrado), con su definición de NOK y denominadores.",
+  },
+  {
+    source: "Dataset dimensional de la demo",
+    origin: "SIMULATED",
+    status: "warning",
+    statusLabel: "Sintético",
+    note: "Estructura estilo cliente (nidos, turnos, lotes) con mecanismos de defecto conocidos. Pasos 2 y 3.",
   },
   {
     source: "Señales de proceso de máquina (PLC)",

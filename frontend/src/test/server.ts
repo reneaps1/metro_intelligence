@@ -656,6 +656,134 @@ export const industrialSignalsHandlers = [
   }),
 ];
 
+// IQ-F5: fixtures mirroring backend/app/schemas/quality_analytics.py. The
+// overview echoes the cavities filter so tests can prove filters drive data.
+export const QUALITY_DATASET_FIXTURE = {
+  id: "demo-synthetic-dimensional",
+  name: "Dataset dimensional sintético (estilo cliente)",
+  description: "7 días, 2 máquinas, 12 nidos, 2 cotas.",
+  source_type: "SIMULATED",
+  period_start: "2026-10-13T00:00:00Z",
+  period_end: "2026-10-19T23:58:00Z",
+  pieces: 1200,
+  groups: 100,
+  variables: [
+    { key: "PinsLength", name: "Longitud de pines", unit: "mm", nominal: 12, lsl: 11.95, usl: 12.05 },
+    { key: "Coplanarity", name: "Coplanaridad", unit: "mm", nominal: 0, lsl: null, usl: 0.08 },
+  ],
+  machines: ["INY-01", "INY-02"],
+  cavities: [1, 2, 3, 4],
+  shifts: ["A", "B", "C"],
+  batches: [],
+  available_filters: { machine: true, cavity: true, shift: true, batch: false },
+  mechanisms: ["Nido 4: longitud de pines desplazada."],
+};
+
+function overviewFixture(cavities: number[] | null) {
+  const pieces = cavities ? 300 * cavities.length : 1200;
+  const nok = cavities?.includes(4) ? 28 : cavities ? 3 : 37;
+  return {
+    dataset_id: QUALITY_DATASET_FIXTURE.id,
+    source_type: "SIMULATED",
+    granularity: "day",
+    summary: {
+      groups: pieces / 12,
+      pieces,
+      measurements: pieces * 2,
+      ok_pieces: pieces - nok,
+      nok_pieces: nok,
+      nok_rate: nok / pieces,
+      nok_rate_ci: [0.02, 0.04],
+      measurement_nok: nok,
+      top_variables: ["PinsLength"],
+      worst_cavity: { cavity: 4, pieces: 300, nok: 28, rate: 28 / 300, ci_low: 0.06, ci_high: 0.13, relative_risk: 9.3 },
+      period_start: "2026-10-13T00:00:00Z",
+      period_end: "2026-10-19T23:58:00Z",
+      nok_definition: "Pieza NOK = al menos una de las cotas seleccionadas fuera de tolerancia.",
+      variables_counted: ["PinsLength", "Coplanarity"],
+    },
+    trend: [{ bucket: "2026-10-13", start: "2026-10-13T00:00:00Z", pieces, nok, rate: nok / pieces }],
+    pareto: [
+      { variable: "PinsLength", name: "Longitud de pines", nok, above: nok, below: 0, measurements: pieces, cumulative_pct: 1 },
+    ],
+    by_cavity: [
+      { cavity: 1, pieces: 300, nok: 3, rate: 0.01, ci_low: 0.003, ci_high: 0.029, relative_risk: 0.3 },
+      { cavity: 4, pieces: 300, nok: 28, rate: 28 / 300, ci_low: 0.06, ci_high: 0.13, relative_risk: 9.3 },
+    ],
+    heatmap: [{ cavity: 4, variable: "PinsLength", pieces: 300, nok: 28, rate: 28 / 300 }],
+  };
+}
+
+export const VARIABLE_DETAIL_FIXTURE = {
+  dataset_id: QUALITY_DATASET_FIXTURE.id,
+  source_type: "SIMULATED",
+  variable: "PinsLength",
+  name: "Longitud de pines",
+  spec: { nominal: 12, lsl: 11.95, usl: 12.05, unit: "mm" },
+  n: 1200,
+  nok: 30,
+  nok_rate: 0.025,
+  mean: 12.002,
+  std: 0.014,
+  min: 11.96,
+  max: 12.08,
+  capability: { cp: 1.19, cpk: 1.14, reason: null },
+  control_limits: { center_line: 12.002, ucl: 12.044, lcl: 11.96, engine: "spc_engine v1" },
+  histogram: [
+    { x0: 11.95, x1: 12.0, count: 600 },
+    { x0: 12.0, x1: 12.05, count: 570 },
+    { x0: 12.05, x1: 12.1, count: 30 },
+  ],
+  series: [
+    [1760313600000, 12.0, false],
+    [1760317200000, 12.06, true],
+  ],
+  series_thinned: false,
+  group_by: "cavity",
+  groups: [
+    { group: "1", n: 300, min: 11.96, q1: 11.99, median: 12.0, q3: 12.01, max: 12.04, whisker_low: 11.96, whisker_high: 12.04, outliers: 0, mean: 12.0, nok: 0, nok_rate: 0 },
+    { group: "4", n: 300, min: 11.99, q1: 12.02, median: 12.03, q3: 12.04, max: 12.08, whisker_low: 11.99, whisker_high: 12.07, outliers: 1, mean: 12.03, nok: 28, nok_rate: 0.093 },
+  ],
+  cpk_by_day: [{ day: "2026-10-13", n: 170, cpk: 1.1 }],
+};
+
+export const qualityHandlers = [
+  http.get(`${API_BASE_URL}/quality-analytics/datasets`, () => HttpResponse.json({ items: [QUALITY_DATASET_FIXTURE] })),
+  http.get(`${API_BASE_URL}/quality-analytics/overview`, ({ request }) => {
+    const raw = new URL(request.url).searchParams.get("cavities");
+    return HttpResponse.json(overviewFixture(raw ? raw.split(",").map(Number) : null));
+  }),
+  http.get(`${API_BASE_URL}/quality-analytics/variable`, ({ request }) => {
+    const variable = new URL(request.url).searchParams.get("variable");
+    if (variable === "Coplanarity") {
+      return HttpResponse.json({
+        ...VARIABLE_DETAIL_FIXTURE,
+        variable,
+        name: "Coplanaridad",
+        spec: { nominal: 0, lsl: null, usl: 0.08, unit: "mm" },
+        capability: { cp: null, cpk: 1.3, reason: "Cp no aplica a tolerancia unilateral; se reporta solo Cpk." },
+      });
+    }
+    return HttpResponse.json(VARIABLE_DETAIL_FIXTURE);
+  }),
+  http.get(`${API_BASE_URL}/quality-analytics/report-summary`, () =>
+    HttpResponse.json({
+      source: "placeholder",
+      illustrative: true,
+      title: "Ejemplo ilustrativo de informe histórico",
+      period: "Período de ejemplo",
+      records: 1000000,
+      piece_ids: 50000,
+      variables: 20,
+      nok_definition: "Pieza NOK = al menos una cota fuera de tolerancia.",
+      critical_nest: 4,
+      critical_nest_relative_risk: 10,
+      relative_risk_basis: null,
+      notes: [],
+    }),
+  ),
+];
+
 export const server = setupServer(
   ...handlers,
   ...catalogHandlers,
@@ -663,4 +791,5 @@ export const server = setupServer(
   ...liveMonitorHandlers,
   ...metaHandlers,
   ...industrialSignalsHandlers,
+  ...qualityHandlers,
 );

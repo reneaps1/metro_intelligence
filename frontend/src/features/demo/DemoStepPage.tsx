@@ -4,10 +4,13 @@ import { DEMO_BASE_PATH, DEMO_STEPS, type DemoStep } from "../../lib/demo/steps"
 import { ContextStep } from "./steps/ContextStep";
 import { CorrelationStep } from "./steps/CorrelationStep";
 import { IiotLabStep } from "./steps/IiotLabStep";
+import { DimensionalStep, QualityStep } from "./steps/QualitySteps";
 import { StepPlaceholder } from "./steps/StepPlaceholder";
 
 function StepContent({ step }: { step: DemoStep }) {
   if (step.id === "context") return <ContextStep />;
+  if (step.id === "quality") return <QualityStep />;
+  if (step.id === "dimensional") return <DimensionalStep />;
   if (step.id === "iiot") return <IiotLabStep />;
   if (step.id === "correlation") return <CorrelationStep />;
   return <StepPlaceholder stepId={step.id} />;

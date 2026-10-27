@@ -26,5 +26,5 @@ def read_meta(_user: User = Depends(get_current_user)) -> MetaResponse:
     return MetaResponse(
         edition=settings.app_edition,
         client_label=settings.demo_client_label if industrial else None,
-        modules=["industrial_demo", "industrial_signals"] if industrial else [],
+        modules=["industrial_demo", "industrial_signals", "quality_analytics"] if industrial else [],
     )
