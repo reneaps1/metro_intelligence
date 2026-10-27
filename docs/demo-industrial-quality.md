@@ -19,8 +19,12 @@ menú, las rutas y los endpoints de la demo no existen (404).
 cp .env.example .env            # completar valores locales; nunca commitear .env
 # en .env: APP_EDITION=industrial, SEED_DEMO_USER_PASSWORD=<contraseña local>
 docker compose up -d
-docker compose exec backend python -m seed   # usuarios y catálogo ficticios (.demo.local)
 ```
+
+Con `SEED_DEMO_USER_PASSWORD` definido y `APP_ENV` distinto de `production`, el backend crea al arrancar el
+administrador ficticio `luis.torres@demo.local`, suficiente para la demo (los pasos no necesitan datos en la base).
+El resto de usuarios y el catálogo ficticio se siembran desde el host con `python -m seed` (entorno de `seed/`,
+apuntando a la misma base). Despliegue de las dos ediciones en el VPS: `docs/deployment-editions.md`.
 
 ### En desarrollo (sin contenedores)
 
@@ -35,7 +39,8 @@ Todos son ficticios, con la contraseña de `SEED_DEMO_USER_PASSWORD`:
 
 | Usuario | Rol | Para qué |
 |---|---|---|
-| `ana.garcia@demo.local` | Metrólogo | **Recomendado para presentar**: ve todo y puede importar CSV (paso 2/3 y página de importación). |
+| `luis.torres@demo.local` | Administrador | Creado al arrancar (ver arriba); ve todo y puede importar CSV. Es el usuario disponible en el VPS. |
+| `ana.garcia@demo.local` | Metrólogo | **Recomendado para presentar** si se sembró con `python -m seed`: ve todo y puede importar CSV. |
 | `sofia.mendez@demo.local` | Ingeniería de calidad | Ve toda la demo; no importa archivos. |
 | `karla.jimenez@demo.local` | Consulta | No accede a la analítica de la demo (sin permiso de lectura de mediciones). |
 
