@@ -67,6 +67,9 @@ DIM_TOL_MM = 0.05
 DIM_MOLD_COEF_MM_PER_C = 0.006
 DIM_HOLD_COEF_MM_PER_BAR = -0.0006
 DIM_NOISE_MM = 0.007
+NEST_OFFSET_SD_MM = 0.003
+# Random part of the hold pressure around its setpoint (bar), cycle to cycle.
+HOLD_NOISE_BAR = 4.0
 HOLD_REFERENCE_BAR = 620.0
 DIM_KEYS = frozenset({"dim_pins_length", "dim_nok"})
 
@@ -249,6 +252,12 @@ def _machine(code: str) -> MachineDefinition:
     raise KeyError(code)
 
 
+def nest_offsets(machine_code: str) -> tuple[float, ...]:
+    """Fixed per-nest offset of the Vista B dimension (mm), nests 1..NEST_COUNT."""
+    nest_rng = random.Random(f"{BASE_SEED}:nests:{_machine(machine_code).code}")
+    return tuple(nest_rng.gauss(0.0, NEST_OFFSET_SD_MM) for _ in range(NEST_COUNT))
+
+
 @lru_cache(maxsize=32)
 def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
     """Cycle-by-cycle timeline for one scenario and machine (cached, deterministic)."""
@@ -258,8 +267,7 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
     rng = random.Random(f"{BASE_SEED}:{scenario.id}:{machine.code}")
     # Separate streams so the synthetic quality layer never perturbs process values.
     rng_quality = random.Random(f"{BASE_SEED}:{scenario.id}:{machine.code}:quality")
-    nest_rng = random.Random(f"{BASE_SEED}:nests:{machine.code}")
-    nest_offsets = [nest_rng.gauss(0.0, 0.003) for _ in range(NEST_COUNT)]
+    offsets = nest_offsets(machine.code)
     seed = _splitmix64(BASE_SEED ^ zlib.crc32(f"{scenario.id}:{machine.code}".encode()))
 
     cycles: list[Cycle] = []
@@ -288,7 +296,7 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
         if spiked:
             # A scripted spike must leave the process window whatever the random spread.
             peak = max(peak * 1.14, PEAK_WINDOW_BAR[1] * 1.03)
-        hold_pressure = _step(effective.hold_setpoints, t) + rng.gauss(0.0, 4.0)
+        hold_pressure = _step(effective.hold_setpoints, t) + rng.gauss(0.0, HOLD_NOISE_BAR)
         fault = _window_containing(effective.fault_windows, t) is not None
         cushion = CUSHION_MM + rng.gauss(0.0, 0.08)
         process_ok = (
@@ -298,7 +306,7 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
             and not fault
         )
         cavity = shot % NEST_COUNT + 1
-        nest_offset = nest_offsets[cavity - 1]
+        nest_offset = offsets[cavity - 1]
         worn = effective.worn_nest
         if worn is not None and cavity == worn[0] and t < worn[2]:
             nest_offset += worn[1]

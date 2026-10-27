@@ -4,15 +4,6 @@ import { Card } from "../../../components/ui/Card";
 // IQ-F1: honest placeholder for steps whose content lands in later phases of
 // docs/tasks/IQ-plan-demo-industrial-quality.md -- no fake charts.
 const PLANNED: Record<string, { phase: string; items: string[] }> = {
-  ai: {
-    phase: "F7",
-    items: [
-      "Comparativa Gradient Boosting vs. MLP: ROC-AUC, PR-AUC, recall y precisión",
-      "Matrices de confusión y costo de las falsas alarmas",
-      "Oleadas NOK: detectar una racha iniciada no es predecir su inicio",
-      "CUSUM experimental y simulación what-if hipotética",
-    ],
-  },
   integration: {
     phase: "F8",
     items: [

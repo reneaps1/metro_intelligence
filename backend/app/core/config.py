@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # IQ-F5: optional path to a PRIVATE JSON with the customer's historical
     # report summary (kept outside the repo). Unset = illustrative placeholder.
     demo_report_summary_path: str | None = None
+    # IQ-F7: optional path to a PRIVATE JSON with the customer's precomputed
+    # ML/DL study results (kept outside the repo). Unset = illustrative placeholder.
+    demo_model_lab_path: str | None = None
     # IQ-F6: exploratory dimensional CSV import (in memory only, never persisted).
     # Files larger than the byte cap are analysed as a sample of their head.
     dimensional_import_max_rows: int = Field(default=200_000, ge=1_000, le=2_000_000)

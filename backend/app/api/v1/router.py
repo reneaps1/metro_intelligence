@@ -14,6 +14,7 @@ from app.api.v1.intelligence import router as intelligence_router
 from app.api.v1.live_monitor import router as live_monitor_router
 from app.api.v1.measurements import router as measurements_router
 from app.api.v1.meta import router as meta_router
+from app.api.v1.predictive import router as predictive_router
 from app.api.v1.process_events import router as process_events_router
 from app.api.v1.quality_analytics import router as quality_analytics_router
 from app.api.v1.quality_imports import router as quality_imports_router
@@ -34,3 +35,4 @@ api_router.include_router(meta_router)
 api_router.include_router(industrial_signals_router)
 api_router.include_router(quality_analytics_router)
 api_router.include_router(quality_imports_router)
+api_router.include_router(predictive_router)

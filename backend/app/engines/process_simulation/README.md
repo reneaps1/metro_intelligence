@@ -46,3 +46,34 @@ Served read-only by `app/api/v1/industrial_signals.py` (industrial edition
 only). A real source (PLC / OPC UA / iba) would replace this module behind the
 same API contract; nothing downstream may assume the data is simulated except
 through the `source_type` field.
+
+## Failure history for the experimental prediction study (IQ-F7.b)
+
+`failure_history.py` simulates **9 weeks of hourly history** for four fictitious
+machines (`INY-01`…`INY-04`), each with its own seeded RNG
+(`random.Random(f"{SEED}:{machine}")`), cached and fully deterministic:
+
+- Latent wear grows every running hour; preventive maintenance (~every 7 days,
+  jittered) resets it, corrective repair after a failure only halves it.
+- Failures are drawn from an hourly hazard `base + a·wear` (plus a short bump
+  after a repair) — **never from the signals**, so signals are effects, not
+  causes. ~2 failures per machine-week.
+- About 70 % of failures have a precursor (vibration and motor current ramp up
+  3–10 h before); the rest have none. Precursor-like bumps with no failure are
+  added on purpose so a model has honest false alarms.
+- Channels: `vibration_mm_s`, `current_a`, `alarm_count` (Poisson, rate rises
+  with vibration). Repair hours are flagged in `downtime` and must be excluded
+  from training/evaluation rows.
+
+Consumed by `app/engines/experimental_ml/failure_prediction.py` (temporal
+train/test split, pure-Python logistic regression, per-episode evaluation vs.
+baselines). Simulated data only — it says nothing about a real machine.
+
+## What-if over the Vista B mechanism (IQ-F7)
+
+`what_if.py` evaluates the **exact** Vista B formula (no fitted model) for a
+hold pressure, mold-temperature delta, nest and optional worn insert, and
+returns the expected length, P(NOK) as the normal tail outside ±0.050 mm
+(spread = measurement noise ⊕ hold-pressure scatter) and sweeps over each
+lever. It is HYPOTHETICAL by construction: it says what the simulator would
+do. Cycle time is not in the mechanism, so it is not offered as a lever.

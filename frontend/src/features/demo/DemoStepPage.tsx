@@ -4,6 +4,7 @@ import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import type { DataOrigin } from "../../lib/demo/origin";
 import { DEMO_BASE_PATH, DEMO_STEPS, type DemoStep } from "../../lib/demo/steps";
 import { DEMO_DATASET_ID } from "../../lib/quality-analytics/filters";
+import { AiStep } from "./steps/AiStep";
 import { ContextStep } from "./steps/ContextStep";
 import { CorrelationStep } from "./steps/CorrelationStep";
 import { IiotLabStep } from "./steps/IiotLabStep";
@@ -16,6 +17,7 @@ function StepContent({ step }: { step: DemoStep }) {
   if (step.id === "dimensional") return <DimensionalStep />;
   if (step.id === "iiot") return <IiotLabStep />;
   if (step.id === "correlation") return <CorrelationStep />;
+  if (step.id === "ai") return <AiStep />;
   return <StepPlaceholder stepId={step.id} />;
 }
 

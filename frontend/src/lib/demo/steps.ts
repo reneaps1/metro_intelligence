@@ -52,8 +52,9 @@ export const DEMO_STEPS: DemoStep[] = [
     id: "ai",
     number: 6,
     title: "IA predictiva y oleadas NOK",
-    summary: "Resultados ML/DL históricos, falsas alarmas y detección experimental de oleadas.",
-    origins: ["PRECOMPUTED", "EXPERIMENTAL"],
+    summary:
+      "Resultados ML/DL históricos, falsas alarmas, oleadas NOK, CUSUM, what-if y predicción experimental de fallas.",
+    origins: ["PRECOMPUTED", "SIMULATED", "EXPERIMENTAL"],
   },
   {
     id: "integration",

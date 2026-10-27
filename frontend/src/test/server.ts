@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import { predictiveHandlers } from "./predictiveFixtures";
 
 // F5.4 (MI-33): mocks the real F4.2 /auth contract (backend/app/api/v1/auth.py)
 // so AuthProvider/LoginPage tests exercise the actual request/response shapes
@@ -909,4 +910,5 @@ export const server = setupServer(
   ...metaHandlers,
   ...industrialSignalsHandlers,
   ...qualityHandlers,
+  ...predictiveHandlers,
 );

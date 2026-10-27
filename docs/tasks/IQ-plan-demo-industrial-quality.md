@@ -29,7 +29,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F4 | Correlación, regresión y caso sintético causal | ✅ Hecho | `feat/industrial-quality-demo` | Vista B completa; Vista A depende de F5/F6 |
 | F5 | Dashboard de calidad dimensional (nidos) | ✅ Hecho | `feat/industrial-quality-demo` | Dataset sintético + informe privado; verificado en navegador |
 | F6 | Importación CSV con mapeo de columnas | ✅ Hecho | `feat/industrial-quality-demo` | Ancho/largo, muestra, cuarentena; análisis en memoria (D6); verificado en navegador |
-| F7 | Laboratorio ML/DL, oleadas NOK y predicción de alarmas | ⬜ Pendiente | | Cifras precalculadas + F7.b alarmas (experimental, simulado) |
+| F7 | Laboratorio ML/DL, oleadas NOK y predicción de alarmas | ✅ Hecho | `feat/industrial-quality-demo` | Cifras del brief (pendientes de PDF) + F7.b; verificado en navegador |
 | F8 | Oportunidad de integración, pulido, guía y handoff | ⬜ Pendiente | | Docs, pruebas, PR |
 | F9 | Despliegue de dos ediciones (metrology + industrial) | ⬜ Pendiente | | Requiere autorización para tocar VPS/deploy |
 
@@ -309,6 +309,14 @@ Entregables (`frontend/src/features/predictive/`):
 Pruebas: render del fixture, evaluación por episodio (alerta antes del inicio cuenta, durante no), CUSUM sobre vector conocido; F7.b: regresión logística contra vector conocido, ventana de features sin información futura, la línea base y el modelo se evalúan sobre el mismo test.
 Hecho cuando: DoD #9, #10 (+ F7.b con métricas por episodio y comparación contra línea base).
 
+**Resultado F7 (26/oct/2026):**
+- Laboratorio ML/DL (`services/model_lab_service.py`, `GET /predictive/model-lab`): cifras PRECALCULADAS desde un JSON privado (`DEMO_MODEL_LAB_PATH`, D1) o un placeholder ficticio rotulado. El servicio deriva de cada matriz de confusión las falsas alarmas por NOK detectado y la tasa de alerta, y marca `consistent=false` si recall/precisión no cuadran con la matriz; exige el mismo conjunto de prueba en todos los modelos. La conclusión DL vs. ML se calcula (PR-AUC), no se escribe. Sin curvas ROC/PR ni umbral: el estudio solo trae métricas agregadas. `demo-private/model-lab.json` (gitignored) creado con las cifras del brief; las matrices de los MLP se reconstruyeron desde recall/precisión/~FP y se rotulan «aproximadas». Con las cifras privadas cargadas, el mejor DL no supera al ML tabular (cifras solo en `demo-private/`).
+- Oleadas NOK (`engines/experimental_ml/nok_waves.py`, `services/predictive_service.py`, `GET /predictive/nok-waves`): regla de persistencia («≥ k NOK en los últimos w grupos», solo pasado) evaluada por episodio independiente contra las 4 oleadas inyectadas en el dataset sintético de F5 (verdad conocida): anticipada / detectada ya iniciada / no detectada, retraso, fracción de la oleada aún por delante, falsas alarmas debounced. Con w=5, k=4: 0 de 4 anticipadas, 4 de 4 detectadas en 4–20 min con ~96 % de la oleada aún por delante, ~0.6 falsas alarmas/día por máquina.
+- CUSUM (`GET /predictive/cusum`): `drift_cusum` (sin cambios) sobre series horarias del dataset sintético; presets con su verdad conocida, incluido Coplanaridad INY-02, donde alarma sin mecanismo inyectado → se muestra como falso positivo del método.
+- What-if (`engines/process_simulation/what_if.py`, `GET /predictive/what-if`): evalúa la fórmula exacta de la Vista B (presión, ΔT molde, nido, inserto desgastado); P(NOK) = cola normal. Rotulado HIPOTÉTICO. El tiempo de ciclo no está en el mecanismo y se dice en vez de ofrecerlo como palanca. `generator.py`: `nest_offsets()` extraído sin cambiar la secuencia aleatoria.
+- **F7.b** (`process_simulation/failure_history.py`, `experimental_ml/failure_prediction.py`, `GET /predictive/failure-study`): 9 semanas × 4 máquinas simuladas, fallas por desgaste (~70 % con precursor de vibración/corriente), regresión logística IRLS en Python puro, partición temporal (6 semanas train / 3 test), líneas base «falla en la última hora» y «tasa constante» sobre las mismas filas. Umbral 0.5: 15 de 21 fallas anticipadas (14/14 con precursor, 1/7 sin precursor), anticipación media 2.8 h, 0.07 falsas alarmas por turno; PR-AUC 0.399 vs. 0.063 de ambas líneas base.
+- UI paso 6 (`features/predictive/`, `steps/AiStep.tsx`): cinco pestañas con insignias de procedencia por panel, umbral interactivo solo en F7.b (scores reales simulados), tarjeta de limitaciones y «qué haría falta en planta».
+
 ### F8 — Oportunidad de integración, pulido, guía y handoff
 
 Entregables:
@@ -332,7 +340,7 @@ Entregables:
 - `docker-compose.vps.yml` parametrizado: nombre de proyecto (`-p`), puertos, volúmenes y `APP_EDITION` por instancia; sin nombres de contenedor fijos.
 - Base de datos y bucket MinIO **separados** por edición (la industrial no toca datos de la actual).
 - Archivos de entorno por instancia en el VPS (`.env.metrology`, `.env.industrial`), nunca en el repo; placeholders en `.env.example`.
-- Instancia industrial del cliente: `DEMO_CLIENT_LABEL`, `DEMO_CRITICAL_NEST` (coherente con el informe) y `DEMO_REPORT_SUMMARY_PATH` apuntando a una copia privada del JSON en el VPS (fuera del repo y de la imagen). Valores en `demo-private/client-brief.md`.
+- Instancia industrial del cliente: `DEMO_CLIENT_LABEL`, `DEMO_CRITICAL_NEST` (coherente con el informe), `DEMO_REPORT_SUMMARY_PATH` y `DEMO_MODEL_LAB_PATH` (IQ-F7) apuntando a copias privadas de los JSON en el VPS (fuera del repo y de la imagen). Valores en `demo-private/client-brief.md`.
 - Workflow: un job (matrix) que despliega ambas instancias tras push a `main`, o disparo manual (`workflow_dispatch`) para la industrial durante las demos.
 - Proxy/Nginx: dos subdominios (p. ej. `metro.<dominio>` y `industrial.<dominio>`), TLS en ambos.
 - Seed: la instancia industrial carga escenarios demo de forma idempotente al arrancar (patrón de `backend/app/demo_data.py` con advisory lock), sin crear/borrar usuarios.
@@ -353,8 +361,8 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 - [x] 6. Cursores A/B con tiempo, valor y Δt. (F3)
 - [x] 7. Scatter + regresión real con R²/coeficientes sobre datos alineados. (F4)
 - [x] 8. Escenarios normal/deriva/anomalía reproducibles y restaurables sin borrar datos. (F2)
-- [ ] 9. Lab ML/DL con cifras del informe, falsas alarmas y DL ≤ ML explícitos. (F7)
-- [ ] 10. Oleadas NOK no confunde rachas detectadas con episodios prevenidos. (F7)
+- [x] 9. Lab ML/DL con cifras del informe, falsas alarmas y DL ≤ ML explícitos. (F7) — cifras del brief; verificar contra el PDF cuando llegue.
+- [x] 10. Oleadas NOK no confunde rachas detectadas con episodios prevenidos. (F7)
 - [ ] 11. Cada pantalla distingue histórico / precalculado / simulado / experimental. (F8)
 - [ ] 12. Sin regresiones en login, catálogo, importación, Live Monitor, navegación. (F8)
 - [ ] 13. Pruebas de lógica nuevas pasan y el frontend compila. (todas)
@@ -388,6 +396,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 | 2026-10-26 | F7 (plan) | A petición del usuario se añadió **F7.b**: predicción experimental de alarmas/fallas por frecuencia de fallas y precursores, sobre historial simulado, con línea base y evaluación por episodio. |
 | 2026-10-26 | F5 | Hecho en esta sesión. Pruebas: backend 1095 passed / 4 skipped; frontend 152 passed, `tsc -b` limpio; navegador F5 9/9 + regresión F1–F4 17/17, sin errores de consola. DoD #2 ✅. Siguiente: **F6** (importación CSV con mapeo; Vista A de F4 depende de ella). |
 | 2026-10-26 | F6 | Hecho. La implementación venía de la sesión anterior sin commit; en esta se revisó contra los entregables y se cerraron huecos: README de `connectors/` (ruta offline por lotes) y de `seed/sample_files/` (tolerancias para el formato ancho y resultados esperados, verificados con el adaptador), endpoints en `rbac.md`, D6 registrado, tipado mypy de la respuesta de preview, nombre del dataset sin «Importado ·» duplicado, plural de «variable», insignias de procedencia de los pasos 2/3 según el dataset. Pruebas: backend 1132 passed / 4 skipped (incluye `test_imports_api.py`); frontend 166 passed, `tsc -b` limpio, build OK; lint de confidencialidad de `seed/sample_files` 17 passed; generador determinista (regeneración idéntica byte a byte); navegador F6 16/16 (preview `;` + decimal coma, mapeo sugerido, cuarentena 5/3, tasa NOK y nido de mayor riesgo cambian, tarjeta fuente vs. recalculado, paso 3 con cotas importadas, tolerancias tecleadas, descartar → demo intacta), 0 errores de consola. DoD #3 ✅. Vista A de F4 pasa a §7. Siguiente: **F7**. |
+| 2026-10-26 | F7 + F7.b | Hecho en la misma sesión que F6 a petición del usuario. El motor de F7.b se delegó a un subagente con contrato fijo (archivos nuevos) y se revisó antes de integrarlo (features solo del pasado, etiqueta (t, t+6], filas de train que cruzarían a test descartadas, evaluación por episodio). Los PDF siguen sin llegar: el laboratorio usa las cifras del brief en `demo-private/model-lab.json`, rotuladas «pendientes de verificar contra el PDF». Pruebas: backend 1177 passed / 4 skipped; frontend 171 passed, `tsc -b` limpio, build OK; navegador F7 15/15 con el archivo privado cargado (5 pestañas, umbral, what-if, regresión del paso 2), 0 errores de consola. DoD #9, #10 ✅. Para F9: desplegar `DEMO_MODEL_LAB_PATH` igual que `DEMO_REPORT_SUMMARY_PATH`. Siguiente: **F8**. |
 
 ---
 
