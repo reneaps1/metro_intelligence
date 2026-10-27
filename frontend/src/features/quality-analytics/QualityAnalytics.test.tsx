@@ -34,7 +34,7 @@ describe("QualityStep (diagnosis)", () => {
     expect(within(kpis).getByText("3.08 %")).toBeInTheDocument();
     expect(within(kpis).getByText("Nido 4")).toBeInTheDocument();
     expect(within(kpis).getByText(/RR 9.3× vs. resto/)).toBeInTheDocument();
-    expect(screen.getByText(/Dataset dimensional sintético/)).toBeInTheDocument();
+    expect(screen.getByText(/Dataset dimensional sintético/, { selector: "strong" })).toBeInTheDocument();
   });
 
   it("filters actually change the data", async () => {

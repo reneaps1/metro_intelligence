@@ -28,7 +28,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F3 | Explorador de señales estilo iba | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador (Edge headless, Playwright) |
 | F4 | Correlación, regresión y caso sintético causal | ✅ Hecho | `feat/industrial-quality-demo` | Vista B completa; Vista A depende de F5/F6 |
 | F5 | Dashboard de calidad dimensional (nidos) | ✅ Hecho | `feat/industrial-quality-demo` | Dataset sintético + informe privado; verificado en navegador |
-| F6 | Importación CSV con mapeo de columnas | ⬜ Pendiente | | Ancho/largo, muestra |
+| F6 | Importación CSV con mapeo de columnas | ✅ Hecho | `feat/industrial-quality-demo` | Ancho/largo, muestra, cuarentena; análisis en memoria (D6); verificado en navegador |
 | F7 | Laboratorio ML/DL, oleadas NOK y predicción de alarmas | ⬜ Pendiente | | Cifras precalculadas + F7.b alarmas (experimental, simulado) |
 | F8 | Oportunidad de integración, pulido, guía y handoff | ⬜ Pendiente | | Docs, pruebas, PR |
 | F9 | Despliegue de dos ediciones (metrology + industrial) | ⬜ Pendiente | | Requiere autorización para tocar VPS/deploy |
@@ -91,10 +91,12 @@ Orden de ejecución: F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9.
 |---|---|---|---|
 | D1 | ¿Dónde viven el nombre del cliente y las cifras del informe? | CLAUDE.md §7/§16/§20 prohíben datos reales de clientes en el repo; el repo es público en GitHub. | Repo solo con **etiqueta genérica** ("Cliente demo") y **cifras placeholder ficticias** en un fixture versionado. Nombre real vía variable de entorno `DEMO_CLIENT_LABEL` (solo en el `.env` del despliegue; implementado en F1). Cifras reales del informe en `demo-private/` (**gitignored**), a cargar en F7. Guía final como `docs/demo-industrial-quality.md` (ningún nombre de cliente en nombres de archivo). |
 | D2 | Persistencia de señales IIoT | Crear tablas de series exige migración y volumen. | **Sin tablas nuevas**: generador determinista puro que el backend evalúa bajo demanda (escenario + ventana + resolución). "Restaurar escenario" = reset de estado, nunca borra BD. |
-| D3 | Nido/cavidad en mediciones | No existe en el modelo. | Migración Alembic pequeña y reversible `0009`: columna nullable `cavity_code` en `measurement_runs` (+ índice). Sin tablas duplicadas. **Actualización F5:** no hizo falta para el dataset sintético (stateless). Se decide en F6 según cómo se persistan los CSV importados. |
+| D3 | Nido/cavidad en mediciones | No existe en el modelo. | Migración Alembic pequeña y reversible `0009`: columna nullable `cavity_code` en `measurement_runs` (+ índice). Sin tablas duplicadas. **Actualización F5:** no hizo falta para el dataset sintético (stateless). Se decide en F6 según cómo se persistan los CSV importados. **Actualización F6:** tampoco hizo falta: los CSV importados no se persisten (D6). Se reabre solo si se implementa la ruta offline por lotes hacia el historial. |
 | D4 | Permiso RBAC para endpoints nuevos | Añadir permisos requiere migración y actualizar `rbac.md`. | Reusar `live_monitor:read` (misma naturaleza: replay/simulación de solo lectura) para señales y analítica demo; `imports` existentes para el mapeo. Documentar en `rbac.md`. |
 
 D1–D4: el usuario no objetó → se aplican los defaults propuestos. Reabrir solo si aparece un bloqueo.
+
+**D6 — Persistencia de CSV importados con mapeo (F6): en memoria, sin escribir.** Un CSV dimensional con mapeo es un *análisis exploratorio*, no una ingesta al historial inmutable de mediciones (eso sigue siendo `/imports`, formato del catálogo). El dataset resultante vive solo en la memoria del proceso, visible solo para quien lo importó, con TTL (`DIMENSIONAL_IMPORT_TTL_MINUTES`, default 240) y tope (3 por usuario, 12 en total). Nada va a PostgreSQL ni a MinIO, así que un archivo de cliente nunca queda guardado en un servidor de demo; solo se audita el evento (usuario, hash SHA-256 de lo analizado, conteos). Limitación: por proceso (un solo worker de uvicorn).
 
 **D5 — Dos versiones de Metro Intelligence: ✅ decidido (26/oct/2026).** Un solo código y una sola rama de integración (`main`), con interruptor de edición en vez de dos ramas de larga vida:
 
@@ -274,6 +276,14 @@ Entregables:
 Pruebas: preview y detección de delimitador, mapeo ancho/largo → filas canónicas, cuarentena por tipos inválidos, límite de muestra, regresión del import actual (`test_imports_api.py`).
 Hecho cuando: DoD #3.
 
+**Resultado F6 (26/oct/2026):**
+- Adaptador puro `backend/app/connectors/dimensional_csv.py` (README en `app/connectors/`): `sniff()` detecta codificación (UTF-8/Windows-1252), delimitador (`, ; tab |`), decimal, tipos por mayoría, orden de fecha y sugiere el mapeo (alias ES/EN/DE); `build_dataset()` aplica el mapeo en formato largo (pivotea a piezas) o ancho y produce un `DimensionalDataset` con `source_type="IMPORTED"`. Cada fila rechazada va a cuarentena con su motivo (columnas, fecha, variable vacía, nulo, no numérico, unidad distinta, duplicado). Mismo blindaje que `manual_upload` (firmas binarias, inyección de fórmulas).
+- API (`api/v1/quality_imports.py`, edición industrial, permiso `measurement.imported_file:create`, rate limit, auditoría): `POST /quality-analytics/imports/preview`, `POST /quality-analytics/datasets`, `DELETE /quality-analytics/datasets/{id}`. Los endpoints de F5 aceptan el id del dataset importado (solo su dueño). Persistencia: **D6** (memoria, TTL, nunca BD/MinIO). Archivos grandes: el navegador manda solo el inicio y el informe dice «muestra de X filas (~Y % del archivo)»; config `DIMENSIONAL_IMPORT_MAX_ROWS/_MAX_MB/_TTL_MINUTES`.
+- Motor F5: OK/NOK de la fuente (`reported_nok`) separado del recalculado por especificación (`summary.source_reported`: ambos NOK / solo fuente / solo recalculado / ambos OK); variables sin tolerancia → sin NOK por spec ni Cp/Cpk y sin «nido de mayor riesgo»; `Variable.from_limits()` (sin nominal en la fuente no se muestra uno).
+- UI: `DimensionalImport.tsx` (soltar archivo, delimitador/decimal/fechas, largo/ancho, mapeo por rol con tipo inferido, vista previa con rol por columna, tolerancias tecleadas en formato ancho, informe de aceptadas/cuarentena/muestra) en la página de importación (solo edición industrial) y dentro de los pasos 2/3 («Importar CSV propio», selector de dataset, «Descartar archivo»). Tarjeta «OK/NOK reportado por la fuente vs. recalculado», el informe privado se oculta para archivos importados y las insignias de procedencia del paso pasan a «Histórico».
+- Fixtures ficticios deterministas `seed/sample_files/mi_demo_dimensional_{long,wide}.csv` (generador `seed/scripts/generate_dimensional_samples.py`, README con resultados esperados). Largo: 5 filas en cuarentena, NOK 2.19 %, nido 11 con RR 37.5×, fuente 5.0 % NOK (27 piezas solo NOK para la fuente). Ancho con tolerancias tecleadas: 3 en cuarentena, NOK 11.2 % (lote LOT-M2).
+- Sin migración (D3 sigue sin hacer falta). Ruta offline por lotes para archivos completos: documentada en `app/connectors/README.md`, no implementada.
+
 ### F7 — Laboratorio ML/DL y oleadas NOK
 
 **Objetivo:** relato honesto y visualmente sólido.
@@ -337,7 +347,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 
 - [ ] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
 - [x] 2. Dashboard con KPIs y varias gráficas coherentes, dataset rotulado. (F5)
-- [ ] 3. Se carga un CSV representativo, se ve el mapeo y ≥ 2 analíticas cambian. (F6)
+- [x] 3. Se carga un CSV representativo, se ve el mapeo y ≥ 2 analíticas cambian. (F6)
 - [x] 4. Árbol IIoT con señales analógicas/digitales, unidades y estado ficticio. (F2/F3)
 - [x] 5. Arrastrar/agregar 3 señales, tiempo común, zoom, quitar/ocultar; ejes por unidad. (F3)
 - [x] 6. Cursores A/B con tiempo, valor y Δt. (F3)
@@ -377,14 +387,17 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 | 2026-10-26 | F3+F4 | El usuario pidió llegar al 50 % → F3 y F4 en esta sesión, y verificar con navegador real («Playwright»): no hay skill con ese nombre, se usó la skill `run` con `playwright-core` + Edge instalado. Pruebas: backend 1064 passed / 4 skipped; frontend 141 passed, `tsc -b` limpio, build OK; navegador 17/17, sin errores de consola. DoD #4, #5, #6, #7 ✅. Pendiente de decisión del usuario: commit `5476a23` contiene el nombre del cliente en el historial de la rama (ya eliminado del archivo). Siguiente: **F5**. |
 | 2026-10-26 | F7 (plan) | A petición del usuario se añadió **F7.b**: predicción experimental de alarmas/fallas por frecuencia de fallas y precursores, sobre historial simulado, con línea base y evaluación por episodio. |
 | 2026-10-26 | F5 | Hecho en esta sesión. Pruebas: backend 1095 passed / 4 skipped; frontend 152 passed, `tsc -b` limpio; navegador F5 9/9 + regresión F1–F4 17/17, sin errores de consola. DoD #2 ✅. Siguiente: **F6** (importación CSV con mapeo; Vista A de F4 depende de ella). |
+| 2026-10-26 | F6 | Hecho. La implementación venía de la sesión anterior sin commit; en esta se revisó contra los entregables y se cerraron huecos: README de `connectors/` (ruta offline por lotes) y de `seed/sample_files/` (tolerancias para el formato ancho y resultados esperados, verificados con el adaptador), endpoints en `rbac.md`, D6 registrado, tipado mypy de la respuesta de preview, nombre del dataset sin «Importado ·» duplicado, plural de «variable», insignias de procedencia de los pasos 2/3 según el dataset. Pruebas: backend 1132 passed / 4 skipped (incluye `test_imports_api.py`); frontend 166 passed, `tsc -b` limpio, build OK; lint de confidencialidad de `seed/sample_files` 17 passed; generador determinista (regeneración idéntica byte a byte); navegador F6 16/16 (preview `;` + decimal coma, mapeo sugerido, cuarentena 5/3, tasa NOK y nido de mayor riesgo cambian, tarjeta fuente vs. recalculado, paso 3 con cotas importadas, tolerancias tecleadas, descartar → demo intacta), 0 errores de consola. DoD #3 ✅. Vista A de F4 pasa a §7. Siguiente: **F7**. |
 
 ---
 
 ## 7. Pendientes / ideas fuera de fase
 
-- Recibir del usuario los PDF de los informes y las 4 imágenes de referencia → guardarlos en `demo-private/` (gitignored) y verificar cifras de `client-brief.md`.
+- Recibir del usuario los PDF de los informes y las 4 imágenes de referencia → el usuario los deja en la carpeta local de documentos del proyecto (fuera del repo; ruta en `demo-private/client-brief.md`): `Informes/`, `Referencias visuales/`; CSV reales en `Datos cliente/`. Revisarlos al inicio de la sesión correspondiente y verificar las cifras de `client-brief.md` / `report-summary.json`.
 - Vista por ciclo de inyección / comparativo de ciclos OK vs. NOK (opcional del prompt; solo si F3 queda estable).
-- Importación offline por lotes para archivos de decenas de millones de filas (F6 solo hace muestra).
+- Importación offline por lotes para archivos de decenas de millones de filas (F6 solo hace muestra). Diseño propuesto en `backend/app/connectors/README.md`.
+- **Vista A de F4** (mediciones dimensionales + sensores simulados unidos por tiempo, banner «Unión ilustrativa por tiempo; relación no validada»): ya es posible porque F5/F6 dan datasets dimensionales con marca de tiempo, pero no estaba en los entregables de F6. Candidata para F8; el panel de correlación sigue mostrando la tarjeta «Vista A pendiente».
+- Ancho/largo es la única distinción de formato: archivos con varias filas de encabezado o tolerancias en filas aparte (exportaciones PolyWorks/Calypso típicas) requieren limpieza previa o un adaptador específico.
 - Deuda previa (no introducida aquí): `ruff check app` reporta ~25 errores en archivos existentes (`demo_data.py`, `main.py`, `core/security.py`, `services/audit_service.py`…) y `ruff format` reformatearía ~15 archivos previos. Los archivos nuevos de IQ pasan ruff. El CI actual solo corre pruebas de `seed/`; los jobs backend/frontend siguen como comentario en `ci.yml`.
 - Aviso de Vite: bundle > 500 kB (previo). En F8 considerar `lazy()` para las rutas de la demo.
 - Verificación en navegador reutilizable: no hay skill de proyecto para levantar la app. Receta usada (F3/F4): BD desechable migrada + usuario metrólogo ficticio, `uvicorn` con `APP_EDITION=industrial POSTGRES_DB=<desechable>`, `npx vite`, `playwright-core` con `channel: "msedge"`; la sesión vive en memoria, así que se navega dentro de la SPA sin recargar. Considerar `/run-skill-generator` para guardarla como skill del proyecto.

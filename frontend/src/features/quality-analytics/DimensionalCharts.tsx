@@ -54,7 +54,9 @@ export function HistogramChart({ detail }: { detail: VariableDetailResponse }) {
         />
         <Bar dataKey="count" fill="var(--chart-1)" isAnimationActive={false} />
         {specLines(detail.spec, "x")}
-        <ReferenceLine x={detail.spec.nominal} stroke="var(--text-secondary)" strokeDasharray="2 2" label={{ value: "Nom.", position: "top", fontSize: 10, fill: "var(--text-secondary)" }} />
+        {detail.spec.nominal !== null && (
+          <ReferenceLine x={detail.spec.nominal} stroke="var(--text-secondary)" strokeDasharray="2 2" label={{ value: "Nom.", position: "top", fontSize: 10, fill: "var(--text-secondary)" }} />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );

@@ -2,8 +2,9 @@
 
 One row per inspected piece; one value column per dimensional variable.
 Columnar on purpose: aggregations loop over plain lists, which keeps tens of
-thousands of pieces fast enough in pure Python. A future CSV import (IQ-F6)
-only has to produce one of these; every analytic works unchanged.
+thousands of pieces fast enough in pure Python. CSV imports (IQ-F6,
+`app/connectors/dimensional_csv.py`) produce one of these; every analytic
+works unchanged.
 """
 
 from __future__ import annotations
@@ -11,7 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-SourceType = Literal["SIMULATED", "REAL"]
+# IMPORTED = a user-uploaded file analysed as-is: not verified by the platform.
+SourceType = Literal["SIMULATED", "REAL", "IMPORTED"]
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,34 @@ class Variable:
     # Tolerances relative to nominal; None = that side is not specified.
     lower_tol: float | None
     upper_tol: float | None
+    # False when the source gave only limits: `nominal` is then just the
+    # reference the tolerances are relative to and must not be shown as one.
+    nominal_given: bool = True
+
+    @classmethod
+    def from_limits(
+        cls, key: str, name: str, unit: str, nominal: float | None, lsl: float | None, usl: float | None
+    ) -> Variable:
+        """Build from absolute limits, as files usually carry them."""
+        if nominal is not None:
+            ref = nominal
+        elif lsl is not None and usl is not None:
+            ref = (lsl + usl) / 2
+        else:
+            ref = lsl if lsl is not None else usl if usl is not None else 0.0
+        return cls(
+            key,
+            name,
+            unit,
+            ref,
+            None if lsl is None else lsl - ref,
+            None if usl is None else usl - ref,
+            nominal_given=nominal is not None,
+        )
+
+    @property
+    def display_nominal(self) -> float | None:
+        return self.nominal if self.nominal_given else None
 
     @property
     def lsl(self) -> float | None:
@@ -60,6 +90,9 @@ class DimensionalDataset:
     values: dict[str, list[float | None]]
     # Ground-truth notes for synthetic data ("verdad conocida"); empty for real data.
     mechanisms: list[str] = field(default_factory=list)
+    # Piece verdict as reported by the source file (IQ-F6), kept apart from the
+    # verdict recalculated from the specification; None = no such column.
+    reported_nok: list[bool | None] | None = None
     nok: dict[str, list[bool]] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -71,6 +104,7 @@ class DimensionalDataset:
             self.shifts,
             self.batches,
             *self.values.values(),
+            *([self.reported_nok] if self.reported_nok is not None else []),
         ]
         if any(len(col) != n for col in columns):
             raise ValueError("all dataset columns must have the same length")

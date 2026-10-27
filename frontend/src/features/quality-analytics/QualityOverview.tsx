@@ -8,7 +8,7 @@ import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import { fetchOverview, fetchReportSummary } from "../../lib/quality-analytics/api";
 import { cavityCsv, downloadText } from "../../lib/quality-analytics/export";
 import { formatPct } from "../../lib/quality-analytics/filters";
-import type { Granularity, QualityDataset, ReportSummary } from "../../lib/quality-analytics/types";
+import type { Granularity, QualityDataset, ReportSummary, SourceReported } from "../../lib/quality-analytics/types";
 import { CavityHeatmap, CavityRateChart, NokTrendChart, ParetoChart } from "./QualityCharts";
 import { QualityFilterBar } from "./QualityFilterBar";
 
@@ -36,6 +36,8 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
   const { qualityFilters: f, setQualityFilters } = useDemoSession();
   const overview = useAsync(() => fetchOverview(f), [JSON.stringify({ ...f, detailVariable: "", groupBy: "" })]);
   const report = useAsync(fetchReportSummary, []);
+  // The private historical report describes the customer's plant, not an uploaded file.
+  const showReport = dataset.source_type !== "IMPORTED";
   const data = overview.data;
   const s = data?.summary;
   const varName = (key: string) => dataset.variables.find((v) => v.key === key)?.name ?? key;
@@ -79,6 +81,13 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
               tone="nok"
             />
           </div>
+          {s.variables_with_tolerance === 0 && (
+            <p role="status" className="rounded bg-status-warning-bg px-3 py-2 text-sm text-status-warning">
+              Ninguna cota seleccionada tiene tolerancias: la tasa NOK por especificación no es calculable (se muestra 0) y
+              no hay nido de mayor riesgo. Usa el OK/NOK de la fuente o define LIE/LSE al importar.
+            </p>
+          )}
+          {s.source_reported && <SourceReportedCard data={s.source_reported} />}
           <p className="text-xs text-text-secondary">
             {s.nok_definition} Cotas con más NOK: {s.top_variables.map(varName).join(", ") || "ninguna"}. Riesgo relativo =
             tasa del nido / tasa conjunta del resto: indica asociación, no causa.
@@ -141,9 +150,43 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
         </>
       )}
 
-      {report.data && <ReportCard report={report.data} />}
+      {showReport && report.data && <ReportCard report={report.data} />}
       {dataset.mechanisms.length > 0 && <Mechanisms items={dataset.mechanisms} />}
     </div>
+  );
+}
+
+// IQ-F6: the verdict the file brings vs. the one recalculated from the
+// specification. They can legitimately differ (in-house limits, other
+// characteristics, manual decisions), so they are never merged.
+function SourceReportedCard({ data }: { data: SourceReported }) {
+  const cells: [string, number, string][] = [
+    ["NOK en ambos", data.both_nok, "text-status-nok"],
+    ["Solo NOK según la fuente", data.source_only_nok, "text-status-warning"],
+    ["Solo NOK recalculado", data.spec_only_nok, "text-status-warning"],
+    ["OK en ambos", data.both_ok, "text-status-ok"],
+  ];
+  return (
+    <Card className="space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-text-primary">OK/NOK reportado por la fuente vs. recalculado por especificación</p>
+        <p className="text-sm text-text-secondary">
+          Fuente: <span className="font-mono font-semibold text-status-nok">{formatPct(data.nok_rate)}</span> NOK (
+          {n(data.nok_pieces)} de {n(data.pieces_with_verdict)} piezas con veredicto)
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-4">
+        {cells.map(([label, value, tone]) => (
+          <div key={label} className="rounded border border-border p-2">
+            <p className="text-xs text-text-secondary">{label}</p>
+            <p className={clsx("font-mono text-lg font-semibold", tone)}>{n(value)}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-text-secondary">
+        {data.definition} Los KPIs de arriba usan el veredicto recalculado con las tolerancias de cada cota.
+      </p>
+    </Card>
   );
 }
 

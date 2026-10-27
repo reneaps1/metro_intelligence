@@ -32,6 +32,10 @@ Granularity = Literal["day", "hour", "shift"]
 GroupBy = Literal["cavity", "machine", "shift", "batch"]
 
 NOK_DEFINITION = "Pieza NOK = al menos una de las cotas seleccionadas fuera de tolerancia."
+REPORTED_NOK_DEFINITION = (
+    "OK/NOK reportado por la fuente: veredicto que trae el archivo, sin recalcular; "
+    "puede usar criterios que la plataforma no conoce."
+)
 MIN_PIECES_FOR_RANKING = 30
 MIN_VALUES_FOR_DAILY_CPK = 30
 HISTOGRAM_BINS = 30
@@ -197,7 +201,25 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
         for k in keys
     ]
 
-    ranked = [c for c in by_cavity if c["pieces"] >= MIN_PIECES_FOR_RANKING and c["rate"] is not None]
+    # --- verdict reported by the source vs. recalculated from the spec (IQ-F6) ---
+    source_reported = None
+    if ds.reported_nok is not None:
+        pairs = [(ds.reported_nok[i], bad) for i, bad in zip(idx, flags, strict=True)]
+        known = [(rep, bad) for rep, bad in pairs if rep is not None]
+        reported_nok = sum(1 for rep, _ in known if rep)
+        source_reported = {
+            "pieces_with_verdict": len(known),
+            "nok_pieces": reported_nok,
+            "nok_rate": _rate(reported_nok, len(known)),
+            "both_nok": sum(1 for rep, bad in known if rep and bad),
+            "source_only_nok": sum(1 for rep, bad in known if rep and not bad),
+            "spec_only_nok": sum(1 for rep, bad in known if not rep and bad),
+            "both_ok": sum(1 for rep, bad in known if not rep and not bad),
+            "definition": REPORTED_NOK_DEFINITION,
+        }
+
+    # A nest with no NOK is never "the riskiest" (e.g. a file without tolerances).
+    ranked = [c for c in by_cavity if c["pieces"] >= MIN_PIECES_FOR_RANKING and c["nok"] > 0]
     worst = max(ranked, key=lambda c: c["rate"]) if ranked else None
     period = (ds.timestamps[idx[0]], ds.timestamps[idx[-1]]) if idx else (None, None)
     summary = {
@@ -215,6 +237,8 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
         "period_end": period[1],
         "nok_definition": NOK_DEFINITION,
         "variables_counted": keys,
+        "variables_with_tolerance": sum(1 for v in variables if v.has_tolerance),
+        "source_reported": source_reported,
     }
     return {
         "summary": summary,
@@ -283,7 +307,7 @@ def variable_detail(
     column = ds.values[key]
     idx = [i for i in select(ds, f) if column[i] is not None]
     values = [float(column[i]) for i in idx]  # type: ignore[arg-type]
-    spec = {"nominal": v.nominal, "lsl": v.lsl, "usl": v.usl, "unit": v.unit}
+    spec = {"nominal": v.display_nominal, "lsl": v.lsl, "usl": v.usl, "unit": v.unit}
     if not values:
         return {"variable": key, "name": v.name, "spec": spec, "n": 0}
 

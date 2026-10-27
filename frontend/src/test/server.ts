@@ -677,6 +677,7 @@ export const QUALITY_DATASET_FIXTURE = {
   batches: [],
   available_filters: { machine: true, cavity: true, shift: true, batch: false },
   mechanisms: ["Nido 4: longitud de pines desplazada."],
+  has_reported_verdict: false,
 };
 
 function overviewFixture(cavities: number[] | null) {
@@ -701,6 +702,8 @@ function overviewFixture(cavities: number[] | null) {
       period_end: "2026-10-19T23:58:00Z",
       nok_definition: "Pieza NOK = al menos una de las cotas seleccionadas fuera de tolerancia.",
       variables_counted: ["PinsLength", "Coplanarity"],
+      variables_with_tolerance: 2,
+      source_reported: null,
     },
     trend: [{ bucket: "2026-10-13", start: "2026-10-13T00:00:00Z", pieces, nok, rate: nok / pieces }],
     pareto: [
@@ -747,9 +750,123 @@ export const VARIABLE_DETAIL_FIXTURE = {
   cpk_by_day: [{ day: "2026-10-13", n: 170, cpk: 1.1 }],
 };
 
+// IQ-F6: imported-CSV fixtures (preview -> mapping -> dataset).
+export const IMPORT_PREVIEW_FIXTURE = {
+  encoding: "utf-8",
+  delimiter: ";",
+  decimal: ",",
+  date_order: "dmy",
+  header: ["Fecha", "Hora", "ID_Pieza", "Nido", "Caracteristica", "Valor", "LIE", "LSE", "Resultado"],
+  rows: [["01/09/2026", "06:00:00", "P00001", "Nido 1", "Diametro_Pin", "0,6452", "0,625", "0,655", "OK"]],
+  profiles: [
+    { name: "Fecha", kind: "datetime", non_empty: 1, examples: ["01/09/2026"] },
+    { name: "Hora", kind: "datetime", non_empty: 1, examples: ["06:00:00"] },
+    { name: "ID_Pieza", kind: "text", non_empty: 1, examples: ["P00001"] },
+    { name: "Nido", kind: "text", non_empty: 1, examples: ["Nido 1"] },
+    { name: "Caracteristica", kind: "text", non_empty: 1, examples: ["Diametro_Pin"] },
+    { name: "Valor", kind: "number", non_empty: 1, examples: ["0,6452"] },
+    { name: "LIE", kind: "number", non_empty: 1, examples: ["0,625"] },
+    { name: "LSE", kind: "number", non_empty: 1, examples: ["0,655"] },
+    { name: "Resultado", kind: "text", non_empty: 1, examples: ["OK"] },
+  ],
+  suggestion: {
+    layout: "long",
+    roles: {
+      timestamp: "Fecha",
+      time: "Hora",
+      piece_id: "ID_Pieza",
+      cavity: "Nido",
+      ok_nok: "Resultado",
+      variable: "Caracteristica",
+      value: "Valor",
+      lsl: "LIE",
+      usl: "LSE",
+    },
+    value_columns: [],
+  },
+  sampled_rows: 1,
+  limits: { max_bytes: 20 * 1024 * 1024, max_rows: 200000 },
+};
+
+export const IMPORTED_DATASET_FIXTURE = {
+  ...QUALITY_DATASET_FIXTURE,
+  id: "import-0f0f",
+  name: "ensayo.csv",
+  description: "Archivo importado (formato largo): 960 piezas × 1 variable. No verificado por la plataforma.",
+  source_type: "IMPORTED",
+  pieces: 960,
+  variables: [{ key: "Diametro_Pin", name: "Diametro_Pin", unit: "mm", nominal: null, lsl: 0.625, usl: 0.655 }],
+  machines: [],
+  cavities: Array.from({ length: 16 }, (_, i) => i + 1),
+  shifts: [],
+  available_filters: { machine: false, cavity: true, shift: false, batch: false },
+  mechanisms: [],
+  has_reported_verdict: true,
+};
+
+export const IMPORT_REPORT_FIXTURE = {
+  filename: "ensayo.csv",
+  layout: "long",
+  rows_read: 5761,
+  rows_accepted: 5756,
+  rows_quarantined: 5,
+  pieces: 960,
+  variables: 1,
+  empty_values: 1,
+  quarantine_by_reason: [
+    { reason: "Valor no numérico", rows: 1 },
+    { reason: "Duplicado (misma pieza y variable)", rows: 4 },
+  ],
+  quarantine_examples: [
+    { row_number: 6, reason: "Valor no numérico" },
+    { row_number: 61, reason: "Duplicado (misma pieza y variable)" },
+  ],
+  warnings: ["Fechas sin zona horaria: se interpretaron como UTC."],
+  sample: { limited: true, rows_read: 5761, approx_file_pct: 12.5, file_bytes: 4000000, bytes_analysed: 500000 },
+};
+
+function importedOverviewFixture() {
+  const base = overviewFixture(null);
+  return {
+    ...base,
+    dataset_id: IMPORTED_DATASET_FIXTURE.id,
+    source_type: "IMPORTED",
+    summary: {
+      ...base.summary,
+      pieces: 960,
+      nok_pieces: 21,
+      ok_pieces: 939,
+      nok_rate: 21 / 960,
+      worst_cavity: { cavity: 11, pieces: 60, nok: 15, rate: 0.25, ci_low: 0.15, ci_high: 0.37, relative_risk: 37.5 },
+      variables_counted: ["Diametro_Pin"],
+      variables_with_tolerance: 1,
+      source_reported: {
+        pieces_with_verdict: 960,
+        nok_pieces: 48,
+        nok_rate: 0.05,
+        both_nok: 21,
+        source_only_nok: 27,
+        spec_only_nok: 0,
+        both_ok: 912,
+        definition: "OK/NOK reportado por la fuente: veredicto que trae el archivo, sin recalcular.",
+      },
+    },
+    by_cavity: [{ cavity: 11, pieces: 60, nok: 15, rate: 0.25, ci_low: 0.15, ci_high: 0.37, relative_risk: 37.5 }],
+    heatmap: [],
+  };
+}
+
 export const qualityHandlers = [
   http.get(`${API_BASE_URL}/quality-analytics/datasets`, () => HttpResponse.json({ items: [QUALITY_DATASET_FIXTURE] })),
+  http.post(`${API_BASE_URL}/quality-analytics/imports/preview`, () => HttpResponse.json(IMPORT_PREVIEW_FIXTURE)),
+  http.post(`${API_BASE_URL}/quality-analytics/datasets`, () =>
+    HttpResponse.json({ report: IMPORT_REPORT_FIXTURE, dataset: IMPORTED_DATASET_FIXTURE }, { status: 201 }),
+  ),
+  http.delete(`${API_BASE_URL}/quality-analytics/datasets/:id`, () => new HttpResponse(null, { status: 204 })),
   http.get(`${API_BASE_URL}/quality-analytics/overview`, ({ request }) => {
+    if (new URL(request.url).searchParams.get("dataset") === IMPORTED_DATASET_FIXTURE.id) {
+      return HttpResponse.json(importedOverviewFixture());
+    }
     const raw = new URL(request.url).searchParams.get("cavities");
     return HttpResponse.json(overviewFixture(raw ? raw.split(",").map(Number) : null));
   }),

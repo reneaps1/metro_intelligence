@@ -120,6 +120,11 @@ Role abbreviations used below:
 
 Industrial edition (IQ-F2): `GET /api/v1/industrial-signals/*` (simulated process signals, scenarios and events) reuses the `live_monitor.stream` token -- same nature as the Live Monitor replay (read-only, replayed/simulated, never written to measurement history), so same role set (M, QE, AD, AU) and no new permission migration. These routes return 404 when `APP_EDITION=metrology`. `GET /api/v1/meta` (edition + demo label) needs any authenticated session and no specific permission.
 
+Industrial edition (IQ-F5/F6), also 404 when `APP_EDITION=metrology`:
+
+- `GET /api/v1/quality-analytics/datasets|overview|variable|report-summary` (dimensional quality aggregates) reuse `measurement.measurement_result:read` (M, QE, AD, AU) -- aggregates of the same data the measurements API exposes.
+- `POST /api/v1/quality-analytics/imports/preview`, `POST /api/v1/quality-analytics/datasets` and `DELETE /api/v1/quality-analytics/datasets/{id}` (exploratory CSV import with column mapping) reuse `measurement.imported_file:create` (D4), so the roles that may upload to the measurement history (M, AD) may run it. The resulting dataset is held in memory, visible only to the user who imported it, and never written to the database or object storage; import, rejection and discard are audited (file hash and counts, no content). Rate-limited: 30/min preview, 10/min import.
+
 ## Minimum Demo Permissions
 
 The client-facing demo needs only this path:

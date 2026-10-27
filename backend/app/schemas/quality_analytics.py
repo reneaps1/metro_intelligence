@@ -7,12 +7,15 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+SourceType = Literal["SIMULATED", "REAL", "IMPORTED"]
+
 
 class VariableOut(BaseModel):
     key: str
     name: str
     unit: str
-    nominal: float
+    # None when the source only gave limits (no nominal to show).
+    nominal: float | None
     lsl: float | None
     usl: float | None
 
@@ -28,7 +31,7 @@ class DatasetOut(BaseModel):
     id: str
     name: str
     description: str
-    source_type: Literal["SIMULATED", "REAL"]
+    source_type: SourceType
     period_start: datetime
     period_end: datetime
     pieces: int
@@ -40,6 +43,8 @@ class DatasetOut(BaseModel):
     batches: list[str]
     available_filters: AvailableFilters
     mechanisms: list[str]
+    # IQ-F6: the source file carries its own OK/NOK verdict column.
+    has_reported_verdict: bool = False
 
 
 class DatasetListResponse(BaseModel):
@@ -54,6 +59,19 @@ class CavityRate(BaseModel):
     ci_low: float | None
     ci_high: float | None
     relative_risk: float | None
+
+
+class SourceReported(BaseModel):
+    """Piece verdict carried by the imported file vs. the one recalculated from spec."""
+
+    pieces_with_verdict: int
+    nok_pieces: int
+    nok_rate: float | None
+    both_nok: int
+    source_only_nok: int
+    spec_only_nok: int
+    both_ok: int
+    definition: str
 
 
 class Summary(BaseModel):
@@ -71,6 +89,8 @@ class Summary(BaseModel):
     period_end: datetime | None
     nok_definition: str
     variables_counted: list[str]
+    variables_with_tolerance: int
+    source_reported: SourceReported | None = None
 
 
 class TrendBucket(BaseModel):
@@ -101,7 +121,7 @@ class HeatmapCell(BaseModel):
 
 class OverviewResponse(BaseModel):
     dataset_id: str
-    source_type: Literal["SIMULATED", "REAL"]
+    source_type: SourceType
     granularity: Literal["day", "hour", "shift"]
     summary: Summary
     trend: list[TrendBucket]
@@ -111,7 +131,7 @@ class OverviewResponse(BaseModel):
 
 
 class Spec(BaseModel):
-    nominal: float
+    nominal: float | None
     lsl: float | None
     usl: float | None
     unit: str
@@ -160,7 +180,7 @@ class DailyCpk(BaseModel):
 
 class VariableDetailResponse(BaseModel):
     dataset_id: str
-    source_type: Literal["SIMULATED", "REAL"]
+    source_type: SourceType
     variable: str
     name: str
     spec: Spec

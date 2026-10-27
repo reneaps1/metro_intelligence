@@ -1,8 +1,9 @@
 """IQ-F5: read-only dimensional quality analytics (industrial edition only).
 
-Aggregations run over a `DimensionalDataset` (today the synthetic demo
-dataset; IQ-F6 adds imported CSV datasets behind the same contract). Every
-payload carries the dataset's `source_type` so the UI can label it.
+Aggregations run over a `DimensionalDataset`: the synthetic demo dataset, or
+one the current user built from a CSV (IQ-F6, `quality_imports.py`; held in
+memory, visible only to its owner). Every payload carries the dataset's
+`source_type` so the UI can label it.
 
 RBAC: `measurement.measurement_result.read` -- these are aggregates of
 measurement results, the same data the measurements API already exposes.
@@ -33,6 +34,7 @@ from app.schemas.quality_analytics import (
     ReportSummary,
     VariableDetailResponse,
 )
+from app.services.imported_dataset_store import get_imported_dataset_store
 from app.services.report_summary_service import load_report_summary
 
 router = APIRouter(
@@ -44,9 +46,12 @@ router = APIRouter(
 _read = require_permission("measurement.measurement_result", "read")
 
 
-def _dataset_or_404(dataset_id: str) -> DimensionalDataset:
+def _dataset_or_404(dataset_id: str, user: User) -> DimensionalDataset:
     if dataset_id == SYNTHETIC_DATASET_ID:
         return synthetic_dataset()
+    stored = get_imported_dataset_store().get(dataset_id, user.id)
+    if stored is not None:
+        return stored.dataset
     raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
 
 
@@ -100,7 +105,7 @@ def _filter(
     )
 
 
-def _dataset_out(ds: DimensionalDataset) -> DatasetOut:
+def dataset_out(ds: DimensionalDataset) -> DatasetOut:
     return DatasetOut(
         id=ds.id,
         name=ds.name,
@@ -111,7 +116,14 @@ def _dataset_out(ds: DimensionalDataset) -> DatasetOut:
         pieces=len(ds),
         groups=len(set(ds.group_ids)),
         variables=[
-            {"key": v.key, "name": v.name, "unit": v.unit, "nominal": v.nominal, "lsl": v.lsl, "usl": v.usl}
+            {
+                "key": v.key,
+                "name": v.name,
+                "unit": v.unit,
+                "nominal": v.display_nominal,
+                "lsl": v.lsl,
+                "usl": v.usl,
+            }
             for v in ds.variables
         ],
         machines=ds.distinct(ds.machines),
@@ -120,12 +132,14 @@ def _dataset_out(ds: DimensionalDataset) -> DatasetOut:
         batches=ds.distinct(ds.batches),
         available_filters=ds.available_filters(),
         mechanisms=ds.mechanisms,
+        has_reported_verdict=ds.reported_nok is not None,
     )
 
 
 @router.get("/datasets", response_model=DatasetListResponse)
-def list_datasets(_user: User = Depends(_read)) -> DatasetListResponse:
-    return DatasetListResponse(items=[_dataset_out(synthetic_dataset())])
+def list_datasets(user: User = Depends(_read)) -> DatasetListResponse:
+    imported = [dataset_out(item.dataset) for item in get_imported_dataset_store().list_for(user.id)]
+    return DatasetListResponse(items=[dataset_out(synthetic_dataset()), *imported])
 
 
 @router.get("/overview", response_model=OverviewResponse)
@@ -139,9 +153,9 @@ def read_overview(
     batches: str | None = Query(None, max_length=512),
     variables: str | None = Query(None, max_length=2048),
     granularity: Literal["day", "hour", "shift"] = "day",
-    _user: User = Depends(_read),
+    user: User = Depends(_read),
 ) -> OverviewResponse:
-    ds = _dataset_or_404(dataset)
+    ds = _dataset_or_404(dataset, user)
     f = _filter(ds, start, end, machines, cavities, shifts, batches, variables)
     result = overview(ds, f, granularity)
     return OverviewResponse(dataset_id=ds.id, source_type=ds.source_type, granularity=granularity, **result)
@@ -158,9 +172,9 @@ def read_variable(
     cavities: str | None = Query(None, max_length=512),
     shifts: str | None = Query(None, max_length=128),
     batches: str | None = Query(None, max_length=512),
-    _user: User = Depends(_read),
+    user: User = Depends(_read),
 ) -> VariableDetailResponse:
-    ds = _dataset_or_404(dataset)
+    ds = _dataset_or_404(dataset, user)
     if variable not in {v.key for v in ds.variables}:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Variable not found.")
     f = _filter(ds, start, end, machines, cavities, shifts, batches, None)

@@ -1,5 +1,6 @@
 // IQ-F5: mirrors backend/app/schemas/quality_analytics.py.
-export type DatasetSourceType = "SIMULATED" | "REAL";
+// IMPORTED = user-uploaded CSV (IQ-F6), analysed as-is, not verified by the platform.
+export type DatasetSourceType = "SIMULATED" | "REAL" | "IMPORTED";
 export type Granularity = "day" | "hour" | "shift";
 export type GroupBy = "cavity" | "machine" | "shift" | "batch";
 
@@ -7,7 +8,8 @@ export interface QualityVariable {
   key: string;
   name: string;
   unit: string;
-  nominal: number;
+  /** null when the source only gave limits */
+  nominal: number | null;
   lsl: number | null;
   usl: number | null;
 }
@@ -35,6 +37,7 @@ export interface QualityDataset {
   batches: string[];
   available_filters: AvailableFilters;
   mechanisms: string[];
+  has_reported_verdict: boolean;
 }
 
 export interface CavityRate {
@@ -62,6 +65,20 @@ export interface QualitySummary {
   period_end: string | null;
   nok_definition: string;
   variables_counted: string[];
+  variables_with_tolerance: number;
+  source_reported: SourceReported | null;
+}
+
+/** IQ-F6: piece verdict carried by the file vs. the one recalculated from spec. */
+export interface SourceReported {
+  pieces_with_verdict: number;
+  nok_pieces: number;
+  nok_rate: number | null;
+  both_nok: number;
+  source_only_nok: number;
+  spec_only_nok: number;
+  both_ok: number;
+  definition: string;
 }
 
 export interface TrendBucket {
@@ -122,7 +139,7 @@ export interface VariableDetailResponse {
   source_type: DatasetSourceType;
   variable: string;
   name: string;
-  spec: { nominal: number; lsl: number | null; usl: number | null; unit: string };
+  spec: { nominal: number | null; lsl: number | null; usl: number | null; unit: string };
   n: number;
   nok: number;
   nok_rate: number | null;
