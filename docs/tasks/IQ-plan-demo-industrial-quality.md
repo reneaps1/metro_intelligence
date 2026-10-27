@@ -30,7 +30,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F5 | Dashboard de calidad dimensional (nidos) | ✅ Hecho | `feat/industrial-quality-demo` | Dataset sintético + informe privado; verificado en navegador |
 | F6 | Importación CSV con mapeo de columnas | ✅ Hecho | `feat/industrial-quality-demo` | Ancho/largo, muestra, cuarentena; análisis en memoria (D6); verificado en navegador |
 | F7 | Laboratorio ML/DL, oleadas NOK y predicción de alarmas | ✅ Hecho | `feat/industrial-quality-demo` | Cifras del brief (pendientes de PDF) + F7.b; verificado en navegador |
-| F8 | Oportunidad de integración, pulido, guía y handoff | ✅ Hecho | `feat/industrial-quality-demo` → PR a `main` | Paso 7, guía, carga diferida, lint privado; regresión 20/20 |
+| F8 | Oportunidad de integración, pulido, guía y handoff | ✅ Hecho | PR #43 a `main` (sin merge) | Paso 7, guía, carga diferida, lint privado; regresión 20/20 |
 | F9 | Despliegue de dos ediciones (metrology + industrial) | 🟨 Preparado en el repo | `feat/industrial-quality-demo` | Falta ejecución en VPS/secretos/DNS (autorización del usuario) |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
