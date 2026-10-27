@@ -75,6 +75,20 @@ const SOURCES: {
     note: "Sin validar para control productivo.",
   },
   {
+    source: "CSV dimensional importado (pasos 2 y 3)",
+    origin: "HISTORICAL",
+    status: "info",
+    statusLabel: "Opcional",
+    note: "Exportación de un período cerrado, analizada tal como viene, en memoria y sin guardarse.",
+  },
+  {
+    source: "Predicción de fallas de máquina",
+    origin: "EXPERIMENTAL",
+    status: "info",
+    statusLabel: "Simulación",
+    note: "Historial de fallas simulado con precursores; modelo sin validar, comparado contra reglas simples.",
+  },
+  {
     source: "Trazabilidad ciclo ↔ pieza",
     origin: null,
     status: "neutral",

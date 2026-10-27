@@ -30,7 +30,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F5 | Dashboard de calidad dimensional (nidos) | ✅ Hecho | `feat/industrial-quality-demo` | Dataset sintético + informe privado; verificado en navegador |
 | F6 | Importación CSV con mapeo de columnas | ✅ Hecho | `feat/industrial-quality-demo` | Ancho/largo, muestra, cuarentena; análisis en memoria (D6); verificado en navegador |
 | F7 | Laboratorio ML/DL, oleadas NOK y predicción de alarmas | ✅ Hecho | `feat/industrial-quality-demo` | Cifras del brief (pendientes de PDF) + F7.b; verificado en navegador |
-| F8 | Oportunidad de integración, pulido, guía y handoff | ⬜ Pendiente | | Docs, pruebas, PR |
+| F8 | Oportunidad de integración, pulido, guía y handoff | ✅ Hecho | `feat/industrial-quality-demo` → PR a `main` | Paso 7, guía, carga diferida, lint privado; regresión 20/20 |
 | F9 | Despliegue de dos ediciones (metrology + industrial) | ⬜ Pendiente | | Requiere autorización para tocar VPS/deploy |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
@@ -329,6 +329,14 @@ Entregables:
 - Check de confidencialidad: `seed/validation/confidentiality.py` ampliado; `git diff` sin nombre real ni datos del cliente (DoD #14).
 - PR a `main` con resumen: real / simulado / precalculado / experimental, rutas, pruebas, limitaciones, próximos pasos PLC/iba, riesgos de deploy. **Sin merge ni deploy.**
 
+**Resultado F8 (26/oct/2026):**
+- Paso 7 `steps/IntegrationStep.tsx`: cadena máquina → conector en planta → trazabilidad ciclo ↔ pieza → modelo validado → alertas → decisión humana; tabla «hoy en la demo vs. con integración» con la procedencia de lo actual; qué haría falta de planta; camino de validación en 4 etapas; mensaje central. `StepPlaceholder` eliminado (ya no quedan pasos pendientes).
+- Procedencia (DoD #11): cada paso declara sus insignias y cada panel las suyas; el paso 1 incluye ahora los CSV importados y la predicción de fallas. Revisado en claro y oscuro.
+- Rendimiento: pasos 2–6 con `lazy()` (chunks de 10–33 kB) y Recharts en su propio chunk; el código de la app bajó de 735 kB a 208 kB (el chunk de Recharts, 548 kB, es la librería). Límite del aviso de Vite en 600 kB, comentado.
+- Guía `docs/demo-industrial-quality.md` (en español por su público): levantar, usuarios, configuración privada, guion de 7–10 min con mensajes clave, CSV, procedencia por pantalla, límites, problemas frecuentes. READMEs nuevos: `features/demo`, `engines/experimental_ml`, `engines/statistics`.
+- Confidencialidad (DoD #14): `seed/validation/confidentiality.py` añade un escaneo de todos los archivos versionados contra una lista privada (`demo-private/forbidden-terms.txt` o `CONFIDENTIAL_TERMS_FILE`, nunca en el repo; en CI se omite). Más prueba de la prueba y lint de los identificadores de los CSV dimensionales.
+- Verificación (DoD #12/#13): backend 1177 passed / 4 skipped; frontend 172 passed, `tsc -b` limpio y build OK sobre el árbol exacto del commit (exportado aparte); lint de confidencialidad 14 passed (con la lista privada, sin coincidencias); navegador 20/20 (login, catálogo, importación, Live Monitor, los 7 pasos en claro y oscuro, edición metrology con rutas industriales en 404), 0 errores de consola. ESLint: el repo no tiene configuración (`eslint.config.*`); queda en §7.
+
 ### F9 — Despliegue de dos ediciones (metrology + industrial)
 
 **Objetivo:** dos URLs en el VPS: versión actual y versión industrial, desde el mismo código. **Cada cambio en VPS, secretos, DNS o workflow de deploy requiere autorización explícita del usuario en esa sesión.**
@@ -353,7 +361,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 
 ## 4. Definition of Done (checklist de aceptación)
 
-- [ ] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
+- [x] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
 - [x] 2. Dashboard con KPIs y varias gráficas coherentes, dataset rotulado. (F5)
 - [x] 3. Se carga un CSV representativo, se ve el mapeo y ≥ 2 analíticas cambian. (F6)
 - [x] 4. Árbol IIoT con señales analógicas/digitales, unidades y estado ficticio. (F2/F3)
@@ -363,10 +371,10 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 - [x] 8. Escenarios normal/deriva/anomalía reproducibles y restaurables sin borrar datos. (F2)
 - [x] 9. Lab ML/DL con cifras del informe, falsas alarmas y DL ≤ ML explícitos. (F7) — cifras del brief; verificar contra el PDF cuando llegue.
 - [x] 10. Oleadas NOK no confunde rachas detectadas con episodios prevenidos. (F7)
-- [ ] 11. Cada pantalla distingue histórico / precalculado / simulado / experimental. (F8)
-- [ ] 12. Sin regresiones en login, catálogo, importación, Live Monitor, navegación. (F8)
-- [ ] 13. Pruebas de lógica nuevas pasan y el frontend compila. (todas)
-- [ ] 14. Sin CSV sensibles, credenciales ni datos del cliente en el repo. (todas)
+- [x] 11. Cada pantalla distingue histórico / precalculado / simulado / experimental. (F8)
+- [x] 12. Sin regresiones en login, catálogo, importación, Live Monitor, navegación. (F8)
+- [x] 13. Pruebas de lógica nuevas pasan y el frontend compila. (todas)
+- [x] 14. Sin CSV sensibles, credenciales ni datos del cliente en el repo. (todas) — archivos versionados limpios (lint privado); queda el nombre del cliente en el historial del commit `5476a23` (decisión pendiente antes del merge).
 
 ---
 
@@ -397,6 +405,8 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 | 2026-10-26 | F5 | Hecho en esta sesión. Pruebas: backend 1095 passed / 4 skipped; frontend 152 passed, `tsc -b` limpio; navegador F5 9/9 + regresión F1–F4 17/17, sin errores de consola. DoD #2 ✅. Siguiente: **F6** (importación CSV con mapeo; Vista A de F4 depende de ella). |
 | 2026-10-26 | F6 | Hecho. La implementación venía de la sesión anterior sin commit; en esta se revisó contra los entregables y se cerraron huecos: README de `connectors/` (ruta offline por lotes) y de `seed/sample_files/` (tolerancias para el formato ancho y resultados esperados, verificados con el adaptador), endpoints en `rbac.md`, D6 registrado, tipado mypy de la respuesta de preview, nombre del dataset sin «Importado ·» duplicado, plural de «variable», insignias de procedencia de los pasos 2/3 según el dataset. Pruebas: backend 1132 passed / 4 skipped (incluye `test_imports_api.py`); frontend 166 passed, `tsc -b` limpio, build OK; lint de confidencialidad de `seed/sample_files` 17 passed; generador determinista (regeneración idéntica byte a byte); navegador F6 16/16 (preview `;` + decimal coma, mapeo sugerido, cuarentena 5/3, tasa NOK y nido de mayor riesgo cambian, tarjeta fuente vs. recalculado, paso 3 con cotas importadas, tolerancias tecleadas, descartar → demo intacta), 0 errores de consola. DoD #3 ✅. Vista A de F4 pasa a §7. Siguiente: **F7**. |
 | 2026-10-26 | F7 + F7.b | Hecho en la misma sesión que F6 a petición del usuario. El motor de F7.b se delegó a un subagente con contrato fijo (archivos nuevos) y se revisó antes de integrarlo (features solo del pasado, etiqueta (t, t+6], filas de train que cruzarían a test descartadas, evaluación por episodio). Los PDF siguen sin llegar: el laboratorio usa las cifras del brief en `demo-private/model-lab.json`, rotuladas «pendientes de verificar contra el PDF». Pruebas: backend 1177 passed / 4 skipped; frontend 171 passed, `tsc -b` limpio, build OK; navegador F7 15/15 con el archivo privado cargado (5 pestañas, umbral, what-if, regresión del paso 2), 0 errores de consola. DoD #9, #10 ✅. Para F9: desplegar `DEMO_MODEL_LAB_PATH` igual que `DEMO_REPORT_SUMMARY_PATH`. Siguiente: **F8**. |
+| 2026-10-26 | F8 | Hecho. Paso 7, procedencia revisada, carga diferida, guía, READMEs, lint de confidencialidad con lista privada. Vista A de F4 sigue en §7 (no estaba en los entregables). Pruebas: backend 1177/4 skipped; frontend 172 sobre el árbol del commit; navegador 20/20. Durante la sesión apareció trabajo sin commit de otra sesión en el mismo checkout (layout «workbench» de la demo: `DemoShell`, `workbench/`, `WorkbenchLayout`, tema, `docs/design/*`); **no se incluyó** en los commits de F8/F9 y la regresión en navegador se vio con ese layout encima. PR a `main` abierto sin merge. El usuario decidió que F9 se prepare solo en el repo (sin tocar VPS, secretos ni DNS). Siguiente: **F9 (preparación)**. |
+| 2026-10-26 | UI (fuera de fase) | A petición del usuario se evaluaron 5 propuestas de interfaz (prototipo navegable fuera del repo) y se aplicó la **propuesta 3 «Ingeniería Ribbon»** al módulo de la demo, en modo claro y oscuro: `DemoShell` pasa a banco de trabajo a pantalla completa (cinta, navegador de proyecto, propiedades, salida, barra de estado) en `features/demo/workbench/`; la ruta de la demo sale de `AppShell` a `layouts/WorkbenchLayout.tsx`; tokens `--wb-*`; spec en `design-system.md` §4.1 y nota en `docs/design/decisions.md`. Metrología sin cambios. Pruebas: frontend 174 passed, `tsc -b` limpio, build OK; capturas en Edge (claro/oscuro) con API interceptada, 0 errores de consola. Sin commit todavía. |
 
 ---
 
@@ -408,6 +418,7 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 - **Vista A de F4** (mediciones dimensionales + sensores simulados unidos por tiempo, banner «Unión ilustrativa por tiempo; relación no validada»): ya es posible porque F5/F6 dan datasets dimensionales con marca de tiempo, pero no estaba en los entregables de F6. Candidata para F8; el panel de correlación sigue mostrando la tarjeta «Vista A pendiente».
 - Ancho/largo es la única distinción de formato: archivos con varias filas de encabezado o tolerancias en filas aparte (exportaciones PolyWorks/Calypso típicas) requieren limpieza previa o un adaptador específico.
 - Deuda previa (no introducida aquí): `ruff check app` reporta ~25 errores en archivos existentes (`demo_data.py`, `main.py`, `core/security.py`, `services/audit_service.py`…) y `ruff format` reformatearía ~15 archivos previos. Los archivos nuevos de IQ pasan ruff. El CI actual solo corre pruebas de `seed/`; los jobs backend/frontend siguen como comentario en `ci.yml`.
-- Aviso de Vite: bundle > 500 kB (previo). En F8 considerar `lazy()` para las rutas de la demo.
+- ~~Aviso de Vite: bundle > 500 kB~~ Resuelto en F8 (lazy + chunk de Recharts).
+- ESLint 9 sin `eslint.config.*` en `frontend/`: `npx eslint` no corre. Migrar la configuración (deuda previa).
 - Verificación en navegador reutilizable: no hay skill de proyecto para levantar la app. Receta usada (F3/F4): BD desechable migrada + usuario metrólogo ficticio, `uvicorn` con `APP_EDITION=industrial POSTGRES_DB=<desechable>`, `npx vite`, `playwright-core` con `channel: "msedge"`; la sesión vive en memoria, así que se navega dentro de la SPA sin recargar. Considerar `/run-skill-generator` para guardarla como skill del proyecto.
 - `.pyc` antiguos muestran rutas `C:\Users\renea\Proyectos\...` en tracebacks; es cosmético (borrar `__pycache__` si molesta).

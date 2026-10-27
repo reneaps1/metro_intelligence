@@ -78,7 +78,8 @@ describe("DemoShell walkthrough", () => {
 
     await user.click(screen.getByRole("button", { name: /siguiente: diagnóstico de calidad/i }));
     expect(await screen.findByRole("heading", { name: "Diagnóstico de calidad" })).toBeInTheDocument();
-    expect(await screen.findByLabelText("Indicadores de calidad")).toBeInTheDocument();
+    // Step 2 is lazy-loaded (IQ-F8): the first import can take a while under a parallel run.
+    expect(await screen.findByLabelText("Indicadores de calidad", {}, { timeout: 5000 })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /anterior/i }));
     expect(await screen.findByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();
@@ -107,6 +108,16 @@ describe("DemoShell walkthrough", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/escenario demo restaurado/i);
     const normal = await screen.findByRole("button", { name: /operación normal estable/i });
     expect(normal).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("step 7 contrasts today's demo with a real integration and keeps decisions human", async () => {
+    server.use(industrialMetaHandler());
+    renderDemo("/demo/industrial-quality/integration");
+    const table = await screen.findByLabelText("Hoy vs. con integración");
+    expect(within(table).getByText("Señales de proceso")).toBeInTheDocument();
+    expect(within(table).getAllByText("Simulado").length).toBeGreaterThan(0);
+    expect(screen.getByText("Decisión humana")).toBeInTheDocument();
+    expect(screen.getByText(/La capa IIoT mostrada aquí es simulada/)).toBeInTheDocument();
   });
 
   it("unknown step falls back to the demo home", async () => {

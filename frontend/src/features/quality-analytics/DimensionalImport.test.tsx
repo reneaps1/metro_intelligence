@@ -85,7 +85,8 @@ describe("QualityStep with an imported CSV", () => {
       </DemoSessionProvider>,
       { ...CREDS, route: "/demo/quality" },
     );
-    const kpis = await screen.findByLabelText("Indicadores de calidad");
+    // DemoStepPage lazy-loads step 2 (IQ-F8).
+    const kpis = await screen.findByLabelText("Indicadores de calidad", {}, { timeout: 5000 });
     expect(within(kpis).getByText("Nido 4")).toBeInTheDocument();
     expect(screen.getByText("Ejemplo ilustrativo (cifras ficticias)")).toBeInTheDocument();
     expect(screen.getByText("Simulado")).toBeInTheDocument();
@@ -111,5 +112,6 @@ describe("QualityStep with an imported CSV", () => {
 
     await user.click(screen.getByRole("button", { name: /Descartar archivo/ }));
     expect(await within(await screen.findByLabelText("Indicadores de calidad")).findByText("Nido 4")).toBeInTheDocument();
-  });
+    // Full import flow plus the lazy step chunk: more than the default 5 s on a loaded machine.
+  }, 15_000);
 });

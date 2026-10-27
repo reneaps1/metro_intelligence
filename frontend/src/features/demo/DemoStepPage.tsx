@@ -1,24 +1,38 @@
+import { Suspense, lazy, type ComponentType } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { OriginBadge } from "../../components/ui/OriginBadge";
 import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import type { DataOrigin } from "../../lib/demo/origin";
 import { DEMO_BASE_PATH, DEMO_STEPS, type DemoStep } from "../../lib/demo/steps";
 import { DEMO_DATASET_ID } from "../../lib/quality-analytics/filters";
-import { AiStep } from "./steps/AiStep";
 import { ContextStep } from "./steps/ContextStep";
-import { CorrelationStep } from "./steps/CorrelationStep";
-import { IiotLabStep } from "./steps/IiotLabStep";
-import { DimensionalStep, QualityStep } from "./steps/QualitySteps";
-import { StepPlaceholder } from "./steps/StepPlaceholder";
+import { IntegrationStep } from "./steps/IntegrationStep";
+
+// IQ-F8: chart-heavy steps load on demand, so the metrology edition (which
+// never opens the demo) does not download them.
+const QualityStep = lazy(() => import("./steps/QualitySteps").then((m) => ({ default: m.QualityStep })));
+const DimensionalStep = lazy(() => import("./steps/QualitySteps").then((m) => ({ default: m.DimensionalStep })));
+const IiotLabStep = lazy(() => import("./steps/IiotLabStep").then((m) => ({ default: m.IiotLabStep })));
+const CorrelationStep = lazy(() => import("./steps/CorrelationStep").then((m) => ({ default: m.CorrelationStep })));
+const AiStep = lazy(() => import("./steps/AiStep").then((m) => ({ default: m.AiStep })));
+
+const STEP_CONTENT: Record<string, ComponentType> = {
+  context: ContextStep,
+  quality: QualityStep,
+  dimensional: DimensionalStep,
+  iiot: IiotLabStep,
+  correlation: CorrelationStep,
+  ai: AiStep,
+  integration: IntegrationStep,
+};
 
 function StepContent({ step }: { step: DemoStep }) {
-  if (step.id === "context") return <ContextStep />;
-  if (step.id === "quality") return <QualityStep />;
-  if (step.id === "dimensional") return <DimensionalStep />;
-  if (step.id === "iiot") return <IiotLabStep />;
-  if (step.id === "correlation") return <CorrelationStep />;
-  if (step.id === "ai") return <AiStep />;
-  return <StepPlaceholder stepId={step.id} />;
+  const Content = STEP_CONTENT[step.id];
+  return (
+    <Suspense fallback={<p className="text-sm text-text-secondary">Cargando…</p>}>
+      <Content />
+    </Suspense>
+  );
 }
 
 // IQ-F6: steps 2/3 analysing an imported CSV show a closed-period file, not
