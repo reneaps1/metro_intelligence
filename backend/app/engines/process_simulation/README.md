@@ -16,7 +16,19 @@ plant, machine or customer.
   channel at any instant, and windowed series with min/max downsampling.
 - `alignment.py` (IQ-F4) — pairs two channels per cycle (simulated
   traceability) or per time with a lag (no traceability), fits OLS via
-  `app/engines/statistics`, and scans lags.
+  `app/engines/statistics`, and scans lags. `cycle_feature` is the
+  one-value-per-cycle definition (the value, the profile peak or the in-cycle
+  mean).
+- `calendar_scenario.py` (IQ-F13) — pure builder of the `real_calendar`
+  scenario from plain inputs (piece timestamps, verdicts, nest count, plant UTC
+  offset); see below.
+
+Every entry point (`build_timeline`, `generate_series`, `scenario_events`,
+`correlate`) takes a `Scenario` object or a static scenario id. A scenario's
+optional calendar fields (`start`, `duration_s`, `nest_count`; None = the
+fixed 8 h demo calendar with 12 nests) let it run on another calendar; the
+static scenarios leave them unset and their output is byte-identical to
+`process-sim-1.1.0` (only `GENERATOR_VERSION` moved to `process-sim-1.2.0`).
 
 ## "Vista B": synthetic quality with an imposed mechanism
 
@@ -29,14 +41,36 @@ tolerance ±0.050 mm, published 300 s after the cycle (inspection delay). In
 until the insert change. Process channels never read this layer (separate RNG
 stream), so there is no leakage from quality into process signals.
 
+## "Vista A": process on the real calendar (IQ-F13, plan decision D7)
+
+`build_calendar_scenario` turns the inspected pieces of a dataset into the
+`real_calendar` scenario ("Calendario real (simulado)"): start = first piece
+floored to the minute, duration = last piece − start + 60 s, downtimes = every
+gap ≥ 20 min between consecutive pieces (no cycle starts inside one), nest
+count of the dataset on the primary machine (INY-02 keeps the `normal`
+behaviour), and a `mold_temp_delta` that follows the hourly NOK rate in plant
+time (hours with ≥ 100 pieces, centred 3-hour moving average,
+`clamp(4.0·(rate / p_ref − 1), −2, 8)` °C at each hour midpoint, linear in
+between, 0 outside). Everything else is the `normal` behaviour.
+
+That delta is derived from real quality labels, so the scenario is
+`quality_driven=True`: the API reports `causal_imposed=true` for its mold
+temperature, and the delta drives **only** the mold temperature channel (and
+the mold-temperature check of `process_ok`) — peak pressure and the Vista B
+dimension do not inherit it, so hold pressure, peak pressure and cycle time
+remain controls. The scenario is built at runtime
+(`app/services/process_join_service.py`, cached per dataset object) and never
+added to `SCENARIOS`: no customer dates in code.
+
 ## Guarantees
 
 - **Deterministic:** same scenario + machine + instant → same value, whatever
   window or resolution is requested (noise is hashed from the sample index).
 - **Stateless:** no database access. Restoring a scenario cannot touch users,
   catalog or measurement history.
-- **No leakage:** no parameter depends on quality labels; `process_ok` comes
-  only from the simulated process window.
+- **No leakage:** no parameter of the static scenarios depends on quality
+  labels; `process_ok` comes only from the simulated process window. The only
+  exception is the declared `quality_driven` calendar scenario above.
 - **Bounded output:** ≤ 6 000 evaluations per slow channel and a per-cycle
   envelope for fast channels on long windows; responses capped by `max_points`.
 

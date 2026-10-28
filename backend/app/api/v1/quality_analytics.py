@@ -8,6 +8,10 @@ customer's REAL dataset when configured locally (IQ-F10,
 
 RBAC: `measurement.measurement_result.read` -- these are aggregates of
 measurement results, the same data the measurements API already exposes.
+
+IQ-F13: `/process-join` ("Vista A") joins the REAL pieces by time with the
+SIMULATED process of the `real_calendar` scenario
+(`services/process_join_service.py`); REAL dataset only, 404 without it.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.edition import require_industrial_edition
 from app.core.security import require_permission
+from app.engines.process_simulation.generator import GENERATOR_VERSION
 from app.engines.quality_analytics import (
     SYNTHETIC_DATASET_ID,
     DimensionalDataset,
@@ -33,12 +38,23 @@ from app.schemas.quality_analytics import (
     DatasetOut,
     OverviewResponse,
     PresetOut,
+    ProcessJoinBucket,
+    ProcessJoinLag,
+    ProcessJoinResponse,
+    ProcessJoinSignal,
     ReportSummary,
     StationOut,
     VariableDetailResponse,
 )
 from app.services.imported_dataset_store import get_imported_dataset_store
+from app.services.process_join_service import (
+    DEFAULT_BUCKET_MINUTES,
+    join_signal,
+    process_join,
+    validate_window,
+)
 from app.services.real_dataset_service import REAL_DATASET_ID, cached_overview, load_real_dataset
+from app.services.real_predictive_service import TOTAL_TARGET, target_label, validate_target
 from app.services.report_summary_service import load_report_summary
 
 router = APIRouter(
@@ -227,3 +243,68 @@ def read_variable(
 @router.get("/report-summary", response_model=ReportSummary)
 def read_report_summary(_user: User = Depends(_read)) -> ReportSummary:
     return load_report_summary()
+
+
+def _unprocessable(detail: str) -> HTTPException:
+    return HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+
+
+@router.get("/process-join", response_model=ProcessJoinResponse)
+def read_process_join(
+    signal: str = Query(..., max_length=128),
+    dataset: str = Query(REAL_DATASET_ID, max_length=128),
+    target: str = Query(TOTAL_TARGET, max_length=64),
+    bucket_minutes: int = DEFAULT_BUCKET_MINUTES,
+    lag_minutes: int = 0,
+    _user: User = Depends(_read),
+) -> ProcessJoinResponse:
+    """Vista A: NOK rate of the REAL pieces vs. a SIMULATED signal of the calendar scenario, per bucket.
+
+    ``lag_minutes`` > 0 pairs each bucket with the cycles that started that
+    long before it (the process precedes the inspection).
+    """
+    real = load_real_dataset() if dataset == REAL_DATASET_ID else None
+    if real is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+    try:
+        join_signal(signal)
+    except ValueError:
+        raise _unprocessable("Unknown signal or not offered by the process join.") from None
+    try:
+        validate_target(real, target)
+    except ValueError:
+        raise _unprocessable("Unknown target.") from None
+    try:
+        validate_window(bucket_minutes, lag_minutes)
+    except ValueError:
+        raise _unprocessable(
+            "bucket_minutes must be 15, 30 or 60 and lag_minutes a multiple of it within ±180."
+        ) from None
+
+    result = process_join(real, signal, target, bucket_minutes, lag_minutes)
+    fit = result.join.fit
+    return ProcessJoinResponse(
+        dataset=real.id,
+        scenario_id=result.scenario.id,
+        generator_version=GENERATOR_VERSION,
+        signal=ProcessJoinSignal(id=signal, name=result.signal_name, unit=result.signal.unit),
+        target=target,
+        target_label=target_label(real, target),
+        bucket_minutes=bucket_minutes,
+        lag_minutes=lag_minutes,
+        utc_offset_minutes=real.utc_offset_s // 60,
+        n=fit.n,
+        pearson_r=fit.pearson_r,
+        slope=fit.slope,
+        intercept=fit.intercept,
+        r_squared=fit.r_squared,
+        buckets=[
+            ProcessJoinBucket(start_ts=b.start_ts, x=b.x, y=b.y, pieces=b.pieces, cycles=b.cycles)
+            for b in result.join.buckets
+        ],
+        lag_scan=[ProcessJoinLag(lag_minutes=lag, r=s.r, n=s.n) for lag, s in result.scan],
+        best_lag_minutes=result.best_lag_minutes,
+        causal_imposed=result.causal_imposed,
+        provenance=["REAL", "SIMULATED", "EXPERIMENTAL"],
+        notes=result.notes,
+    )

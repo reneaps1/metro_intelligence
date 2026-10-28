@@ -19,13 +19,15 @@ from typing import Literal
 
 from app.engines.process_simulation.catalog import SignalDefinition, parse_signal_id
 from app.engines.process_simulation.generator import (
-    SCENARIO_DURATION_S,
     Cycle,
     Timeline,
     _per_cycle_value,
     build_timeline,
+    causal_imposed,
     evaluate,
+    scenario_duration,
 )
+from app.engines.process_simulation.scenarios import Scenario, resolve_scenario
 from app.engines.statistics import LinearFit, linear_fit
 
 AlignMode = Literal["time", "cycle"]
@@ -56,7 +58,7 @@ class CorrelationResult:
     causal_imposed: bool
 
 
-def _cycle_feature(timeline: Timeline, signal: SignalDefinition, c: Cycle) -> float:
+def cycle_feature(timeline: Timeline, signal: SignalDefinition, c: Cycle) -> float:
     """One value per cycle: the value itself, the profile peak, or the in-cycle mean."""
     if signal.sampling == "per_cycle":
         return _per_cycle_value(signal.key, c)
@@ -85,7 +87,7 @@ def _best(scan: list[LagScore]) -> float | None:
 
 
 def correlate(
-    scenario_id: str,
+    scenario: str | Scenario,
     x_id: str,
     y_id: str,
     start_s: float,
@@ -100,13 +102,15 @@ def correlate(
         KeyError: unknown scenario or signal.
         ValueError: invalid window, or ``cycle`` mode across different machines.
     """
-    if not (0.0 <= start_s < end_s <= SCENARIO_DURATION_S):
+    sc = resolve_scenario(scenario)
+    duration = scenario_duration(sc)
+    if not (0.0 <= start_s < end_s <= duration):
         raise ValueError("invalid window")
     x_machine, x_signal = parse_signal_id(x_id)
     y_machine, y_signal = parse_signal_id(y_id)
-    x_timeline = build_timeline(scenario_id, x_machine.code)
-    y_timeline = build_timeline(scenario_id, y_machine.code)
-    causal = x_signal.causal_imposed or y_signal.causal_imposed
+    x_timeline = build_timeline(scenario, x_machine.code)
+    y_timeline = build_timeline(scenario, y_machine.code)
+    causal = causal_imposed(sc, x_machine, x_signal) or causal_imposed(sc, y_machine, y_signal)
 
     if mode == "cycle":
         if x_machine.code != y_machine.code:
@@ -115,8 +119,8 @@ def correlate(
         indices = [i for i, c in enumerate(cycles) if start_s <= c.start < end_s]
         lags = sorted({int(lag), *(int(v) for v in (scan_lags or ()))})
         y_needed = sorted({i + k for i in indices for k in lags if 0 <= i + k < len(cycles)})
-        fx = {i: _cycle_feature(x_timeline, x_signal, cycles[i]) for i in indices}
-        fy = {j: _cycle_feature(y_timeline, y_signal, cycles[j]) for j in y_needed}
+        fx = {i: cycle_feature(x_timeline, x_signal, cycles[i]) for i in indices}
+        fy = {j: cycle_feature(y_timeline, y_signal, cycles[j]) for j in y_needed}
 
         def pairs_at(k: int) -> list[tuple[float, float]]:
             return [(fx[i], fy[i + k]) for i in indices if (i + k) in fy]
@@ -133,7 +137,7 @@ def correlate(
             return [
                 (evaluate(x_timeline, x_signal.key, t), evaluate(y_timeline, y_signal.key, t + shift))
                 for t in times
-                if 0.0 <= t + shift <= SCENARIO_DURATION_S
+                if 0.0 <= t + shift <= duration
             ]
 
         main = pairs_on(_grid(start_s, end_s, TIME_GRID_POINTS), lag)

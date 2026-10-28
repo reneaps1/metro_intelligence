@@ -19,6 +19,14 @@ Pure engines, no database access.
   per-nest rate with Wilson 95 % CI and relative risk, nest × variable
   heatmap) and `variable_detail()` (histogram, boxplots by group, Cp/Cpk and
   I-MR limits via `app/engines/spc`, daily Cpk).
+- `process_join.py` (IQ-F13, "Vista A") — illustrative join BY TIME of piece
+  verdicts with per-cycle process values on plant-time buckets: `x` = mean of
+  the cycles that start in `[b − lag, b − lag + bucket)`, `y` = NOK rate of the
+  pieces inspected in `[b, b + bucket)`; a bucket counts with ≥ 50 pieces and
+  ≥ 5 cycles; OLS fit, lag scan and best lag (largest |r| with ≥ 10 buckets).
+  There is no cycle/piece traceability behind it. Composed with the REAL
+  dataset and the simulated `real_calendar` scenario by
+  `app/services/process_join_service.py`.
 
 ## Definitions (returned with the data)
 

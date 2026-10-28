@@ -263,3 +263,52 @@ class ReportSummary(BaseModel):
     critical_nest_relative_risk: float | None = None
     relative_risk_basis: str | None = Field(default=None, max_length=400)
     notes: list[str] = Field(default_factory=list, max_length=12)
+
+
+# --- IQ-F13 "Vista A": REAL pieces joined by time with the SIMULATED calendar process ---
+
+
+class ProcessJoinSignal(BaseModel):
+    id: str
+    name: str
+    unit: str
+
+
+class ProcessJoinBucket(BaseModel):
+    # UTC epoch seconds of the bucket start (buckets are aligned to plant time).
+    start_ts: float
+    # Mean per-cycle value of the cycles starting in the lagged bucket.
+    x: float
+    # NOK rate of the pieces inspected in the bucket.
+    y: float
+    pieces: int
+    cycles: int
+
+
+class ProcessJoinLag(BaseModel):
+    lag_minutes: int
+    r: float | None
+    n: int
+
+
+class ProcessJoinResponse(BaseModel):
+    dataset: str
+    scenario_id: str
+    generator_version: str
+    signal: ProcessJoinSignal
+    target: str
+    target_label: str
+    bucket_minutes: int
+    lag_minutes: int
+    utc_offset_minutes: int
+    n: int
+    pearson_r: float | None
+    slope: float | None
+    intercept: float | None
+    r_squared: float | None
+    buckets: list[ProcessJoinBucket]
+    lag_scan: list[ProcessJoinLag]
+    best_lag_minutes: int | None
+    causal_imposed: bool
+    provenance: list[Literal["REAL", "SIMULATED", "EXPERIMENTAL"]]
+    notes: list[str]

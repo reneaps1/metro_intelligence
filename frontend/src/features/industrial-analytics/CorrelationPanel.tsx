@@ -21,6 +21,7 @@ import { collectSignals, fetchCorrelation, fetchSignalTree } from "../../lib/ind
 import { describeCorrelation, equation, formatCoefficient } from "../../lib/industrial-signals/correlation";
 import { formatValue } from "../../lib/industrial-signals/explorer";
 import type { AlignMode } from "../../lib/industrial-signals/types";
+import { QualityJoinPanel } from "./QualityJoinPanel";
 
 // IQ-F4: real scatter / OLS / Pearson / lag scan computed by the backend on
 // time-aligned simulated pairs. Wording stays at "association" level.
@@ -302,17 +303,7 @@ export function CorrelationPanel() {
         </>
       )}
 
-      <Card className="space-y-1">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-text-primary">Vista A: mediciones históricas + sensores simulados</p>
-          <OriginBadge origin="HISTORICAL" />
-          <OriginBadge origin="SIMULATED" />
-        </div>
-        <p className="text-sm text-text-secondary">
-          Disponible cuando haya datos dimensionales cargados (fases F5 y F6). Sería una superposición ilustrativa por tiempo: cualquier
-          relación con los NOK reales queda como hipótesis sin validar hasta tener señales de máquina reales y trazabilidad por ciclo.
-        </p>
-      </Card>
+      <QualityJoinPanel />
     </div>
   );
 }

@@ -11,7 +11,15 @@ Design:
   construction, and no user/catalog data can ever be touched.
 
 Leakage guard: no parameter here depends on real or simulated quality labels.
-`process_ok` is derived only from the simulated process window.
+`process_ok` is derived only from the simulated process window. The single,
+declared exception is a `quality_driven` scenario (IQ-F13, plan decision D7):
+its mold temperature delta follows real reject rates, so it is reported as
+`causal_imposed` and drives the mold temperature only -- peak pressure and the
+Vista B dimension do not inherit it, so the other channels stay controls.
+
+IQ-F13: every entry point takes a `Scenario` object or a static scenario id;
+the scenario's calendar fields (start, duration, nest count) default to the
+fixed demo calendar below, so the static scenarios are unchanged.
 """
 
 from __future__ import annotations
@@ -32,10 +40,10 @@ from app.engines.process_simulation.catalog import (
     get_signal,
     parse_signal_id,
 )
-from app.engines.process_simulation.scenarios import Scenario, ScenarioEvent, get_scenario
+from app.engines.process_simulation.scenarios import Scenario, ScenarioEvent, get_scenario, resolve_scenario
 from app.engines.timeseries.downsample import minmax_downsample
 
-GENERATOR_VERSION = "process-sim-1.1.0"
+GENERATOR_VERSION = "process-sim-1.2.0"
 BASE_SEED = 20261026
 SCENARIO_START = datetime(2026, 10, 20, 6, 0, tzinfo=UTC)
 SCENARIO_DURATION_S = 8 * 3600.0
@@ -76,6 +84,9 @@ DIM_KEYS = frozenset({"dim_pins_length", "dim_nok"})
 # Above this many native samples in the requested window, profile channels
 # switch to a per-cycle envelope and slow channels to a coarser uniform grid.
 RAW_EVAL_LIMIT = 6000
+
+# Channels that carry the delta of a quality-driven scenario (D7).
+QUALITY_DRIVEN_KEYS = frozenset({"mold_temp"})
 
 Mode = Literal["raw", "envelope"]
 
@@ -181,7 +192,7 @@ class SeriesResult:
     signal_id: str
     signal: SignalDefinition
     machine: MachineDefinition
-    # (offset seconds from SCENARIO_START, value)
+    # (offset seconds from the scenario start, value)
     points: list[tuple[float, float]]
     native_points: int
     downsampled: bool
@@ -252,22 +263,49 @@ def _machine(code: str) -> MachineDefinition:
     raise KeyError(code)
 
 
-def nest_offsets(machine_code: str) -> tuple[float, ...]:
-    """Fixed per-nest offset of the Vista B dimension (mm), nests 1..NEST_COUNT."""
+def scenario_start(scenario: Scenario) -> datetime:
+    """Absolute instant of offset 0 (the fixed demo start unless the scenario has a calendar)."""
+    return SCENARIO_START if scenario.start is None else scenario.start
+
+
+def scenario_duration(scenario: Scenario) -> float:
+    """Length of the scenario timeline in seconds."""
+    return SCENARIO_DURATION_S if scenario.duration_s is None else scenario.duration_s
+
+
+def causal_imposed(scenario: Scenario, machine: MachineDefinition, signal: SignalDefinition) -> bool:
+    """True when the channel's relation with quality was imposed by construction.
+
+    Either the Vista B synthetic quality layer, or the mold temperature of a
+    quality-driven scenario on the primary machine (the only one it drives).
+    """
+    driven = scenario.quality_driven and machine.primary and signal.key in QUALITY_DRIVEN_KEYS
+    return signal.causal_imposed or driven
+
+
+def nest_offsets(machine_code: str, count: int = NEST_COUNT) -> tuple[float, ...]:
+    """Fixed per-nest offset of the Vista B dimension (mm), nests 1..count."""
     nest_rng = random.Random(f"{BASE_SEED}:nests:{_machine(machine_code).code}")
-    return tuple(nest_rng.gauss(0.0, NEST_OFFSET_SD_MM) for _ in range(NEST_COUNT))
+    return tuple(nest_rng.gauss(0.0, NEST_OFFSET_SD_MM) for _ in range(count))
 
 
 @lru_cache(maxsize=32)
-def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
-    """Cycle-by-cycle timeline for one scenario and machine (cached, deterministic)."""
-    scenario = get_scenario(scenario_id)
+def build_timeline(scenario: str | Scenario, machine_code: str) -> Timeline:
+    """Cycle-by-cycle timeline for one scenario and machine (cached, deterministic).
+
+    The calendar (duration) is the scenario's; the behaviour (deviations,
+    downtimes, nest count) is the scenario's on the primary machine and the
+    `normal` one on the others.
+    """
+    scenario = resolve_scenario(scenario)
     machine = _machine(machine_code)
     effective = scenario if machine.primary else get_scenario("normal")
+    duration_limit = scenario_duration(scenario)
+    nests = NEST_COUNT if effective.nest_count is None else effective.nest_count
     rng = random.Random(f"{BASE_SEED}:{scenario.id}:{machine.code}")
     # Separate streams so the synthetic quality layer never perturbs process values.
     rng_quality = random.Random(f"{BASE_SEED}:{scenario.id}:{machine.code}:quality")
-    offsets = nest_offsets(machine.code)
+    offsets = nest_offsets(machine.code, nests)
     seed = _splitmix64(BASE_SEED ^ zlib.crc32(f"{scenario.id}:{machine.code}".encode()))
 
     cycles: list[Cycle] = []
@@ -285,13 +323,15 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
         cool_s = COOLING_TIME_S
         open_s = 3.0 + abs(rng.gauss(0.0, 0.05))
         duration = close_s + fill_s + hold_s + cool_s + open_s
-        if t + duration > SCENARIO_DURATION_S:
+        if t + duration > duration_limit:
             break
 
         mold_delta = _piecewise(effective.mold_temp_delta, t)
+        # A quality-driven delta (D7) stays on the mold temperature channel.
+        coupled_delta = 0.0 if effective.quality_driven else mold_delta
         spread = _step(effective.peak_spread, t)
         # Hotter mold -> lower melt viscosity -> slightly lower peak pressure.
-        peak = PEAK_PRESSURE_BAR - 6.0 * mold_delta + rng.gauss(0.0, 12.0 * spread)
+        peak = PEAK_PRESSURE_BAR - 6.0 * coupled_delta + rng.gauss(0.0, 12.0 * spread)
         spiked = any(t <= s < t + duration for s in effective.pressure_spikes)
         if spiked:
             # A scripted spike must leave the process window whatever the random spread.
@@ -305,14 +345,14 @@ def build_timeline(scenario_id: str, machine_code: str) -> Timeline:
             and MOLD_TEMP_C + mold_delta <= MOLD_TEMP_MAX_C
             and not fault
         )
-        cavity = shot % NEST_COUNT + 1
+        cavity = shot % nests + 1
         nest_offset = offsets[cavity - 1]
         worn = effective.worn_nest
         if worn is not None and cavity == worn[0] and t < worn[2]:
             nest_offset += worn[1]
         dim_length = (
             DIM_NOMINAL_MM
-            + DIM_MOLD_COEF_MM_PER_C * mold_delta
+            + DIM_MOLD_COEF_MM_PER_C * coupled_delta
             + DIM_HOLD_COEF_MM_PER_BAR * (hold_pressure - HOLD_REFERENCE_BAR)
             + nest_offset
             + rng_quality.gauss(0.0, DIM_NOISE_MM)
@@ -536,7 +576,7 @@ def _native_grid(start: float, end: float, rate: float) -> list[float]:
 
 
 def generate_series(
-    scenario_id: str, signal_id: str, start_s: float, end_s: float, max_points: int
+    scenario: str | Scenario, signal_id: str, start_s: float, end_s: float, max_points: int
 ) -> SeriesResult:
     """Points of one channel over ``[start_s, end_s]`` (offsets), at most ``max_points``.
 
@@ -544,12 +584,12 @@ def generate_series(
         KeyError: unknown scenario or signal id.
         ValueError: empty/invalid window or ``max_points`` < 2.
     """
-    if not (0.0 <= start_s < end_s <= SCENARIO_DURATION_S):
+    if not (0.0 <= start_s < end_s <= scenario_duration(resolve_scenario(scenario))):
         raise ValueError("invalid window")
     if max_points < 2:
         raise ValueError("max_points must be >= 2")
     machine, signal = parse_signal_id(signal_id)
-    timeline = build_timeline(scenario_id, machine.code)
+    timeline = build_timeline(scenario, machine.code)
     key = signal.key
 
     in_window = [c for c in timeline.cycles if c.end > start_s and c.start < end_s]
@@ -596,6 +636,6 @@ def generate_series(
     )
 
 
-def scenario_events(scenario_id: str) -> tuple[ScenarioEvent, ...]:
+def scenario_events(scenario: str | Scenario) -> tuple[ScenarioEvent, ...]:
     """Annotated events of a scenario (they occur on the primary machine)."""
-    return get_scenario(scenario_id).events
+    return resolve_scenario(scenario).events

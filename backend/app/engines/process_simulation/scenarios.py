@@ -3,11 +3,17 @@
 Each scenario is pure data: piecewise deviations, windows and annotated
 events, all as offsets (seconds) from the scenario start. Deviations apply to
 the primary machine only. Nothing here is conditioned on real quality labels.
+
+IQ-F13: optional calendar fields (absolute start, duration, nest count) let a
+scenario live on another calendar. The only scenario that uses them,
+`real_calendar` (`calendar_scenario.py`), is built at runtime and never added
+to `SCENARIOS`; it is `quality_driven` (plan decision D7).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal
 
 H = 3600.0
@@ -57,6 +63,16 @@ class Scenario:
     # Vista B only: worn insert in one nest, (nest, length offset mm, until offset_s).
     worn_nest: tuple[int, float, float] | None = None
     events: tuple[ScenarioEvent, ...] = field(default=())
+    # --- IQ-F13 calendar fields; None = the fixed demo calendar of the generator ---
+    # Absolute instant of offset 0 (None = SCENARIO_START).
+    start: datetime | None = None
+    # Length of the timeline in seconds (None = SCENARIO_DURATION_S).
+    duration_s: float | None = None
+    # Nests of the primary machine (None = NEST_COUNT).
+    nest_count: int | None = None
+    # True when `mold_temp_delta` follows real quality labels (D7): reported as
+    # `causal_imposed`, and the delta drives the mold temperature channel only.
+    quality_driven: bool = False
 
 
 _BATCH_CHANGE = ScenarioEvent(
@@ -200,3 +216,8 @@ _BY_ID = {s.id: s for s in SCENARIOS}
 def get_scenario(scenario_id: str) -> Scenario:
     """Raises KeyError for an unknown scenario id."""
     return _BY_ID[scenario_id]
+
+
+def resolve_scenario(scenario: str | Scenario) -> Scenario:
+    """A scenario object as given, or a static scenario by id (KeyError if unknown)."""
+    return get_scenario(scenario) if isinstance(scenario, str) else scenario
