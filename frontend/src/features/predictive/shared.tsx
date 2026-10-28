@@ -76,13 +76,42 @@ export function Callout({ tone = "info", children }: { tone?: "info" | "warning"
   );
 }
 
-export function LoadState({ loading, error }: { loading: boolean; error: string | null }) {
+// Errors say what failed, the likely cause and how to recover (never a bare
+// server message): a 404 here means the backend does not serve this module.
+export function LoadState({
+  loading,
+  error,
+  onRetry,
+}: {
+  loading: boolean;
+  error: string | null;
+  onRetry?: () => void;
+}) {
   if (error) {
+    const notFound = /not found/i.test(error);
     return (
-      <p role="alert" className="text-sm text-status-nok">
-        {error}
-      </p>
+      <div role="alert" className="flex flex-wrap items-center gap-3 rounded bg-status-nok-bg px-3 py-2 text-sm text-status-nok">
+        <p className="min-w-0 flex-1">
+          <strong>No se pudo cargar este análisis.</strong>{" "}
+          {notFound
+            ? "El servidor no tiene este módulo: reinicie el backend con la versión actual y APP_EDITION=industrial."
+            : `Detalle: ${error}`}
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-[32px] rounded border border-status-nok px-3 text-sm font-medium hover:bg-surface"
+          >
+            Reintentar
+          </button>
+        )}
+      </div>
     );
   }
-  return loading ? <p className="text-sm text-text-secondary">Cargando…</p> : null;
+  return loading ? (
+    <p role="status" className="text-sm text-text-secondary">
+      Cargando…
+    </p>
+  ) : null;
 }

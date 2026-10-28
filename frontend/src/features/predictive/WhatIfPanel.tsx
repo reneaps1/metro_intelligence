@@ -117,7 +117,7 @@ export function WhatIfPanel() {
           Inserto desgastado en el nido 7 (+0.04 mm)
         </label>
       </div>
-      <LoadState loading={result.loading && !r} error={result.error} />
+      <LoadState loading={result.loading && !r} error={result.error} onRetry={result.refetch} />
       {r && (
         <>
           <div className="grid gap-3 sm:grid-cols-3">

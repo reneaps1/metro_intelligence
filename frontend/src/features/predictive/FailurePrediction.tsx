@@ -144,7 +144,7 @@ export function FailurePrediction() {
         y corriente que suben horas antes) y otras sin aviso. ¿Puede un modelo simple anticiparlas mejor que una regla
         ingenua?
       </PanelHeader>
-      <LoadState loading={study.loading} error={study.error} />
+      <LoadState loading={study.loading} error={study.error} onRetry={study.refetch} />
       {s && row && (
         <>
           <p className="text-xs text-text-secondary">

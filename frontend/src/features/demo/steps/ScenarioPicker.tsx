@@ -1,42 +1,33 @@
-import clsx from "clsx";
-import { Card, CardHeader } from "../../../components/ui/Card";
+import { Card } from "../../../components/ui/Card";
 import type { AsyncState } from "../../../lib/catalog/hooks";
 import { useDemoSession } from "../../../lib/demo/DemoSessionProvider";
 import type { ScenarioListResponse } from "../../../lib/industrial-signals/types";
 
-// IQ-F3/F4: shared selector for the simulated process scenario (demo session state).
-export function ScenarioPicker({ scenarios }: { scenarios: AsyncState<ScenarioListResponse> }) {
-  const { scenarioId, setScenarioId } = useDemoSession();
+// IQ-F3/F4: the simulated process scenario these steps show. Read-only: the
+// workbench toolbar is the single place to change it (design-system.md §4.1).
+export function ScenarioSummary({ scenarios }: { scenarios: AsyncState<ScenarioListResponse> }) {
+  const { scenarioId } = useDemoSession();
+  const scenario = scenarios.data?.items.find((s) => s.id === scenarioId);
   return (
     <Card>
-      <CardHeader title="Escenario de proceso" />
-      {scenarios.loading && <p className="text-sm text-text-secondary">Cargando escenarios…</p>}
-      {scenarios.error && (
-        <p role="alert" className="text-sm text-status-nok">
-          {scenarios.error}
-        </p>
-      )}
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        {scenarios.data?.items.map((scenario) => (
-          <button
-            key={scenario.id}
-            type="button"
-            aria-pressed={scenario.id === scenarioId}
-            onClick={() => setScenarioId(scenario.id)}
-            className={clsx(
-              "rounded border p-3 text-left transition-colors",
-              scenario.id === scenarioId
-                ? "border-brand-primary bg-surface-app"
-                : "border-border bg-surface hover:border-brand-primary",
-            )}
-          >
-            <span className="block text-sm font-semibold text-text-primary">{scenario.name}</span>
-            <span className="block text-xs text-text-secondary">{scenario.description}</span>
-            <span className="mt-1 block text-xs text-text-secondary">
-              {scenario.event_count} {scenario.event_count === 1 ? "evento anotado" : "eventos anotados"}
+      <div aria-label="Escenario de proceso" className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+        <span className="text-text-secondary">Escenario de proceso</span>
+        {scenarios.loading && <span className="text-text-secondary">Cargando escenarios…</span>}
+        {scenarios.error && (
+          <span role="alert" className="text-status-nok">
+            {scenarios.error}
+          </span>
+        )}
+        {scenario && (
+          <>
+            <span className="font-semibold text-text-primary">{scenario.name}</span>
+            <span className="text-text-secondary">
+              {scenario.description} · {scenario.event_count}{" "}
+              {scenario.event_count === 1 ? "evento anotado" : "eventos anotados"}
             </span>
-          </button>
-        ))}
+            <span className="text-xs text-text-secondary">Cámbialo desde «Escenario» en la barra de herramientas.</span>
+          </>
+        )}
       </div>
     </Card>
   );

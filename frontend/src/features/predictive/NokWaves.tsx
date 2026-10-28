@@ -127,7 +127,7 @@ export function NokWaves() {
         <NumberField label="Umbral (piezas NOK)" value={p.threshold} min={1} max={100} onChange={(threshold) => setP({ ...p, threshold })} />
         <NumberField label="Anticipación (grupos)" value={p.horizon} min={0} max={60} onChange={(horizon) => setP({ ...p, horizon })} />
       </div>
-      <LoadState loading={study.loading && !study.data} error={study.error} />
+      <LoadState loading={study.loading && !study.data} error={study.error} onRetry={study.refetch} />
       {study.data && s && (
         <>
           <p className="text-sm text-text-secondary">{study.data.rule}</p>

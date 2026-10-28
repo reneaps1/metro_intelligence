@@ -73,7 +73,7 @@ describe("DemoShell walkthrough", () => {
 
     await user.click(await screen.findByRole("button", { name: /iniciar demo/i }));
     expect(await screen.findByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();
-    expect(screen.getByText("Paso 1 de 7")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Recorrido" })).getByText("1 / 7")).toBeInTheDocument();
     expect(screen.getByText("Trazabilidad ciclo ↔ pieza")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /siguiente: diagnóstico de calidad/i }));
@@ -81,15 +81,19 @@ describe("DemoShell walkthrough", () => {
     // Step 2 is lazy-loaded (IQ-F8): the first import can take a while under a parallel run.
     expect(await screen.findByLabelText("Indicadores de calidad", {}, { timeout: 5000 })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /anterior/i }));
+    await user.click(screen.getByRole("button", { name: /anterior: contexto industrial/i }));
     expect(await screen.findByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();
-  });
+    // Walks three steps, one of them lazy-loaded: over the default 5 s on a loaded machine.
+  }, 15_000);
 
-  it("stepper lists the seven steps", async () => {
+  it("project tree lists the seven steps in their groups", async () => {
     server.use(industrialMetaHandler());
     renderDemo();
     const nav = await screen.findByRole("navigation", { name: /pasos de la demo/i });
     expect(within(nav).getAllByRole("link")).toHaveLength(7);
+    for (const group of ["Recorrido", "Calidad", "Proceso", "Predictivo", "Planta"]) {
+      expect(within(nav).getByRole("heading", { name: group })).toBeInTheDocument();
+    }
   });
 
   it("quick access selects the thermal drift scenario and reset restores normal", async () => {
@@ -99,16 +103,18 @@ describe("DemoShell walkthrough", () => {
 
     await user.click(await screen.findByRole("button", { name: /explorar deriva de temperatura/i }));
     expect(await screen.findByRole("heading", { name: "Laboratorio IIoT" })).toBeInTheDocument();
-    const thermal = await screen.findByRole("button", { name: /deriva térmica del molde/i });
-    expect(thermal).toHaveAttribute("aria-pressed", "true");
-    expect(await screen.findByText("Alarma: temperatura de molde > 60 °C")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^escenario deriva térmica del molde/i })).toBeInTheDocument();
+    // Step 4 is lazy-loaded (IQ-F8): give the explorer time under a parallel run.
+    expect(await screen.findByText("Alarma: temperatura de molde > 60 °C", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText("T+04:52")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alarmas: 1 activas, 1 sin reconocer" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /restaurar escenario demo/i }));
+    await user.click(screen.getByRole("button", { name: /^escenario/i }));
+    await user.click(within(screen.getByRole("dialog", { name: "Escenario simulado" })).getByRole("button", { name: "Restaurar escenario demo" }));
     expect(screen.getByRole("status")).toHaveTextContent(/escenario demo restaurado/i);
-    const normal = await screen.findByRole("button", { name: /operación normal estable/i });
-    expect(normal).toHaveAttribute("aria-pressed", "true");
-  });
+    expect(await screen.findByRole("button", { name: /^escenario operación normal estable/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alarmas: 0 activas, 0 sin reconocer" })).toBeInTheDocument();
+  }, 15_000);
 
   it("step 7 contrasts today's demo with a real integration and keeps decisions human", async () => {
     server.use(industrialMetaHandler());
@@ -124,6 +130,123 @@ describe("DemoShell walkthrough", () => {
     server.use(industrialMetaHandler());
     renderDemo("/demo/industrial-quality/nope");
     expect(await screen.findByRole("button", { name: /iniciar demo/i })).toBeInTheDocument();
+  });
+});
+
+describe("DemoShell workbench", () => {
+  it("applies a scenario in two steps, without leaving the view, and undoes it", async () => {
+    server.use(industrialMetaHandler());
+    const user = userEvent.setup();
+    renderDemo("/demo/industrial-quality/context");
+
+    await user.click(await screen.findByRole("button", { name: /^escenario operación normal estable/i }));
+    const dialog = screen.getByRole("dialog", { name: "Escenario simulado" });
+    const apply = within(dialog).getByRole("button", { name: "Aplicar escenario" });
+    expect(apply).toBeDisabled();
+    await user.click(within(dialog).getByRole("radio", { name: /deriva térmica del molde/i }));
+    await user.click(apply);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Escenario aplicado: Deriva térmica del molde.");
+    // the scenario never navigates away from the open view
+    expect(screen.getByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alarmas: 1 activas, 1 sin reconocer" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Última acción")).toHaveTextContent("Escenario simulado: Deriva térmica del molde");
+
+    await user.click(screen.getByRole("button", { name: "Deshacer" }));
+    expect(screen.getByRole("button", { name: /^escenario operación normal estable/i })).toBeInTheDocument();
+  });
+
+  it("lists the simulated alarms and acknowledges them", async () => {
+    server.use(industrialMetaHandler());
+    const user = userEvent.setup();
+    renderDemo("/demo/industrial-quality/context");
+
+    await user.click(await screen.findByRole("button", { name: /^escenario/i }));
+    await user.click(screen.getByRole("radio", { name: /deriva térmica del molde/i }));
+    await user.click(screen.getByRole("button", { name: "Aplicar escenario" }));
+
+    await user.click(screen.getByRole("button", { name: /^alarmas/i }));
+    const summary = screen.getByRole("dialog", { name: "Resumen de alarmas" });
+    expect(within(summary).getByText("Temperatura de molde en deriva ascendente")).toBeInTheDocument();
+    expect(within(summary).getByText("INY01.TMOLDE")).toBeInTheDocument();
+    await user.click(within(summary).getByRole("button", { name: "Reconocer todas" }));
+    expect(screen.getByRole("button", { name: "Alarmas: 1 activas, 0 sin reconocer" })).toBeInTheDocument();
+  });
+
+  it("opens a step 6 view from a direct link, shows it in the path and moves between views with the arrow keys", async () => {
+    server.use(industrialMetaHandler());
+    const user = userEvent.setup();
+    renderDemo("/demo/industrial-quality/ai?vista=cusum");
+
+    const cusum = await screen.findByRole("tab", { name: "CUSUM" }, { timeout: 5000 });
+    expect(cusum).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("navigation", { name: "Ruta" })).toHaveTextContent("Predictivo›IA predictiva›CUSUM");
+    cusum.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "What-if" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "What-if" })).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("tab", { name: "Modelos ML/DL" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("hides the tree and the inspector and remembers it", async () => {
+    server.use(industrialMetaHandler());
+    const user = userEvent.setup();
+    const { unmount } = renderDemo("/demo/industrial-quality/context");
+
+    await user.click(await screen.findByRole("button", { name: "Árbol del proyecto" }));
+    expect(screen.queryByRole("navigation", { name: /pasos de la demo/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Inspector" }));
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument();
+    // the document area is untouched
+    expect(screen.getByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();
+
+    unmount();
+    renderDemo("/demo/industrial-quality/context");
+    const treeToggle = await screen.findByRole("button", { name: "Árbol del proyecto" });
+    expect(treeToggle).toHaveAttribute("aria-pressed", "false");
+    await user.click(treeToggle);
+    expect(screen.getByRole("navigation", { name: /pasos de la demo/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Inspector" }));
+  });
+
+  it("inspector explains the provenance and the simulated scenario of the open view", async () => {
+    server.use(industrialMetaHandler());
+    renderDemo("/demo/industrial-quality/iiot");
+    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+    expect(within(inspector).getByText(ORIGIN_INFO.SIMULATED.description)).toBeInTheDocument();
+    expect(await within(inspector).findByText("process-sim-1.0.0")).toBeInTheDocument();
+    expect(within(inspector).getByText("4 de 7")).toBeInTheDocument();
+  });
+
+  it("walks the demo with Av Pág / Re Pág (presentation clicker)", async () => {
+    server.use(industrialMetaHandler());
+    const user = userEvent.setup();
+    renderDemo("/demo/industrial-quality/context");
+
+    expect(await screen.findByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();
+    await user.keyboard("{PageDown}");
+    expect(await screen.findByRole("heading", { name: "Diagnóstico de calidad" })).toBeInTheDocument();
+    await user.keyboard("{PageUp}");
+    expect(await screen.findByRole("heading", { name: "Contexto industrial" })).toBeInTheDocument();
+  });
+
+  it("menu bar switches the theme and opens the scenario control", async () => {
+    server.use(industrialMetaHandler());
+    const user = userEvent.setup();
+    renderDemo();
+
+    await user.click(await screen.findByRole("menuitem", { name: "Ver" }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Tema oscuro" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    await user.click(screen.getByRole("menuitem", { name: "Ver" }));
+    expect(screen.getByRole("menuitemcheckbox", { name: "Tema oscuro" })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Tema oscuro" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+
+    await user.click(screen.getByRole("menuitem", { name: "Escenario" }));
+    await user.click(screen.getByRole("menuitem", { name: "Cambiar escenario…" }));
+    expect(screen.getByRole("dialog", { name: "Escenario simulado" })).toBeInTheDocument();
   });
 });
 

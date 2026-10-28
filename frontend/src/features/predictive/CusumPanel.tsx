@@ -37,17 +37,18 @@ export function CusumPanel() {
             type="button"
             aria-pressed={i === preset}
             onClick={() => setPreset(i)}
+            // Selection, not a call to action: accent border like the workbench, not the primary fill.
             className={
               i === preset
-                ? "rounded border border-brand-primary bg-brand-primary px-3 py-1.5 text-sm text-text-on-brand"
-                : "rounded border border-border bg-surface px-3 py-1.5 text-sm text-text-secondary"
+                ? "min-h-[36px] rounded border border-brand-accent bg-surface-app px-3 text-sm font-medium text-text-primary"
+                : "min-h-[36px] rounded border border-border bg-surface px-3 text-sm text-text-secondary hover:border-brand-accent hover:text-text-primary"
             }
           >
             {item.label}
           </button>
         ))}
       </div>
-      <LoadState loading={study.loading && !d} error={study.error} />
+      <LoadState loading={study.loading && !d} error={study.error} onRetry={study.refetch} />
       {d && (
         <>
           <ResponsiveContainer width="100%" height={180}>

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./layouts/AppShell";
+import { WorkbenchLayout } from "./layouts/WorkbenchLayout";
 import { LoginPage } from "./features/auth/LoginPage";
 import { ImportPage } from "./features/imports/ImportPage";
 import { CatalogListPage } from "./features/catalog/CatalogListPage";
@@ -40,6 +41,14 @@ export function App() {
         <Route path="/live-monitor/:characteristicId" element={<LiveMonitorDetailPage />} />
         <Route path="/risk" element={<RiskPage />} />
         <Route path="/recommendations" element={<RecommendationsInboxPage />} />
+      </Route>
+      <Route
+        element={
+          <RequireAuth>
+            <WorkbenchLayout />
+          </RequireAuth>
+        }
+      >
         <Route
           path={DEMO_BASE_PATH}
           element={

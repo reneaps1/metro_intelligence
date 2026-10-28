@@ -28,11 +28,11 @@ function MetricChart({ lab, metric }: { lab: ModelLabData; metric: (typeof METRI
       <p className="text-sm font-semibold text-text-primary">
         {metric.label} <span className="text-xs font-normal text-text-secondary">({metric.hint})</span>
       </p>
-      <ResponsiveContainer width="100%" height={150}>
+      <ResponsiveContainer width="100%" height={170}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 8 }}>
           <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} horizontal={false} />
           <XAxis type="number" tick={axisTick} unit=" %" domain={[0, metric.key === "roc_auc" ? 100 : "auto"]} />
-          <YAxis type="category" dataKey="name" tick={{ ...axisTick, fontSize: 10 }} width={130} />
+          <YAxis type="category" dataKey="name" tick={axisTick} width={180} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${n(v, 2)} %`, metric.label]} />
           {reference !== null && <ReferenceLine x={reference} stroke="var(--text-secondary)" strokeDasharray="4 3" />}
           <Bar dataKey="value" isAnimationActive={false} label={{ position: "right", fontSize: 11, formatter: (v: number) => `${n(v, 1)}` }}>
@@ -114,7 +114,7 @@ export function ModelLab() {
         Métricas de un estudio cerrado, no de un modelo en línea. Se muestran tal como se reportaron, con lo que se
         deriva aritméticamente de cada matriz de confusión.
       </PanelHeader>
-      <LoadState loading={lab.loading} error={lab.error} />
+      <LoadState loading={lab.loading} error={lab.error} onRetry={lab.refetch} />
       {data && (
         <>
           {data.illustrative && (

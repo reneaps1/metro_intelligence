@@ -83,6 +83,22 @@ Body ≥14px (16px preferred), line-height 1.5. Measurement values always monosp
 - Density: default comfortable; tables offer a compact toggle (user preference).
 - Breakpoints 768 / 1024 / 1440 — operational dashboards optimized for desktop + shop-floor 1080p displays; sidebar becomes drawer <1024px.
 
+### 4.1 Engineering workbench layout (industrial demo)
+
+The industrial demo module (`/demo/industrial-quality`, `APP_EDITION=industrial` only) opens full-viewport as a desktop engineering workbench (TIA Portal / iba Analyzer family), following ISA-101 high-performance HMI rules. It replaces the platform sidebar and top bar for that module only; the metrology edition and every other screen keep the layout above. Decision notes: `docs/design/decisions.md` (2026-10-26, 2026-10-28).
+
+**Rule: every fact lives in one place.** Location → project tree + toolbar path. Walkthrough position → toolbar `‹ n / 7 ›` only. Scenario and alarms → toolbar only (steps show a read-only summary). Provenance → step header once, explained in the inspector. Connection and activity → status bar only.
+
+- **Menu bar** (32px, `--wb-chrome`): Archivo · Ver · Escenario · Ayuda. It is the command index (every command reachable from a menu); entries that also exist in the toolbar open the same control, never a copy.
+- **Toolbar** (48px, `--wb-pane-header`): tree toggle, path (group › step › view), scenario control (choose + **Aplicar**, two actions; Restaurar), alarm summary (count, priority symbol, Reconocer todas), walkthrough `‹ n / 7 ›` (Re Pág / Av Pág also walk it, for presentation clickers), inspector toggle.
+- **Project tree** (left 232px): two levels only (group › numbered step); steps that show the simulated scenario carry its alarm symbol. Assets (INY-01/INY-02) are status rows, not links.
+- **Document**: notice line (with Deshacer) + the step page. The step header is the only title of the view.
+- **Inspector** (right 288px): technical details of the open view: provenance with its meaning, simulated scenario (description, events, alarms, generator version), session context.
+- **Status bar** (26px, `--wb-status`): simulator connection (failure shown in the alarm color), last action, edition.
+- **ISA-101 color**: neutral gray surfaces scoped to `.wb-root` (light `#DDE1E5` app; dark `#2B3036`, never near-black). Red/amber only for alarms; alarm priority also coded by shape (diamond = P1, triangle = P2) and the symbol blinks only while unacknowledged (stopped by reduced motion). Provenance badges are neutral (icon + label; Experimental dashed). Navigation controls are outlined; action buttons (Aplicar, Reconocer, Deshacer) are solid.
+- Simulated alarms come from `lib/demo/alarms.ts` (derived from the scenario, labeled "Simulada"); no engine produces them.
+- Below 1024px the tree hides and below 1280px the inspector hides; the toolbar and the menu keep every command reachable.
+- Density: desktop pointer targets ≥32px in the menu bar and toolbar (documented exception to the 44px touch target; the workbench is not a touch surface).
 ## 5. Components (standard behaviors)
 
 - **Buttons:** one primary per view; destructive = danger color + confirmation dialog; loading = spinner + disabled. Radius 6px everywhere.

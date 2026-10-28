@@ -1,20 +1,23 @@
-import { Calculator, Cpu, Database, FlaskConical, History } from "lucide-react";
+import { AudioWaveform, Calculator, Database, FlaskConical, History } from "lucide-react";
 import { ORIGIN_INFO, type DataOrigin } from "../../lib/demo/origin";
 
-const STYLE: Record<DataOrigin, { icon: typeof Cpu; classes: string }> = {
-  REAL: { icon: Database, classes: "bg-status-ok-bg text-status-ok" },
-  HISTORICAL: { icon: History, classes: "bg-status-info-bg text-status-info" },
-  SIMULATED: { icon: Cpu, classes: "bg-status-warning-bg text-status-warning" },
-  PRECOMPUTED: { icon: Calculator, classes: "bg-status-neutral-bg text-status-neutral" },
-  EXPERIMENTAL: { icon: FlaskConical, classes: "border border-dashed border-status-nok text-status-nok" },
+// Provenance is metadata, not status: every origin is neutral and told apart
+// by icon and label, so the alarm colors stay reserved for alarms (ISA-101,
+// design-system.md §1.3). Experimental keeps a dashed border as a second cue.
+const STYLE: Record<DataOrigin, { icon: typeof Database; border: string }> = {
+  REAL: { icon: Database, border: "border-solid" },
+  HISTORICAL: { icon: History, border: "border-solid" },
+  SIMULATED: { icon: AudioWaveform, border: "border-solid" },
+  PRECOMPUTED: { icon: Calculator, border: "border-solid" },
+  EXPERIMENTAL: { icon: FlaskConical, border: "border-dashed" },
 };
 
 export function OriginBadge({ origin }: { origin: DataOrigin }) {
-  const { icon: Icon, classes } = STYLE[origin];
+  const { icon: Icon, border } = STYLE[origin];
   const { label, description } = ORIGIN_INFO[origin];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${classes}`}
+      className={`inline-flex items-center gap-1 rounded-sm border ${border} border-text-secondary px-1.5 py-0.5 text-xs font-semibold text-text-primary`}
       title={description}
       data-origin={origin}
     >

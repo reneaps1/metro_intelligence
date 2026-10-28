@@ -33,6 +33,16 @@
   --chart-5: #db2777;
   --chart-6: #64748b;
 
+  /* Engineering workbench chrome (industrial demo, docs/design/design-system.md §4.1) */
+  --wb-chrome: #e3e7eb;
+  --wb-chrome-text: #344054;
+  --wb-ribbon: #f7f8fa;
+  --wb-gutter: #c9d0d7;
+  --wb-pane-header: #edf0f3;
+  --wb-selected: rgba(14, 124, 134, 0.12);
+  --wb-status: #0e7c86;
+  --wb-status-text: #ffffff;
+
   --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.1);
 }
 
@@ -64,5 +74,54 @@
   --status-neutral: #98a6b3;
   --status-neutral-bg: rgba(152, 166, 179, 0.14);
 
+  --wb-chrome: #14181c;
+  --wb-chrome-text: #aab4bf;
+  --wb-ribbon: #232a31;
+  --wb-gutter: #0a0d10;
+  --wb-pane-header: #222a33;
+  --wb-selected: rgba(63, 176, 186, 0.18);
+  --wb-status: #145e5b;
+  --wb-status-text: #e6f4f3;
+
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Industrial demo workbench (design-system.md §4.1, decisions.md 2026-10-28):
+   ISA-101 neutral grays scoped to the module -- light gray background, never
+   near-black in dark. Status colors are re-tuned to keep >= 4.5:1 on these
+   surfaces; the rest of the platform keeps the tokens above. */
+.wb-root {
+  --bg-app: #dde1e5;
+  --bg-surface: #f5f6f8;
+  --bg-surface-raised: #ffffff;
+  --border-default: #b7bec6;
+  --text-secondary: #475467;
+  --status-warning: #8f4a06;
+  --wb-chrome: #e3e7eb;
+  --wb-pane-header: #eceef1;
+  --wb-selected: rgba(14, 124, 134, 0.14);
+  --wb-status: #e3e7eb;
+  --wb-status-text: #344054;
+}
+
+:root[data-theme="dark"] .wb-root {
+  --brand-primary: #8fb3e8;
+  --brand-primary-hover: #a9c4ee;
+  --bg-app: #2b3036;
+  --bg-surface: #343a41;
+  --bg-surface-raised: #3c434b;
+  --border-default: #4d555e;
+  --text-primary: #eef1f4;
+  --text-secondary: #c0c8d1;
+  --status-nok: #ff8a9a;
+  --status-nok-bg: rgba(255, 138, 154, 0.16);
+  --status-warning: #f5a524;
+  --status-warning-bg: rgba(245, 165, 36, 0.16);
+  --status-info: #8fb3e8;
+  --wb-chrome: #1f2328;
+  --wb-chrome-text: #c0c8d1;
+  --wb-pane-header: #393f47;
+  --wb-selected: rgba(63, 176, 186, 0.2);
+  --wb-status: #1f2328;
+  --wb-status-text: #c0c8d1;
 }

@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { API_BASE_URL } from "../../lib/api";
 import { renderAuthed } from "../../test/renderAuthed";
-import { METROLOGIST_EMAIL, METROLOGIST_PASSWORD } from "../../test/server";
+import { MODEL_LAB_FIXTURE } from "../../test/predictiveFixtures";
+import { METROLOGIST_EMAIL, METROLOGIST_PASSWORD, server } from "../../test/server";
 import { AiStep } from "../demo/steps/AiStep";
 
 const CREDS = { email: METROLOGIST_EMAIL, password: METROLOGIST_PASSWORD };
@@ -28,6 +31,24 @@ async function openTab(name: string) {
 }
 
 describe("AiStep (IQ-F7)", () => {
+  it("explains a missing module in Spanish and recovers with Reintentar", async () => {
+    let calls = 0;
+    server.use(
+      http.get(`${API_BASE_URL}/predictive/model-lab`, () => {
+        calls += 1;
+        return calls === 1
+          ? HttpResponse.json({ detail: "Not Found" }, { status: 404 })
+          : HttpResponse.json(MODEL_LAB_FIXTURE);
+      }),
+    );
+    renderAuthed(<AiStep />, CREDS);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("No se pudo cargar este análisis.");
+    expect(alert).toHaveTextContent(/reinicie el backend/);
+    await userEvent.click(within(alert).getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByText("El deep learning no superó al ML tabular")).toBeInTheDocument();
+  });
+
   it("shows the precomputed study, its false-alarm cost and the computed DL vs ML conclusion", async () => {
     renderAuthed(<AiStep />, CREDS);
     expect(await screen.findByText(/Ejemplo ilustrativo \(cifras ficticias\)/)).toBeInTheDocument();
