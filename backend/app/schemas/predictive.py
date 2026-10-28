@@ -23,7 +23,8 @@ class ModelResultIn(BaseModel):
 
     key: str = Field(max_length=32)
     name: str = Field(max_length=80)
-    family: Literal["ml_tabular", "deep_learning"]
+    # "baseline": a transparent rule or single-feature score kept for comparison.
+    family: Literal["ml_tabular", "deep_learning", "baseline"]
     roc_auc: float = Field(ge=0, le=1)
     pr_auc: float = Field(ge=0, le=1)
     recall: float = Field(ge=0, le=1)
@@ -77,6 +78,8 @@ class ModelLab(BaseModel):
     # Per-threshold results were not delivered: no interactive threshold, no ROC/PR curves.
     has_threshold_results: bool
     notes: list[str]
+    # IQ-F12: further studies from the same private file (each validated on its own test set).
+    additional_studies: list[ModelLab] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -84,6 +87,8 @@ class ModelLab(BaseModel):
 # --------------------------------------------------------------------------- #
 
 SourceType = Literal["SIMULATED"]
+# IQ-F12: waves and CUSUM also run over the customer's REAL dataset (local only).
+DataSource = Literal["SIMULATED", "REAL"]
 
 
 class WaveEpisodeOut(BaseModel):
@@ -124,7 +129,13 @@ class WaveSummary(BaseModel):
 
 
 class WaveStudyResponse(BaseModel):
-    source_type: SourceType = "SIMULATED"
+    source_type: DataSource = "SIMULATED"
+    # "injected": known synthetic waves; "retrospective": REAL episodes labelled with hindsight.
+    episode_source: Literal["injected", "retrospective"] = "injected"
+    # What one group of the series is: an inspection group (synthetic) or one piece (REAL).
+    unit: Literal["grupos", "piezas"] = "grupos"
+    target: str | None = None
+    utc_offset_minutes: int = 0
     engine_name: str
     engine_version: str
     machine: str
@@ -153,7 +164,8 @@ class CusumPointOut(BaseModel):
 
 
 class CusumResponse(BaseModel):
-    source_type: SourceType = "SIMULATED"
+    source_type: DataSource = "SIMULATED"
+    utc_offset_minutes: int = 0
     engine_name: str
     engine_version: str
     machine: str
@@ -303,4 +315,98 @@ class FailureStudyResponse(BaseModel):
     baselines: list[BaselineOut]
     timeline: StudyTimelineOut
     precursor_breakdown: PrecursorBreakdownOut
+    limitations: list[str]
+
+
+# --------------------------------------------------------------------------- #
+# IQ-F12: per-group alarm and per-piece risk over the REAL dataset
+# --------------------------------------------------------------------------- #
+
+
+class GroupAlarmOut(BaseModel):
+    group: int
+    pieces: int
+    nok: int
+    first_alarm_ts: float | None
+    nok_after_first_alarm: int
+    alarm_runs: int
+    nok_in_alarm: int
+    ok_in_alarm: int
+
+
+class GroupAlarmResponse(BaseModel):
+    source_type: Literal["REAL"] = "REAL"
+    engine_name: str
+    engine_version: str
+    grouping: Literal["mold_cavity", "nest"]
+    target: str
+    target_label: str
+    k: int
+    n: int
+    scope: Literal["all", "after_longest_gap"]
+    scope_start: float | None
+    longest_gap: tuple[float, float] | None
+    utc_offset_minutes: int
+    rule: str
+    pieces: int
+    nok: int
+    nok_after_first_alarm: int
+    share_after_first_alarm: float | None
+    groups_alarmed: int
+    first_alarm_ts: float | None
+    ok_in_alarm: int
+    groups: list[GroupAlarmOut]
+    limitations: list[str]
+
+
+class TopKOut(BaseModel):
+    share: float
+    flagged: int
+    nok_caught: int
+    precision: float
+    recall: float
+    lift: float
+
+
+class ScoreEvalOut(BaseModel):
+    key: str
+    name: str
+    roc_auc: float
+    pr_auc: float
+    top: list[TopKOut]
+
+
+class RiskHourOut(BaseModel):
+    ts: float
+    pieces: int
+    mean_risk: float
+    nok_rate: float
+
+
+class CoefficientOut(BaseModel):
+    key: str
+    name: str
+    value: float
+
+
+class PieceRiskResponse(BaseModel):
+    source_type: Literal["REAL"] = "REAL"
+    engine_name: str
+    engine_version: str
+    target: str
+    target_label: str
+    test_day: str
+    train_pieces: int
+    train_nok: int
+    test_pieces: int
+    test_nok: int
+    excluded_pieces: int
+    prevalence: float
+    model: ScoreEvalOut
+    baselines: list[ScoreEvalOut]
+    alarm_rule: TopKOut | None
+    beats_baselines: bool
+    coefficients: list[CoefficientOut]
+    hours: list[RiskHourOut]
+    utc_offset_minutes: int
     limitations: list[str]

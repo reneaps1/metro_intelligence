@@ -34,7 +34,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F9 | Despliegue de dos ediciones (metrology + industrial) | 🟨 Preparado en el repo | `feat/industrial-quality-demo` | Falta ejecución en VPS/secretos/DNS (autorización del usuario) |
 | F10 | Convertidor offline y dataset REAL (backend) | ✅ Hecho | `feat/industrial-quality-demo` | Solo local (D8); verificado contra el export real en `demo-private/` |
 | F11 | Pasos 2–3 sobre datos reales (frontend) | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador contra el dataset REAL local |
-| F12 | Laboratorio IA sobre datos reales | ⬜ Pendiente | — | Oleadas/CUSUM con `dataset`, alarmas por cavidad, riesgo por pieza, model-lab multiestudio |
+| F12 | Laboratorio IA sobre datos reales | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador contra el dataset REAL local |
 | F13 | Proceso sintético en calendario real + Vista A | ⬜ Pendiente | — | Escenario `real_calendar` (D7), unión ilustrativa por tiempo |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
@@ -401,9 +401,11 @@ Tipos y filtros nuevos (`moldCavities`, `stations`, `excludeSuspect`), selector 
 
 Hecho además: la tendencia por hora corta la línea en los huecos sin producción (no se dibuja un puente sobre un paro); prefijos «Real · / Demo · / Importado ·» en el selector; el dataset REAL se preselecciona hasta que el presentador elige otro (`datasetChosen`).
 
-### F12 — Laboratorio IA sobre datos reales ⬜
+### F12 — Laboratorio IA sobre datos reales ✅
 
 `/nok-waves` y `/cusum` con `dataset`/`target` (máquina validada contra el dataset, episodios retrospectivos para REAL), `/predictive/group-alarms` (regla ≥k rechazos en n piezas por cavidad/nido), `/predictive/piece-risk` (logística en Python puro con variables solo del pasado, último día como prueba, comparada con líneas base), model-lab multiestudio, paneles nuevos y textos sin «7 días»/INY sobre REAL. Reescribir los JSON privados con las cifras verificadas.
+
+Hecho además: las insignias del paso 6 y el inspector reflejan el dataset que analiza el laboratorio (REAL + PRECALCULADO + SIMULADO + EXPERIMENTAL con datos reales); la selección de datos vive en la URL (`?datos=sintetico`).
 
 ### F13 — Proceso sintético en el calendario real y Vista A ⬜
 
@@ -464,6 +466,7 @@ Hecho además: la tendencia por hora corta la línea en los huecos sin producci�
 
 | 2026-10-28 | F10 | Hecho. Convertidor offline (`long_signal_batch`), lector `pieces_file`, servicio REAL solo local (D8), motor con base reportada por estación (D10), cavidad de molde y hora de planta (D9). Verificado en local contra el export real del cliente: los conteos del manifest y las tasas del overview coinciden con el análisis previo (cifras solo en `demo-private/`, no versionadas). Rendimiento en local: carga de unos segundos y decenas de MB; overview ~2 s sin caché, por eso se añadió un LRU. Pruebas: backend 1191 passed / 4 skipped; `tests/deploy` 7 passed; lint de confidencialidad con la lista privada ampliada con tokens de direcciones del export. Decisiones D7–D10 registradas. Siguiente: **F11**. |
 | 2026-10-28 | F11 | Hecho. Pasos 2–3 sobre el dataset REAL: selector con prefijo de procedencia y preselección de REAL, banner con hora local de planta, insignias REAL (+ PRECALCULADO en el paso 2), KPIs con base reportada y «Cavidad de molde de mayor riesgo», Pareto por estación (primera que falla), tasa por cavidad de molde con IC 95 % y CSV, mapa nido × estación, tarjeta «Calidad del dato», vistas rápidas (presets privados), filtros de cavidad de molde, estaciones y exclusión de piezas con valores repetidos, hora de planta en filtros de día, carta I-MR y Cpk diario, agrupación por cavidad de molde en el paso 3 con boxplot desplazable, corte de la tendencia en huecos sin producción. Arreglado: «Limpiar filtros» ya no regresa al dataset sintético. Pruebas: frontend 187 passed (7 nuevos con un fixture REAL ficticio), `tsc -b` limpio, build OK; navegador 11/11 contra el dataset REAL local (Edge headless, `playwright-core` fuera del repo, capturas solo en el scratchpad), 0 errores de consola. Nota: con la suite completa en paralelo algunos tests de UI (`LiveMonitorDetailPage`, `DimensionalImport`) fallan a veces por timeout y pasan aislados; deuda previa de rendimiento del runner, no regresión. Siguiente: **F12**. |
+| 2026-10-28 | F12 | Hecho. Backend: `nok_waves.retrospective_episodes` (episodios de datos reales etiquetados a posteriori, con búsqueda binaria en la evaluación para series de 10^5 piezas), motores nuevos `group_alarms` (alarma por cavidad/nido) y `piece_risk` (riesgo por pieza con variables solo del pasado, logística en Python puro con submuestreo determinista de negativos, ROC-AUC por rangos, dos líneas base), servicio `real_predictive_service` con caché, `/nok-waves` y `/cusum` con `dataset`/`target` (los límites F7 se conservan para el sintético), endpoints `/predictive/group-alarms` y `/predictive/piece-risk`, model-lab con varios estudios (`additional_studies`, familia `baseline`). Frontend: selector «Datos del laboratorio» (real por omisión, `?datos=sintetico`), pestañas «Alarma por cavidad» y «Riesgo por pieza» solo con datos reales, oleadas y CUSUM con NOK por estación y hora de planta, selector de estudio en Modelos ML/DL, insignias e inspector con REAL. JSON privados reescritos con las cifras verificadas (solo en `demo-private/`). Resultado honesto que muestra el panel: el modelo de riesgo por pieza apenas supera a la tasa reciente de la cavidad. Pruebas: backend 1200 passed / 4 skipped (9 nuevos); frontend 193 passed con `--maxWorkers=4` (6 nuevos), `tsc -b` limpio, build OK; navegador 13/13 contra el dataset REAL local, 0 errores de consola. Siguiente: **F13**. |
 
 ---
 
@@ -477,5 +480,6 @@ Hecho además: la tendencia por hora corta la línea en los huecos sin producci�
 - Deuda previa (no introducida aquí): `ruff check app` reporta ~25 errores en archivos existentes (`demo_data.py`, `main.py`, `core/security.py`, `services/audit_service.py`…) y `ruff format` reformatearía ~15 archivos previos. Los archivos nuevos de IQ pasan ruff. El CI actual solo corre pruebas de `seed/`; los jobs backend/frontend siguen como comentario en `ci.yml`.
 - ~~Aviso de Vite: bundle > 500 kB~~ Resuelto en F8 (lazy + chunk de Recharts).
 - ESLint 9 sin `eslint.config.*` en `frontend/`: `npx eslint` no corre. Migrar la configuración (deuda previa).
+- Vitest con todos los workers en paralelo da timeouts intermitentes en tests de UI (distintos en cada corrida, también en tests previos a F10) cuando la máquina está cargada; con `npx vitest run --maxWorkers=4` pasa todo. Valorar fijar `maxWorkers` en `vite.config.ts` o subir el timeout de `findBy*`.
 - Verificación en navegador reutilizable: no hay skill de proyecto para levantar la app. Receta usada (F3/F4): BD desechable migrada + usuario metrólogo ficticio, `uvicorn` con `APP_EDITION=industrial POSTGRES_DB=<desechable>`, `npx vite`, `playwright-core` con `channel: "msedge"`; la sesión vive en memoria, así que se navega dentro de la SPA sin recargar. Considerar `/run-skill-generator` para guardarla como skill del proyecto.
 - `.pyc` antiguos muestran rutas `C:\Users\renea\Proyectos\...` en tracebacks; es cosmético (borrar `__pycache__` si molesta).

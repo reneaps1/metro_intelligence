@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAsync } from "../../lib/catalog/hooks";
 import { fetchModelLab } from "../../lib/predictive/api";
@@ -9,8 +10,8 @@ import { Callout, LoadState, Metric, PanelHeader, axisTick, n, tooltipStyle } fr
 // curves and no threshold slider: per-threshold results were not delivered,
 // so nothing is drawn that the study did not produce.
 
-const FAMILY_COLOR = { ml_tabular: "var(--chart-1)", deep_learning: "var(--chart-2)" } as const;
-const FAMILY_LABEL = { ml_tabular: "ML tabular", deep_learning: "Deep learning" } as const;
+const FAMILY_COLOR = { ml_tabular: "var(--chart-1)", deep_learning: "var(--chart-2)", baseline: "var(--chart-4)" } as const;
+const FAMILY_LABEL = { ml_tabular: "ML tabular", deep_learning: "Deep learning", baseline: "Línea base" } as const;
 
 type MetricKey = "roc_auc" | "pr_auc" | "recall" | "precision";
 const METRICS: { key: MetricKey; label: string; hint: string }[] = [
@@ -107,7 +108,10 @@ function Conclusions({ lab }: { lab: ModelLabData }) {
 
 export function ModelLab() {
   const lab = useAsync(fetchModelLab, []);
-  const data = lab.data;
+  // IQ-F12: a private file may carry several studies, each on its own test set.
+  const [index, setIndex] = useState(0);
+  const studies = lab.data ? [lab.data, ...(lab.data.additional_studies ?? [])] : [];
+  const data = studies.length ? studies[Math.min(index, studies.length - 1)] : undefined;
   return (
     <section className="space-y-4" aria-label="Laboratorio ML/DL">
       <PanelHeader title="Resultados ML/DL del estudio histórico" origins={["PRECOMPUTED", "HISTORICAL"]}>
@@ -115,6 +119,23 @@ export function ModelLab() {
         deriva aritméticamente de cada matriz de confusión.
       </PanelHeader>
       <LoadState loading={lab.loading} error={lab.error} onRetry={lab.refetch} />
+      {studies.length > 1 && (
+        <label className="block text-xs font-semibold text-text-secondary">
+          Estudio
+          <select
+            className="ml-2 max-w-[36rem] rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary"
+            value={Math.min(index, studies.length - 1)}
+            onChange={(e) => setIndex(Number(e.target.value))}
+            aria-label="Estudio"
+          >
+            {studies.map((s, i) => (
+              <option key={s.title} value={i}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {data && (
         <>
           {data.illustrative && (
@@ -126,14 +147,16 @@ export function ModelLab() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Piezas de prueba" value={n(data.test_n)} hint={data.study_date} />
             <Metric label="NOK en prueba" value={n(data.test_positives)} hint={`prevalencia ${formatPct(data.prevalence, 2)}`} />
-            <Metric label="Variables" value={data.variables === null ? "—" : n(data.variables)} hint="mediciones dimensionales" />
+            <Metric label="Variables" value={data.variables === null ? "—" : n(data.variables)} hint="variables del modelo" />
             <Metric label="Modelos comparados" value={n(data.models.length)} hint="mismo conjunto de prueba" />
           </div>
           <p className="text-xs text-text-secondary">
             {data.dataset_description} {data.split_description}
           </p>
           <p className="flex flex-wrap gap-4 text-xs text-text-secondary" aria-label="Leyenda de familias">
-            {(Object.keys(FAMILY_LABEL) as (keyof typeof FAMILY_LABEL)[]).map((family) => (
+            {(Object.keys(FAMILY_LABEL) as (keyof typeof FAMILY_LABEL)[])
+              .filter((family) => data.models.some((m) => m.family === family))
+              .map((family) => (
               <span key={family} className="inline-flex items-center gap-1">
                 <span className="inline-block h-3 w-3 rounded-sm" style={{ background: FAMILY_COLOR[family] }} aria-hidden="true" />
                 {FAMILY_LABEL[family]}

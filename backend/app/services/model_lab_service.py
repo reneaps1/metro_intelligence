@@ -133,6 +133,19 @@ def _validated(study: ModelLabIn) -> ModelLabIn:
     return study
 
 
+MAX_STUDIES = 4
+
+
+def _studies(data: object) -> list[ModelLabIn]:
+    """One study, or IQ-F12 ``{"studies": [...]}`` (up to 4, each on its own test set)."""
+    if isinstance(data, dict) and "studies" in data:
+        items = data["studies"]
+        if not isinstance(items, list) or not 1 <= len(items) <= MAX_STUDIES:
+            raise ValueError("studies must hold 1 to 4 studies")
+        return [_validated(ModelLabIn.model_validate(item)) for item in items]
+    return [_validated(ModelLabIn.model_validate(data))]
+
+
 def load_model_lab() -> ModelLab:
     path_value = get_settings().demo_model_lab_path
     if not path_value:
@@ -141,9 +154,10 @@ def load_model_lab() -> ModelLab:
     try:
         if not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
             raise ValueError("model lab file missing or too large")
-        study = _validated(ModelLabIn.model_validate(json.loads(path.read_text(encoding="utf-8"))))
+        studies = _studies(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError, ValidationError):
         # Never surface the path or file contents; fall back to the placeholder.
         logger.warning("Model lab results could not be loaded; using the illustrative placeholder.")
         return build_model_lab(PLACEHOLDER, source="placeholder")
-    return build_model_lab(study, source="private")
+    primary, *others = (build_model_lab(study, source="private") for study in studies)
+    return primary.model_copy(update={"additional_studies": others})

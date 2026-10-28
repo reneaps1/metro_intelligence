@@ -1,6 +1,15 @@
 import { http, HttpResponse } from "msw";
 import { API_BASE_URL } from "../lib/api";
-import type { CusumStudy, FailureStudy, ModelLab, ThresholdRow, WaveStudy, WhatIfResult } from "../lib/predictive/types";
+import type {
+  CusumStudy,
+  FailureStudy,
+  GroupAlarmStudy,
+  ModelLab,
+  PieceRiskStudy,
+  ThresholdRow,
+  WaveStudy,
+  WhatIfResult,
+} from "../lib/predictive/types";
 
 // IQ-F7: small, fictitious fixtures for /api/v1/predictive (demo step 6).
 
@@ -204,6 +213,102 @@ export const FAILURE_STUDY_FIXTURE: FailureStudy = {
   },
   limitations: ["Datos simulados.", "Requiere validación prospectiva en planta."],
 };
+
+// IQ-F12: fictitious REAL-dataset studies (see REAL_DATASET_FIXTURE in server.ts).
+export function realWaveFixture(target: string): WaveStudy {
+  return {
+    ...waveFixture(100, 10),
+    source_type: "REAL",
+    episode_source: "retrospective",
+    unit: "piezas",
+    target,
+    utc_offset_minutes: -300,
+    machine: "Línea completa",
+    rule: "Alertar cuando las últimas 100 piezas suman al menos 10 piezas NOK.",
+    episode_definition: "Datos reales sin verdad conocida: un episodio se etiqueta a posteriori.",
+  };
+}
+
+const ten = (recall: number, precision: number) => [
+  { share: 0.05, flagged: 50, nok_caught: Math.round(recall * 60), precision, recall: recall * 0.6, lift: precision / 0.05 },
+  { share: 0.1, flagged: 100, nok_caught: Math.round(recall * 100), precision, recall, lift: precision / 0.05 },
+];
+
+export const GROUP_ALARM_FIXTURE: GroupAlarmStudy = {
+  source_type: "REAL",
+  engine_name: "group_alarm_engine",
+  engine_version: "v1-experimental",
+  grouping: "mold_cavity",
+  target: "total",
+  target_label: "Resultado total de la máquina",
+  k: 6,
+  n: 30,
+  scope: "after_longest_gap",
+  scope_start: T0 + 10 * H,
+  longest_gap: [T0 + 4 * H, T0 + 10 * H],
+  utc_offset_minutes: -300,
+  rule: "Alarma de una cavidad de molde cuando al menos 6 de sus últimas 30 piezas son NOK.",
+  pieces: 900,
+  nok: 100,
+  nok_after_first_alarm: 92,
+  share_after_first_alarm: 0.92,
+  groups_alarmed: 2,
+  first_alarm_ts: T0 + 10 * H + 1200,
+  ok_in_alarm: 40,
+  groups: [
+    { group: 3, pieces: 225, nok: 70, first_alarm_ts: T0 + 10 * H + 1200, nok_after_first_alarm: 66, alarm_runs: 1, nok_in_alarm: 60, ok_in_alarm: 30 },
+    { group: 1, pieces: 225, nok: 30, first_alarm_ts: T0 + 12 * H, nok_after_first_alarm: 26, alarm_runs: 2, nok_in_alarm: 20, ok_in_alarm: 10 },
+  ],
+  limitations: ["Evaluación retrospectiva sobre un período cerrado."],
+};
+
+export const PIECE_RISK_FIXTURE: PieceRiskStudy = {
+  source_type: "REAL",
+  engine_name: "piece_risk_engine",
+  engine_version: "v1-experimental",
+  target: "total",
+  target_label: "Resultado total de la máquina",
+  test_day: "2026-01-07",
+  train_pieces: 600,
+  train_nok: 40,
+  test_pieces: 300,
+  test_nok: 15,
+  excluded_pieces: 0,
+  prevalence: 0.05,
+  model: { key: "logistic", name: "Regresión logística", roc_auc: 0.9, pr_auc: 0.4, top: ten(0.55, 0.42) },
+  baselines: [
+    { key: "cavity_rate", name: "Línea base: tasa reciente de la cavidad", roc_auc: 0.91, pr_auc: 0.42, top: ten(0.56, 0.43) },
+    { key: "alarm_rule", name: "Línea base: alarma", roc_auc: 0.8, pr_auc: 0.27, top: ten(0.4, 0.3) },
+  ],
+  alarm_rule: { share: 0.15, flagged: 45, nok_caught: 10, precision: 0.22, recall: 0.67, lift: 4.4 },
+  beats_baselines: false,
+  coefficients: [{ key: "group_rate_20", name: "Tasa NOK reciente de la cavidad (20 piezas)", value: 1.1 }],
+  hours: [
+    { ts: T0 + 50 * H, pieces: 100, mean_risk: 0.06, nok_rate: 0.05 },
+    { ts: T0 + 51 * H, pieces: 100, mean_risk: 0.08, nok_rate: 0.07 },
+  ],
+  utc_offset_minutes: -300,
+  limitations: ["Un solo día de prueba."],
+};
+
+export const MODEL_LAB_STUDIES_FIXTURE: ModelLab = {
+  ...MODEL_LAB_FIXTURE,
+  source: "private",
+  illustrative: false,
+  title: "Estudio principal ficticio",
+  additional_studies: [{ ...MODEL_LAB_FIXTURE, source: "private", illustrative: false, title: "Segundo estudio ficticio" }],
+};
+
+export const realPredictiveHandlers = [
+  http.get(`${API_BASE_URL}/predictive/nok-waves`, ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    return q.get("dataset") === "real-dimensional"
+      ? HttpResponse.json(realWaveFixture(q.get("target") ?? "total"))
+      : HttpResponse.json(waveFixture(Number(q.get("window")), Number(q.get("threshold"))));
+  }),
+  http.get(`${API_BASE_URL}/predictive/group-alarms`, () => HttpResponse.json(GROUP_ALARM_FIXTURE)),
+  http.get(`${API_BASE_URL}/predictive/piece-risk`, () => HttpResponse.json(PIECE_RISK_FIXTURE)),
+];
 
 export const predictiveHandlers = [
   http.get(`${API_BASE_URL}/predictive/model-lab`, () => HttpResponse.json(MODEL_LAB_FIXTURE)),

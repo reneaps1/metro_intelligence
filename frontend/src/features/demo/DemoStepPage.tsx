@@ -38,12 +38,12 @@ function StepContent({ step }: { step: DemoStep }) {
 // toolbar shows where it sits in the walkthrough (n / 7).
 export function DemoStepPage() {
   const { stepId } = useParams();
-  const { qualityFilters } = useDemoSession();
+  const { qualityFilters, aiDatasetId } = useDemoSession();
   const step = DEMO_STEPS.find((s) => s.id === stepId);
   if (!step) {
     return <Navigate to={DEMO_BASE_PATH} replace />;
   }
-  const origins = stepOrigins(step, qualityFilters.datasetId);
+  const origins = stepOrigins(step, qualityFilters.datasetId, step.id === "ai" ? aiDatasetId : null);
   return (
     <section aria-labelledby="demo-step-title" className="space-y-4">
       <div className="flex flex-wrap items-start gap-x-6 gap-y-2">

@@ -63,6 +63,9 @@ describe("quality filters", () => {
     expect(stepOrigins(dimensional, "real-dimensional")).toEqual(["REAL"]);
     expect(stepOrigins(quality, "import-1")).toEqual(["HISTORICAL"]);
     expect(stepOrigins(quality, DEMO_DATASET_ID)).toEqual(quality.origins);
+    const ai = DEMO_STEPS.find((s) => s.id === "ai")!;
+    expect(stepOrigins(ai, DEMO_DATASET_ID, "real-dimensional")).toEqual(["REAL", ...ai.origins]);
+    expect(stepOrigins(ai, DEMO_DATASET_ID, null)).toEqual(ai.origins);
   });
 
   it("exports the per-nest table as aggregated CSV", () => {

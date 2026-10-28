@@ -10,7 +10,7 @@ export interface Confusion {
 export interface ModelMetrics {
   key: string;
   name: string;
-  family: "ml_tabular" | "deep_learning";
+  family: "ml_tabular" | "deep_learning" | "baseline";
   roc_auc: number;
   pr_auc: number;
   recall: number;
@@ -44,12 +44,20 @@ export interface ModelLab {
   dl_beats_ml: boolean | null;
   has_threshold_results: boolean;
   notes: string[];
+  /** IQ-F12: further studies of the same private file, each on its own test set. */
+  additional_studies?: ModelLab[];
 }
 
 export type EpisodeStatus = "anticipated" | "detected" | "missed";
 
 export interface WaveStudy {
-  source_type: "SIMULATED";
+  source_type: "SIMULATED" | "REAL";
+  /** IQ-F12: "retrospective" = REAL episodes labelled with hindsight. */
+  episode_source?: "injected" | "retrospective";
+  /** What one group of the series is: an inspection group or one piece (REAL). */
+  unit?: "grupos" | "piezas";
+  target?: string | null;
+  utc_offset_minutes?: number;
   engine_name: string;
   engine_version: string;
   machine: string;
@@ -84,7 +92,8 @@ export interface WaveStudy {
 }
 
 export interface CusumStudy {
-  source_type: "SIMULATED";
+  source_type: "SIMULATED" | "REAL";
+  utc_offset_minutes?: number;
   engine_name: string;
   engine_version: string;
   machine: string;
@@ -175,5 +184,83 @@ export interface FailureStudy {
     without_precursor_total: number;
     without_precursor_anticipated: number;
   };
+  limitations: string[];
+}
+
+// --- IQ-F12: REAL dataset only ---------------------------------------------------
+
+export interface GroupAlarmRow {
+  group: number;
+  pieces: number;
+  nok: number;
+  first_alarm_ts: number | null;
+  nok_after_first_alarm: number;
+  alarm_runs: number;
+  nok_in_alarm: number;
+  ok_in_alarm: number;
+}
+
+export interface GroupAlarmStudy {
+  source_type: "REAL";
+  engine_name: string;
+  engine_version: string;
+  grouping: "mold_cavity" | "nest";
+  target: string;
+  target_label: string;
+  k: number;
+  n: number;
+  scope: "all" | "after_longest_gap";
+  scope_start: number | null;
+  longest_gap: [number, number] | null;
+  utc_offset_minutes: number;
+  rule: string;
+  pieces: number;
+  nok: number;
+  nok_after_first_alarm: number;
+  share_after_first_alarm: number | null;
+  groups_alarmed: number;
+  first_alarm_ts: number | null;
+  ok_in_alarm: number;
+  groups: GroupAlarmRow[];
+  limitations: string[];
+}
+
+export interface TopK {
+  share: number;
+  flagged: number;
+  nok_caught: number;
+  precision: number;
+  recall: number;
+  lift: number;
+}
+
+export interface ScoreEval {
+  key: string;
+  name: string;
+  roc_auc: number;
+  pr_auc: number;
+  top: TopK[];
+}
+
+export interface PieceRiskStudy {
+  source_type: "REAL";
+  engine_name: string;
+  engine_version: string;
+  target: string;
+  target_label: string;
+  test_day: string;
+  train_pieces: number;
+  train_nok: number;
+  test_pieces: number;
+  test_nok: number;
+  excluded_pieces: number;
+  prevalence: number;
+  model: ScoreEval;
+  baselines: ScoreEval[];
+  alarm_rule: TopK | null;
+  beats_baselines: boolean;
+  coefficients: { key: string; name: string; value: number }[];
+  hours: { ts: number; pieces: number; mean_risk: number; nok_rate: number }[];
+  utc_offset_minutes: number;
   limitations: string[];
 }

@@ -21,6 +21,7 @@ nothing here raises a real Alert or acts on production.
 
 from __future__ import annotations
 
+from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Literal
 
@@ -116,7 +117,9 @@ def evaluate_episodes(alerts: list[int], episodes: list[Episode], horizon: int) 
     ordered = sorted(alerts)
     results: list[EpisodeResult] = []
     for ep in episodes:
-        first = next((a for a in ordered if ep.start - horizon <= a <= ep.end), None)
+        # First alert in [start - horizon, end] (binary search: real series hold 10^5 groups).
+        pos = bisect_left(ordered, ep.start - horizon)
+        first = ordered[pos] if pos < len(ordered) and ordered[pos] <= ep.end else None
         if first is None:
             results.append(EpisodeResult(ep.start, ep.end, "missed", None, None, None))
             continue
@@ -130,3 +133,36 @@ def evaluate_episodes(alerts: list[int], episodes: list[Episode], horizon: int) 
         1 for a, b in runs if not any(b >= ep.start - horizon and a <= ep.end for ep in episodes)
     )
     return WaveEvaluation(episodes=results, alert_events=runs, false_alarm_events=false_alarms)
+
+
+def retrospective_episodes(
+    series: list[GroupPoint], window: int, threshold: int, merge_gap: int | None = None
+) -> list[Episode]:
+    """Episodes of a REAL series, labelled with hindsight (IQ-F12).
+
+    Real data has no injected ground truth, so an episode is defined from the
+    future on purpose -- only to *label* the evaluation, never as a feature:
+    group ``i`` is "in a wave" when the ``window`` groups starting at ``i``
+    hold at least ``threshold`` NOK pieces. Contiguous in-wave groups form an
+    episode; episodes closer than ``merge_gap`` groups (default ``window``)
+    are merged, so one long wave is not counted as many.
+    """
+    if window < 1 or threshold < 1:
+        raise ValueError("window and threshold must be >= 1")
+    gap = window if merge_gap is None else merge_gap
+    n = len(series)
+    noks = [p.nok_pieces for p in series]
+    runs: list[list[int]] = []  # [first in-wave index, last in-wave index]
+    running = sum(noks[:window])
+    for i in range(n):
+        if i:
+            running -= noks[i - 1]
+            if i + window - 1 < n:
+                running += noks[i + window - 1]
+        if running >= threshold:
+            if runs and i - runs[-1][1] <= gap:
+                runs[-1][1] = i
+            else:
+                runs.append([i, i])
+    # The last in-wave index still looks `window` groups ahead: the wave lasts until then.
+    return [Episode(a, min(n - 1, b + window - 1)) for a, b in runs]

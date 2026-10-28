@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAsync } from "../../lib/catalog/hooks";
 import { fetchCusum } from "../../lib/predictive/api";
+import { SYNTHETIC_SOURCE, plantLabel, type PredictiveSource } from "../../lib/predictive/source";
 import { Callout, LoadState, PanelHeader, axisTick, n, tooltipStyle } from "./shared";
 
 // IQ-F7: shadow-mode CUSUM (app/engines/experimental_ml/drift_cusum.py) over an
@@ -9,29 +10,51 @@ import { Callout, LoadState, PanelHeader, axisTick, n, tooltipStyle } from "./sh
 // mechanism -- and at one series where nothing was injected, to show why the
 // output is a hint to investigate, not a verdict.
 
-const PRESETS = [
+interface Preset {
+  machine: string;
+  series: string;
+  label: string;
+  /** Known injected mechanism (synthetic only); null on REAL data. */
+  truth: string | null;
+}
+
+const PRESETS: Preset[] = [
   { machine: "INY-01", series: "PinPositionY", label: "Posición Y · INY-01", truth: "Oleada inyectada el día 1.4 (hora ~34)." },
   { machine: "INY-01", series: "HousingWidth", label: "Ancho de carcasa · INY-01", truth: "Desgaste de herramienta hasta el cambio del día 3.5." },
   { machine: "INY-01", series: "nok_rate", label: "Tasa NOK · INY-01", truth: "Tres oleadas inyectadas (días 1.4, 4.3 y 5.8)." },
   { machine: "INY-02", series: "Coplanarity", label: "Coplanaridad · INY-02", truth: "Sin deriva inyectada: solo un desplazamiento constante." },
 ];
 
-const fmtHour = (ts: number) =>
-  new Date(ts * 1000).toLocaleString("es-MX", { timeZone: "UTC", day: "2-digit", month: "short", hour: "2-digit" });
+// IQ-F12: REAL presets come from the dataset (total NOK rate + each station's
+// attributed NOK rate); there is no known truth to compare with.
+function realPresets(source: PredictiveSource): Preset[] {
+  const stations = source.real?.stations ?? [];
+  return [
+    { machine: "INY-01", series: "nok_rate", label: "Tasa NOK total", truth: null },
+    ...stations.map((s) => ({ machine: "INY-01", series: `station:${s.key}`, label: `NOK · ${s.name}`, truth: null })),
+  ];
+}
 
-export function CusumPanel() {
+export function CusumPanel({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSource }) {
   const [preset, setPreset] = useState(0);
-  const p = PRESETS[preset];
-  const study = useAsync(() => fetchCusum(p.machine, p.series), [p.machine, p.series]);
+  const presets = source.real ? realPresets(source) : PRESETS;
+  const p = presets[Math.min(preset, presets.length - 1)];
+  const dataset = source.real ? source.datasetId : undefined;
+  const study = useAsync(() => fetchCusum(p.machine, p.series, dataset), [p.machine, p.series, dataset]);
   const d = study.data;
+  const offset = d?.utc_offset_minutes ?? 0;
+  const fmtHour = (ts: number) => plantLabel(ts, offset);
   return (
     <section className="space-y-4" aria-label="CUSUM experimental">
-      <PanelHeader title="CUSUM experimental sobre una serie" origins={["SIMULATED", "EXPERIMENTAL"]}>
+      <PanelHeader
+        title="CUSUM experimental sobre una serie"
+        origins={source.real ? ["REAL", "EXPERIMENTAL"] : ["SIMULATED", "EXPERIMENTAL"]}
+      >
         Suma acumulada de desviaciones respecto de la media de la propia serie (auto-referenciado). Señala un cambio
         sostenido; no dice por qué ocurrió.
       </PanelHeader>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Serie">
-        {PRESETS.map((item, i) => (
+        {presets.map((item, i) => (
           <button
             key={item.label}
             type="button"
@@ -70,7 +93,7 @@ export function CusumPanel() {
                 type="number"
                 domain={["dataMin", "dataMax"]}
                 tick={axisTick}
-                tickFormatter={(v: number) => new Date(v * 1000).toLocaleDateString("es-MX", { timeZone: "UTC", day: "2-digit", month: "short" })}
+                tickFormatter={(v: number) => plantLabel(v, offset, false)}
                 minTickGap={40}
               />
               <YAxis tick={axisTick} width={64} tickFormatter={(v: number) => n(v, 3)} />
@@ -92,9 +115,12 @@ export function CusumPanel() {
                 {fmtHour(d.drift_ts)}.
               </>
             ) : (
-              <strong>Sin cambio sostenido en la semana.</strong>
+              <strong>Sin cambio sostenido en el período.</strong>
             )}{" "}
-            Verdad conocida del dataset: {p.truth} {p.series === "Coplanarity" && d.drift_detected && "Una alarma aquí es un falso positivo del método: por eso es un indicio a investigar, no una conclusión."}
+            {p.truth === null
+              ? "Datos reales sin verdad conocida: contrastar la fecha con la bitácora de planta (paros, cambios de molde, ajustes)."
+              : `Verdad conocida del dataset: ${p.truth}`}{" "}
+            {p.series === "Coplanarity" && d.drift_detected && "Una alarma aquí es un falso positivo del método: por eso es un indicio a investigar, no una conclusión."}
           </Callout>
           <p className="text-xs text-text-secondary">
             Motor {d.engine_name} {d.engine_version} · {d.points.length} horas · media de referencia{" "}

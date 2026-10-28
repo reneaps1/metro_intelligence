@@ -18,6 +18,9 @@ interface DemoSession {
   /** Increments on every reset; steps key on it to drop their local state. */
   resetCount: number;
   reset: () => void;
+  /** IQ-F12: dataset the predictive lab (step 6) currently analyses; null = synthetic demo. */
+  aiDatasetId: string | null;
+  setAiDatasetId: (id: string | null) => void;
 }
 
 const DemoSessionContext = createContext<DemoSession | null>(null);
@@ -27,6 +30,7 @@ export function DemoSessionProvider({ children }: { children: ReactNode }) {
   const [qualityFilters, setQualityFiltersState] = useState<QualityFilters>(DEFAULT_QUALITY_FILTERS);
   const [acknowledgedAlarms, setAcknowledgedAlarms] = useState<string[]>([]);
   const [resetCount, setResetCount] = useState(0);
+  const [aiDatasetId, setAiDatasetId] = useState<string | null>(null);
 
   const setQualityFilters = useCallback(
     (update: (prev: QualityFilters) => QualityFilters) => setQualityFiltersState(update),
@@ -55,10 +59,17 @@ export function DemoSessionProvider({ children }: { children: ReactNode }) {
       acknowledgeAlarms,
       resetCount,
       reset,
+      aiDatasetId,
+      setAiDatasetId,
     }),
-    [scenarioId, qualityFilters, setQualityFilters, acknowledgedAlarms, acknowledgeAlarms, resetCount, reset],
+    [scenarioId, qualityFilters, setQualityFilters, acknowledgedAlarms, acknowledgeAlarms, resetCount, reset, aiDatasetId],
   );
   return <DemoSessionContext.Provider value={value}>{children}</DemoSessionContext.Provider>;
+}
+
+/** For components that may render outside the demo shell (e.g. isolated tests). */
+export function useOptionalDemoSession(): DemoSession | null {
+  return useContext(DemoSessionContext);
 }
 
 export function useDemoSession(): DemoSession {

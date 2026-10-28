@@ -177,7 +177,8 @@ function DemoLayout() {
     },
   ];
 
-  const origins = currentStep ? stepOrigins(currentStep, qualityFilters.datasetId) : [];
+  const aiDatasetId = currentStep?.id === "ai" ? session.aiDatasetId : null;
+  const origins = currentStep ? stepOrigins(currentStep, qualityFilters.datasetId, aiDatasetId) : [];
   const inspectorSections: InspectorSection[] = [
     {
       title: "Vista",
@@ -205,7 +206,7 @@ function DemoLayout() {
   inspectorSections.push({
     title: "Sesión",
     rows: [
-      { label: "Dataset", value: qualityFilters.datasetId, mono: true },
+      { label: "Dataset", value: aiDatasetId ?? qualityFilters.datasetId, mono: true },
       { label: "Edición", value: edition },
       { label: "Cliente", value: clientLabel },
       { label: "Usuario", value: user?.displayName ?? "—" },

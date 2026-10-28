@@ -122,6 +122,7 @@ servidor público sin autorización del cliente.
 | Paso 4 y 5 | SIMULADO; Vista B con causalidad impuesta |
 | Paso 6 · Modelos ML/DL | PRECALCULADO (estudio histórico cerrado) |
 | Paso 6 · Oleadas, CUSUM, What-if, Fallas | SIMULADO + EXPERIMENTAL; What-if además HIPOTÉTICO |
+| Paso 6 con «Datos del laboratorio: Reales» (solo local) | Oleadas, CUSUM, Alarma por cavidad y Riesgo por pieza: REAL + EXPERIMENTAL (episodios de oleadas etiquetados a posteriori, sin verdad conocida); Modelos ML/DL PRECALCULADO del archivo privado (varios estudios); What-if y Fallas siguen SIMULADO |
 | Paso 7 | Propuesta; cada fila indica la procedencia de lo que hay hoy |
 
 ## 6. Límites de interpretación

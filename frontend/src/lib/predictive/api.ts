@@ -1,5 +1,5 @@
 import { apiFetch } from "../api";
-import type { CusumStudy, FailureStudy, ModelLab, WaveStudy, WhatIfResult } from "./types";
+import type { CusumStudy, FailureStudy, GroupAlarmStudy, ModelLab, PieceRiskStudy, WaveStudy, WhatIfResult } from "./types";
 
 // IQ-F7: single boundary for /api/v1/predictive (demo step 6).
 
@@ -12,6 +12,9 @@ export interface WaveParams {
   window: number;
   threshold: number;
   horizon: number;
+  /** IQ-F12: dataset id (synthetic by default) and NOK target of a REAL dataset. */
+  dataset?: string;
+  target?: string;
 }
 
 export function fetchNokWaves(p: WaveParams): Promise<WaveStudy> {
@@ -21,11 +24,40 @@ export function fetchNokWaves(p: WaveParams): Promise<WaveStudy> {
     threshold: String(p.threshold),
     horizon: String(p.horizon),
   });
+  if (p.dataset) q.set("dataset", p.dataset);
+  if (p.target) q.set("target", p.target);
   return apiFetch<WaveStudy>(`/predictive/nok-waves?${q.toString()}`);
 }
 
-export function fetchCusum(machine: string, series: string): Promise<CusumStudy> {
-  return apiFetch<CusumStudy>(`/predictive/cusum?${new URLSearchParams({ machine, series }).toString()}`);
+export function fetchCusum(machine: string, series: string, dataset?: string): Promise<CusumStudy> {
+  const q = new URLSearchParams({ machine, series });
+  if (dataset) q.set("dataset", dataset);
+  return apiFetch<CusumStudy>(`/predictive/cusum?${q.toString()}`);
+}
+
+export interface GroupAlarmParams {
+  dataset: string;
+  grouping: "mold_cavity" | "nest";
+  target: string;
+  k: number;
+  n: number;
+  scope: "all" | "after_longest_gap";
+}
+
+export function fetchGroupAlarms(p: GroupAlarmParams): Promise<GroupAlarmStudy> {
+  const q = new URLSearchParams({
+    dataset: p.dataset,
+    grouping: p.grouping,
+    target: p.target,
+    k: String(p.k),
+    n: String(p.n),
+    scope: p.scope,
+  });
+  return apiFetch<GroupAlarmStudy>(`/predictive/group-alarms?${q.toString()}`);
+}
+
+export function fetchPieceRisk(dataset: string, target: string): Promise<PieceRiskStudy> {
+  return apiFetch<PieceRiskStudy>(`/predictive/piece-risk?${new URLSearchParams({ dataset, target }).toString()}`);
 }
 
 export interface WhatIfParams {
