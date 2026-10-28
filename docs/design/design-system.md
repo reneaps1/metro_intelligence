@@ -99,6 +99,16 @@ The industrial demo module (`/demo/industrial-quality`, `APP_EDITION=industrial`
 - Simulated alarms come from `lib/demo/alarms.ts` (derived from the scenario, labeled "Simulada"); no engine produces them.
 - Below 1024px the tree hides and below 1280px the inspector hides; the toolbar and the menu keep every command reachable.
 - Density: desktop pointer targets ≥32px in the menu bar and toolbar (documented exception to the 44px touch target; the workbench is not a touch surface).
+### 4.2 Line quality panel (shop-floor display, industrial demo)
+
+`/demo/industrial-quality/panel-linea` opens a full-screen panel for the line, outside the workbench chrome (spec and API contract: `docs/design/line-quality-panel.md`). It is a fixed 1920×1080 canvas scaled to the screen, so a TV at the line shows exactly the composed layout. Three views share one replay: **A Andon** (read from 5–10 m), **B Process map** (line lead / quality technician), **C Guided response** (the alarm becomes the case and its four steps).
+
+- **Color only for action.** Surfaces are the `.wb-root` grays. A single NOK piece is dark neutral (`--lp-piece-nok`); red (`--lp-p1-fill`) appears only on a streak that asked to stop, on a priority-1 band and its KPI. Amber (`--lp-p2-fill`) only for priority 2. Advisories (priority 3) are neutral squares.
+- **Priority by shape** (diamond 1, triangle 2, square advisory) and by color; on a solid band the symbol inverts. Symbols blink only while unacknowledged (`.wb-blink`, stopped by reduced motion). Unacknowledged → solid band + escalation countdown; acknowledged → solid, no blink; line stopped → outlined band ("containment").
+- **Commands:** R acknowledge, A register action (four numbered options, also one-touch buttons in view C), F full screen. Action buttons are solid only while they apply. Targets ≥52px (touch at the line).
+- **Presenter bar** (auto-hides, outside the canvas): views 1/2/3, N/W/S jump to the next real normal / attention / stop moment of the replayed data, pause, speed, theme, back to the workbench.
+- New tokens `--lp-*` in `.wb-root` (light/dark): band fills with fixed on-colors, piece strip, bars and the cavity ramp.
+
 ## 5. Components (standard behaviors)
 
 - **Buttons:** one primary per view; destructive = danger color + confirmation dialog; loading = spinner + disabled. Radius 6px everywhere.

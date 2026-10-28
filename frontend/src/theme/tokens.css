@@ -102,6 +102,16 @@
   --wb-selected: rgba(14, 124, 134, 0.14);
   --wb-status: #e3e7eb;
   --wb-status-text: #344054;
+  /* Line quality panel (design-system.md §4.2): alarm band fills (same in both
+     themes, text on them fixed) and the neutral piece strip / bar / ramp. */
+  --lp-p1-fill: #c8102e;
+  --lp-p1-on: #ffffff;
+  --lp-p2-fill: #f5a524;
+  --lp-p2-on: #1f2328;
+  --lp-piece-ok: #c4cad1;
+  --lp-piece-nok: #2f3a48;
+  --lp-bar: #7b8591;
+  --lp-ramp: 47, 58, 72;
 }
 
 :root[data-theme="dark"] .wb-root {
@@ -124,4 +134,8 @@
   --wb-selected: rgba(63, 176, 186, 0.2);
   --wb-status: #1f2328;
   --wb-status-text: #c0c8d1;
+  --lp-piece-ok: #555e68;
+  --lp-piece-nok: #e6eaee;
+  --lp-bar: #9aa4ae;
+  --lp-ramp: 230, 234, 238;
 }

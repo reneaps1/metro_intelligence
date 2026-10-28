@@ -3,6 +3,8 @@ import type { DataOrigin } from "./origin";
 // IQ-F1: the 7-step commercial walkthrough. Route paths are generic on
 // purpose -- the customer name never appears in a URL.
 export const DEMO_BASE_PATH = "/demo/industrial-quality";
+/** IQ-F15: full-screen line quality panel, outside the walkthrough steps. */
+export const LINE_PANEL_PATH = `${DEMO_BASE_PATH}/panel-linea`;
 
 /** Groups of the project tree (design-system.md §4.1). */
 export type DemoStepGroup = "Recorrido" | "Calidad" | "Proceso" | "Predictivo" | "Planta";

@@ -1,11 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { Brain, Crosshair, GitCompareArrows, Play, Thermometer } from "lucide-react";
+import { Brain, Crosshair, GitCompareArrows, MonitorDot, Play, Thermometer } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { OriginLegend } from "../../components/ui/OriginBadge";
 import { DATA_ORIGINS } from "../../lib/demo/origin";
 import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
-import { DEMO_BASE_PATH, DEMO_STEPS, stepPath } from "../../lib/demo/steps";
+import { DEMO_BASE_PATH, DEMO_STEPS, LINE_PANEL_PATH, stepPath } from "../../lib/demo/steps";
 
 const QUICK_ACCESS = [
   {
@@ -54,10 +54,16 @@ export function DemoHomePage() {
           La capa IIoT de esta demo es <strong>simulada</strong>. Validar causalidad y predicción requiere capturar
           señales reales de máquina, vincularlas a cada ciclo y pieza, y evaluar los modelos de forma prospectiva.
         </p>
-        <Button onClick={() => navigate(stepPath(firstStep))}>
-          <Play size={16} aria-hidden="true" />
-          Iniciar demo
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => navigate(stepPath(firstStep))}>
+            <Play size={16} aria-hidden="true" />
+            Iniciar demo
+          </Button>
+          <Button variant="secondary" onClick={() => navigate(LINE_PANEL_PATH)}>
+            <MonitorDot size={16} aria-hidden="true" />
+            Panel de calidad en línea
+          </Button>
+        </div>
       </Card>
 
       <section aria-labelledby="quick-access-title" className="space-y-2">

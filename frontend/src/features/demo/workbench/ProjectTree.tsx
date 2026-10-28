@@ -1,7 +1,7 @@
 import { Link, NavLink } from "react-router-dom";
-import { Cpu } from "lucide-react";
+import { Cpu, MonitorDot } from "lucide-react";
 import clsx from "clsx";
-import { DEMO_BASE_PATH, DEMO_STEPS, stepPath, type DemoStep } from "../../../lib/demo/steps";
+import { DEMO_BASE_PATH, DEMO_STEPS, LINE_PANEL_PATH, stepPath, type DemoStep } from "../../../lib/demo/steps";
 import type { AlarmPriority } from "../../../lib/demo/alarms";
 import { AlarmIcon } from "./AlarmIcon";
 
@@ -74,6 +74,13 @@ export function ProjectTree({
           </div>
         ))}
       </nav>
+      <div className="mt-3 border-t border-border px-1.5 pt-2.5">
+        <h2 className="px-2 pb-0.5 text-xs font-semibold text-text-secondary">Pantallas de planta</h2>
+        <Link to={LINE_PANEL_PATH} title="Pantalla completa para la línea" className={row(false)}>
+          <MonitorDot size={14} className="text-text-secondary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">Panel de calidad en línea</span>
+        </Link>
+      </div>
       <div className="mt-3 border-t border-border px-1.5 py-2.5">
         <h2 className="px-2 pb-0.5 text-xs font-semibold text-text-secondary">Activos · Planta demo, línea 2</h2>
         <ul className="text-[13px]">

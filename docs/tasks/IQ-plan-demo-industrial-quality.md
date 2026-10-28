@@ -36,6 +36,8 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F11 | Pasos 2–3 sobre datos reales (frontend) | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador contra el dataset REAL local |
 | F12 | Laboratorio IA sobre datos reales | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador contra el dataset REAL local |
 | F13 | Proceso sintético en calendario real + Vista A | ⬜ Pendiente | — | Escenario `real_calendar` (D7), unión ilustrativa por tiempo |
+| F14 | Panel de calidad en línea: motor R1–R4 + API de repetición (backend) | ✅ Hecho | `feat/industrial-quality-demo` | Fuera del orden: pedido por el usuario el 28/oct (D11) |
+| F15 | Panel de calidad en línea: vistas Andon, Mapa de proceso y Respuesta guiada (frontend) | ✅ Hecho | `feat/industrial-quality-demo` | Pantalla completa, botones Normal/Atención/Paro sobre momentos reales |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
 
@@ -109,6 +111,8 @@ D1–D4: el usuario no objetó → se aplican los defaults propuestos. Reabrir s
 **D9 — Hora local de planta (F10).** El dataset REAL lleva `utc_offset_minutes` (offset `GMT±HHMM` explícito de la fuente). Los buckets de día/hora y el Cpk diario de ese dataset usan hora de planta; los demás datasets siguen en UTC.
 
 **D10 — Base de NOK explícita (F10).** `nok_basis="spec"` (cotas fuera de tolerancia) para sintético e importados, sin cambios; `nok_basis="reported"` para REAL, cuya fuente no trae LSL/USL ni unidades: veredicto total de la máquina, y cada pieza NOK se atribuye a la **primera estación que falla en el orden del proceso** (así una pieza rechazada en una estación temprana no cuenta también como fallo de las posteriores que no llegó a pasar).
+
+**D11 — Panel de calidad en línea (F14–F15): decidido por el usuario (28/oct/2026).** Tras un prototipo con tres propuestas (fuera del repo) el usuario pidió las tres como vistas de un mismo panel, con datos de **repetición real** (el backend repite el dataset activo y un motor de reglas decide las alarmas) y en una **pantalla aparte** a pantalla completa. Los botones Normal/Atención/Paro saltan a momentos reales del dataset; no se inyectan paros simulados sobre datos medidos. Reconocimientos y acciones son estado de la sesión, no se guardan.
 
 **D5 — Dos versiones de Metro Intelligence: ✅ decidido (26/oct/2026).** Un solo código y una sola rama de integración (`main`), con interruptor de edición en vez de dos ramas de larga vida:
 
@@ -411,6 +415,14 @@ Hecho además: las insignias del paso 6 y el inspector reflejan el dataset que a
 
 `Scenario` con calendario absoluto, `real_calendar` derivado del dataset REAL (D7), generador/alineación/API reciben el objeto escenario (semillas y tests de hash intactos), envolvente rápida para ~60 h, `/quality-analytics/process-join` y `QualityJoinPanel` con insignias REAL+SIMULATED+EXPERIMENTAL y banner de unión ilustrativa.
 
+
+### F14 — Panel de calidad en línea: motor y API (backend) ✅
+
+Diseño y contrato: `docs/design/line-quality-panel.md`. Motor puro `app/engines/line_alarms/` (`line_alarm_engine`, `v1-experimental`): R1 racha NOK ≥ 5 (prioridad 1, parar línea), R2 nido ≥ 3× el resto en sus últimas 100 con al menos 25 NOK (prioridad 2), R3 tasa de las últimas 200 ≥ 2.5× la referencia de la línea (prioridad 2), R4 cavidad de molde ≥ 3× la referencia en sus últimas 150 (aviso). Umbrales relativos a la tasa de referencia del dataset para que funcionen igual en el sintético y en el REAL, con banda muerta (ISA-18.2) en R2–R4 para que una alarma no parpadee alrededor del umbral. Servicio que evalúa toda la secuencia una vez (caché) y endpoints `/line-panel/moments` (momentos reales de paro, atención y normalidad) y `/line-panel/replay` (ventana con piezas, estado de cada regla por pieza, eventos y conteos del turno).
+
+### F15 — Panel de calidad en línea: tres vistas (frontend) ✅
+
+Ruta `/demo/industrial-quality/panel-linea` a pantalla completa fuera del banco de trabajo (`features/line-panel/`, `lib/line-panel/`), accesos en el árbol, menú Ver e inicio de la demo. Vistas A Andon, B Mapa de proceso y C Respuesta guiada sobre una misma repetición; comandos R/A/F; barra del presentador con vistas 1/2/3, Normal/Atención/Paro (saltan a momentos reales), pausa, velocidad y tema. Spec visual: design-system.md §4.2.
 ---
 
 ## 4. Definition of Done (checklist de aceptación)
@@ -469,6 +481,8 @@ Hecho además: las insignias del paso 6 y el inspector reflejan el dataset que a
 | 2026-10-28 | F12 | Hecho. Backend: `nok_waves.retrospective_episodes` (episodios de datos reales etiquetados a posteriori, con búsqueda binaria en la evaluación para series de 10^5 piezas), motores nuevos `group_alarms` (alarma por cavidad/nido) y `piece_risk` (riesgo por pieza con variables solo del pasado, logística en Python puro con submuestreo determinista de negativos, ROC-AUC por rangos, dos líneas base), servicio `real_predictive_service` con caché, `/nok-waves` y `/cusum` con `dataset`/`target` (los límites F7 se conservan para el sintético), endpoints `/predictive/group-alarms` y `/predictive/piece-risk`, model-lab con varios estudios (`additional_studies`, familia `baseline`). Frontend: selector «Datos del laboratorio» (real por omisión, `?datos=sintetico`), pestañas «Alarma por cavidad» y «Riesgo por pieza» solo con datos reales, oleadas y CUSUM con NOK por estación y hora de planta, selector de estudio en Modelos ML/DL, insignias e inspector con REAL. JSON privados reescritos con las cifras verificadas (solo en `demo-private/`). Resultado honesto que muestra el panel: el modelo de riesgo por pieza apenas supera a la tasa reciente de la cavidad. Pruebas: backend 1200 passed / 4 skipped (9 nuevos); frontend 193 passed con `--maxWorkers=4` (6 nuevos), `tsc -b` limpio, build OK; navegador 13/13 contra el dataset REAL local, 0 errores de consola. Siguiente: **F13**. |
 
 ---
+| 2026-10-28 | F14 | Hecho. Motor `line_alarm_engine` (`app/engines/line_alarms/`, `v1-experimental`) con R1–R4 relativas a la tasa de referencia de la línea, estado de cada regla por pieza y eventos con evidencia, pico y retorno a normal; servicio con caché que evalúa la secuencia completa una vez; `/line-panel/moments` (paro, atención, normal) y `/line-panel/replay` (ventana con piezas previas, turnos de 8 h desde las 06:00, conteos del turno). Ajuste tras medir en local contra el dataset REAL: los umbrales del primer borrador producían una avalancha de alarmas de prioridad 2; se agregó banda muerta (`clear_fraction` 0.75) y se subieron R2 (3× sobre 100 piezas, mínimo 25 NOK) y R3 (2.5×) para quedar cerca de una alarma de prioridad 2 por hora; R1 sin cambio. Pruebas: backend 1222 passed / 4 skipped (22 nuevas del panel); ruff limpio; lint de confidencialidad sin coincidencias. Rendimiento local: primera llamada sobre REAL ~1.4 s, luego ~5 ms; ventana de 60 min ~120 KB. Umbrales pendientes de confirmar con el cliente. |
+| 2026-10-28 | F15 | Hecho. Ruta `/demo/industrial-quality/panel-linea` a pantalla completa (lienzo 1920×1080 escalado) con las vistas A Andon, B Mapa de proceso y C Respuesta guiada sobre una misma repetición; comandos R/A/F, diálogo de acción 1–4 y botones de un toque en C; barra del presentador con vistas 1/2/3, Normal/Atención/Paro (saltan a momentos reales, 15 s antes del evento), pausa, velocidad ×1/×5/×20 y tema; alarmas previas al punto de arranque cuentan como reconocidas; R1 enclavada hasta que el operador la cierra; «Línea detenida» pausa la repetición. Tokens `--lp-*` en `.wb-root`, spec en design-system §4.2 y nota en decisions.md; accesos en el árbol, menú Ver e inicio de la demo. Pruebas: frontend 28/28 archivos (13 nuevas), `tsc -b` limpio; navegador (Edge headless contra el backend local con el dataset REAL): A/B/C en claro y oscuro, paro → reconocer → línea detenida, atención y normal, 0 errores de consola. Nota: SignalExplorer falló una vez con la suite completa en paralelo y pasó aislado y en la corrida siguiente (inestabilidad previa del runner). |
 
 ## 7. Pendientes / ideas fuera de fase
 

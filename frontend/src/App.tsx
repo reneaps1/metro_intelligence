@@ -17,7 +17,8 @@ import { RequireEdition } from "./lib/edition/EditionProvider";
 import { DemoShell } from "./features/demo/DemoShell";
 import { DemoHomePage } from "./features/demo/DemoHomePage";
 import { DemoStepPage } from "./features/demo/DemoStepPage";
-import { DEMO_BASE_PATH } from "./lib/demo/steps";
+import { DEMO_BASE_PATH, LINE_PANEL_PATH } from "./lib/demo/steps";
+import { LinePanelPage } from "./features/line-panel/LinePanelPage";
 
 export function App() {
   return (
@@ -49,6 +50,14 @@ export function App() {
           </RequireAuth>
         }
       >
+        <Route
+          path={LINE_PANEL_PATH}
+          element={
+            <RequireEdition edition="industrial">
+              <LinePanelPage />
+            </RequireEdition>
+          }
+        />
         <Route
           path={DEMO_BASE_PATH}
           element={

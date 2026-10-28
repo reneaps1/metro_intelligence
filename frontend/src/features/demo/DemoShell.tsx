@@ -9,7 +9,7 @@ import { alarmsForScenario, isAbnormalScenario, topPriority } from "../../lib/de
 import { DemoSessionProvider, useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import { useVisiblePanes } from "../../lib/demo/panes";
 import { stepOrigins } from "../../lib/demo/stepOrigins";
-import { DEMO_BASE_PATH, DEMO_STEPS, stepPath } from "../../lib/demo/steps";
+import { DEMO_BASE_PATH, DEMO_STEPS, LINE_PANEL_PATH, stepPath } from "../../lib/demo/steps";
 import { fetchScenarios } from "../../lib/industrial-signals/api";
 import { useTheme } from "../../lib/theme/ThemeProvider";
 import { Inspector, type InspectorSection } from "./workbench/Inspector";
@@ -155,6 +155,8 @@ function DemoLayout() {
         { label: "Árbol del proyecto", checked: visible.tree, onSelect: () => toggle("tree") },
         { label: "Inspector", checked: visible.inspector, onSelect: () => toggle("inspector") },
         { label: "Tema oscuro", checked: isDark, onSelect: toggleTheme },
+        { separator: true },
+        { label: "Panel de calidad en línea", onSelect: () => navigate(LINE_PANEL_PATH) },
       ],
     },
     {
