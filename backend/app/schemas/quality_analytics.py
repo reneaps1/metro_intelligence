@@ -25,6 +25,22 @@ class AvailableFilters(BaseModel):
     cavity: bool
     shift: bool
     batch: bool
+    # IQ-F10: mold cavity (second grouping), station verdicts, data-quality flags.
+    mold_cavity: bool = False
+    station: bool = False
+    quality_flags: bool = False
+
+
+class StationOut(BaseModel):
+    key: str
+    name: str
+
+
+class PresetOut(BaseModel):
+    key: str
+    label: str
+    stations: list[str]
+    group_by: Literal["nest", "mold_cavity"]
 
 
 class DatasetOut(BaseModel):
@@ -45,6 +61,16 @@ class DatasetOut(BaseModel):
     mechanisms: list[str]
     # IQ-F6: the source file carries its own OK/NOK verdict column.
     has_reported_verdict: bool = False
+    # --- IQ-F10 (REAL datasets) ---
+    mold_cavities: list[int] = Field(default_factory=list)
+    stations: list[StationOut] = Field(default_factory=list)
+    nok_basis: Literal["spec", "reported"] = "spec"
+    # Plant local time = UTC + offset; buckets of this dataset use it.
+    utc_offset_minutes: int = 0
+    has_groups: bool = True
+    presets: list[PresetOut] = Field(default_factory=list)
+    # Counts only, from the offline conversion report (no identifiers).
+    data_quality: dict[str, int] = Field(default_factory=dict)
 
 
 class DatasetListResponse(BaseModel):
@@ -91,6 +117,21 @@ class Summary(BaseModel):
     variables_counted: list[str]
     variables_with_tolerance: int
     source_reported: SourceReported | None = None
+    nok_basis: Literal["spec", "reported"] = "spec"
+    stations_counted: list[str] = Field(default_factory=list)
+    pieces_without_verdict: int = 0
+    worst_mold_cavity: CavityRate | None = None
+
+
+class StationParetoRow(BaseModel):
+    """NOK pieces attributed to their first failing station (process order)."""
+
+    station: str
+    name: str
+    nok: int
+    fails_any: int
+    share: float | None
+    cumulative_pct: float | None
 
 
 class TrendBucket(BaseModel):
@@ -128,6 +169,10 @@ class OverviewResponse(BaseModel):
     pareto: list[ParetoRow]
     by_cavity: list[CavityRate]
     heatmap: list[HeatmapCell]
+    by_mold_cavity: list[CavityRate] = Field(default_factory=list)
+    station_pareto: list[StationParetoRow] = Field(default_factory=list)
+    # "variable": cells are nest x variable; "station": nest x first failing station.
+    heatmap_axis: Literal["variable", "station"] = "variable"
 
 
 class Spec(BaseModel):
@@ -197,9 +242,12 @@ class VariableDetailResponse(BaseModel):
     # [epoch ms, value, is_nok]
     series: list[tuple[int, float, bool]] = Field(default_factory=list)
     series_thinned: bool = False
-    group_by: Literal["cavity", "machine", "shift", "batch"] = "cavity"
+    group_by: Literal["cavity", "machine", "shift", "batch", "mold_cavity"] = "cavity"
     groups: list[GroupBox] = Field(default_factory=list)
     cpk_by_day: list[DailyCpk] = Field(default_factory=list)
+    nok_basis: Literal["spec", "reported"] = "spec"
+    # What the NOK markers mean ("fuera de tolerancia" / "rechazadas por la estación ...").
+    nok_label: str = "fuera de tolerancia"
 
 
 class ReportSummary(BaseModel):

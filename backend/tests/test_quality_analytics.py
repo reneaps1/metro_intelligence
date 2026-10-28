@@ -139,7 +139,15 @@ def test_capability_rules_for_unilateral_and_missing_tolerances() -> None:
 
 
 def test_missing_metadata_disables_filters() -> None:
-    assert _ds().available_filters() == {"machine": True, "cavity": True, "shift": True, "batch": False}
+    assert _ds().available_filters() == {
+        "machine": True,
+        "cavity": True,
+        "shift": True,
+        "batch": False,
+        "mold_cavity": False,
+        "station": False,
+        "quality_flags": False,
+    }
 
 
 def test_columns_must_have_equal_length() -> None:

@@ -76,7 +76,15 @@ def test_datasets_describe_filters_and_mechanisms(client: TestClient, as_role, s
     body = client.get(f"{BASE}/datasets", headers=as_role("metrologist")).json()
     ds = body["items"][0]
     assert ds["source_type"] == "SIMULATED"
-    assert ds["available_filters"] == {"machine": True, "cavity": True, "shift": True, "batch": True}
+    assert ds["available_filters"] == {
+        "machine": True,
+        "cavity": True,
+        "shift": True,
+        "batch": True,
+        "mold_cavity": False,
+        "station": False,
+        "quality_flags": False,
+    }
     assert len(ds["variables"]) == 10 and ds["cavities"] == list(range(1, 13))
     coplanarity = next(v for v in ds["variables"] if v["key"] == "Coplanarity")
     assert coplanarity["lsl"] is None and coplanarity["usl"] == pytest.approx(0.08)

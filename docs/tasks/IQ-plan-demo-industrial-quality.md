@@ -32,10 +32,14 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F7 | Laboratorio ML/DL, oleadas NOK y predicción de alarmas | ✅ Hecho | `feat/industrial-quality-demo` | Cifras del brief (pendientes de PDF) + F7.b; verificado en navegador |
 | F8 | Oportunidad de integración, pulido, guía y handoff | ✅ Hecho | PR #43 a `main` (sin merge) | Paso 7, guía, carga diferida, lint privado; regresión 20/20 |
 | F9 | Despliegue de dos ediciones (metrology + industrial) | 🟨 Preparado en el repo | `feat/industrial-quality-demo` | Falta ejecución en VPS/secretos/DNS (autorización del usuario) |
+| F10 | Convertidor offline y dataset REAL (backend) | ✅ Hecho | `feat/industrial-quality-demo` | Solo local (D8); verificado contra el export real en `demo-private/` |
+| F11 | Pasos 2–3 sobre datos reales (frontend) | ⬜ Pendiente | — | Cavidad de molde, Pareto por estación, procedencia REAL |
+| F12 | Laboratorio IA sobre datos reales | ⬜ Pendiente | — | Oleadas/CUSUM con `dataset`, alarmas por cavidad, riesgo por pieza, model-lab multiestudio |
+| F13 | Proceso sintético en calendario real + Vista A | ⬜ Pendiente | — | Escenario `real_calendar` (D7), unión ilustrativa por tiempo |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
 
-Orden de ejecución: F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9. Si el tiempo se acorta, F1–F4 + F7 son el mínimo presentable (DoD puntos 1–6 + relato honesto de modelos).
+Orden de ejecución: F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9; después F10 → F11 → F12 → F13 (datos reales en local). Si el tiempo se acorta, F1–F4 + F7 son el mínimo presentable (DoD puntos 1–6 + relato honesto de modelos).
 
 ---
 
@@ -97,6 +101,14 @@ Orden de ejecución: F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9.
 D1–D4: el usuario no objetó → se aplican los defaults propuestos. Reabrir solo si aparece un bloqueo.
 
 **D6 — Persistencia de CSV importados con mapeo (F6): en memoria, sin escribir.** Un CSV dimensional con mapeo es un *análisis exploratorio*, no una ingesta al historial inmutable de mediciones (eso sigue siendo `/imports`, formato del catálogo). El dataset resultante vive solo en la memoria del proceso, visible solo para quien lo importó, con TTL (`DIMENSIONAL_IMPORT_TTL_MINUTES`, default 240) y tope (3 por usuario, 12 en total). Nada va a PostgreSQL ni a MinIO, así que un archivo de cliente nunca queda guardado en un servidor de demo; solo se audita el evento (usuario, hash SHA-256 de lo analizado, conteos). Limitación: por proceso (un solo worker de uvicorn).
+
+**D7 — Proceso sintético sobre el calendario real (F13): decidido por el usuario (28/oct/2026).** El escenario `real_calendar` se construye en ejecución desde el dataset REAL (inicio, fin, paros = huecos ≥ 20 min, número de nidos); no hay fechas de cliente en el código. La deriva simulada de `mold_temp` sigue la tasa horaria suavizada de rechazo real: relaja la regla de F2 (ninguna señal condicionada en etiquetas reales) **solo para este escenario**, marcado con `Scenario.quality_driven` → `causal_imposed`, y la Vista A dice «relación impuesta por construcción». Nunca se presenta como medición de planta.
+
+**D8 — El dataset REAL es solo local (F10).** Se carga desde `DEMO_REAL_DATASET_PATH` (manifest en una carpeta privada, p. ej. `demo-private/real-dataset/`); el servicio lo ignora con `APP_ENV=production`; `docker-compose.vps.yml`, el script y el workflow de deploy nunca lo pasan (test en `tests/deploy`). El convertidor no escribe identificadores de pieza ni rutas de origen y se niega a escribir dentro del repo salvo en `demo-private/`. Subirlo a un servidor requiere autorización expresa del cliente.
+
+**D9 — Hora local de planta (F10).** El dataset REAL lleva `utc_offset_minutes` (offset `GMT±HHMM` explícito de la fuente). Los buckets de día/hora y el Cpk diario de ese dataset usan hora de planta; los demás datasets siguen en UTC.
+
+**D10 — Base de NOK explícita (F10).** `nok_basis="spec"` (cotas fuera de tolerancia) para sintético e importados, sin cambios; `nok_basis="reported"` para REAL, cuya fuente no trae LSL/USL ni unidades: veredicto total de la máquina, y cada pieza NOK se atribuye a la **primera estación que falla en el orden del proceso** (así una pieza rechazada en una estación temprana no cuenta también como fallo de las posteriores que no llegó a pasar).
 
 **D5 — Dos versiones de Metro Intelligence: ✅ decidido (26/oct/2026).** Un solo código y una sola rama de integración (`main`), con interruptor de edición en vez de dos ramas de larga vida:
 
@@ -370,6 +382,33 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 
 ---
 
+### F10 — Convertidor offline y dataset REAL en el backend ✅
+
+**Objetivo:** que el sistema calcule sobre el período real completo del cliente (no la muestra del importador web), solo en local.
+
+Entregables (hechos):
+- `backend/app/connectors/long_signal_batch.py` (solo stdlib + pydantic): `inventory` y `convert` para exports largos `id,address,timestamp,value`. Mapping privado (dirección → rol: nido, cavidad de molde, veredicto total, estaciones en orden de proceso, variables, ciclo vacío, presets). Dos pasadas con particiones por hash en disco (memoria acotada), último valor por pieza y dirección, sentinels → faltante, agrupaciones fuera de rango → faltante, ciclos vacíos excluidos, bandera de firma repetida (dato congelado). Salida `pieces.csv.gz` determinista + `manifest.json` con reporte solo de conteos.
+- `backend/app/connectors/pieces_file.py`: valida manifest y SHA-256 y construye un `DimensionalDataset` REAL (`nok_basis="reported"`, hora de planta, sin grupos).
+- `backend/app/services/real_dataset_service.py`: carga por `DEMO_REAL_DATASET_PATH` con caché (ruta, mtime, tamaño), topes de MB/piezas, guarda de producción, precarga en hilo al arrancar y LRU del overview.
+- Motor: `DimensionalDataset` con `mold_cavities`, `stations`/`station_nok`, `primary_fail`, `flags`, `utc_offset_s`, `nok_basis`, `has_groups`, `presets`, `data_quality` (todos opcionales); `analytics.overview` con Pareto por estación, tasas por cavidad de molde, mapa nido × estación, filtros `mold_cavities`/`stations`/`exclude_flags`; `variable_detail` agrupa por cavidad de molde.
+- API: `/datasets` lista REAL primero; `/overview` y `/variable` aceptan los filtros nuevos; esquemas ampliados sin romper los existentes.
+
+Pruebas: `tests/test_long_signal_batch.py` (8), `tests/test_real_dataset_service.py` (6), ajustes en los tests de analítica; `tests/deploy` con la guarda D8. Todo con datos ficticios.
+
+### F11 — Pasos 2–3 sobre datos reales (frontend) ⬜
+
+Tipos y filtros nuevos (`moldCavities`, `stations`, `excludeSuspect`), selector con prefijo «Real ·», banner REAL, procedencia `REAL`+`PRECOMPUTED` para `real-*`, chips de cavidad de molde y de estaciones, Pareto por estación, gráfica de 32 cavidades, mapa nido × estación, tarjeta «Calidad del dato», presets, hora de planta, agrupar por cavidad de molde en el paso 3, arreglo de «Limpiar filtros» (no debe volver al dataset sintético), MSW con fixture REAL ficticio.
+
+### F12 — Laboratorio IA sobre datos reales ⬜
+
+`/nok-waves` y `/cusum` con `dataset`/`target` (máquina validada contra el dataset, episodios retrospectivos para REAL), `/predictive/group-alarms` (regla ≥k rechazos en n piezas por cavidad/nido), `/predictive/piece-risk` (logística en Python puro con variables solo del pasado, último día como prueba, comparada con líneas base), model-lab multiestudio, paneles nuevos y textos sin «7 días»/INY sobre REAL. Reescribir los JSON privados con las cifras verificadas.
+
+### F13 — Proceso sintético en el calendario real y Vista A ⬜
+
+`Scenario` con calendario absoluto, `real_calendar` derivado del dataset REAL (D7), generador/alineación/API reciben el objeto escenario (semillas y tests de hash intactos), envolvente rápida para ~60 h, `/quality-analytics/process-join` y `QualityJoinPanel` con insignias REAL+SIMULATED+EXPERIMENTAL y banner de unión ilustrativa.
+
+---
+
 ## 4. Definition of Done (checklist de aceptación)
 
 - [x] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
@@ -421,13 +460,15 @@ Riesgos: recursos del VPS (RAM para 2× Postgres/MinIO/backend) → verificar ca
 | 2026-10-26 | UI (fuera de fase) | A petición del usuario se evaluaron 5 propuestas de interfaz (prototipo navegable fuera del repo) y se aplicó la **propuesta 3 «Ingeniería Ribbon»** al módulo de la demo, en modo claro y oscuro: `DemoShell` pasa a banco de trabajo a pantalla completa (cinta, navegador de proyecto, propiedades, salida, barra de estado) en `features/demo/workbench/`; la ruta de la demo sale de `AppShell` a `layouts/WorkbenchLayout.tsx`; tokens `--wb-*`; spec en `design-system.md` §4.1 y nota en `docs/design/decisions.md`. Metrología sin cambios. Pruebas: frontend 174 passed, `tsc -b` limpio, build OK; capturas en Edge (claro/oscuro) con API interceptada, 0 errores de consola. Sin commit todavía. |
 | 2026-10-28 | UI (fuera de fase) | Tras revisar 12 propuestas (lienzo de diseño fuera del repo, skills `apple-design` e `hmi-design-full` ISA-101) el usuario eligió **E2 «Estación de ingeniería refinada»**: barra de menús + barra de herramientas (ruta, escenario en dos pasos con Deshacer, alarmas simuladas con reconocer, `‹ n / 7 ›`, Re Pág/Av Pág) + árbol de 2 niveles + inspector técnico + barra de estado. Se quitaron la cinta, propiedades, salida y las redundancias (escenario en 4 sitios, paso en 3, selector de escenario dentro de los pasos 4/5). Grises ISA-101 con alcance `.wb-root`; `OriginBadge` neutro. Se commitea junto con el workbench del 26-oct (que ya no existe por separado). Pruebas: frontend 180 passed, `tsc -b` limpio. Pendiente: líneas de tolerancia de las gráficas aún en color NOK; detalles técnicos por panel en el inspector. |
 
+| 2026-10-28 | F10 | Hecho. Convertidor offline (`long_signal_batch`), lector `pieces_file`, servicio REAL solo local (D8), motor con base reportada por estación (D10), cavidad de molde y hora de planta (D9). Verificado en local contra el export real del cliente: los conteos del manifest y las tasas del overview coinciden con el análisis previo (cifras solo en `demo-private/`, no versionadas). Rendimiento en local: carga de unos segundos y decenas de MB; overview ~2 s sin caché, por eso se añadió un LRU. Pruebas: backend 1191 passed / 4 skipped; `tests/deploy` 7 passed; lint de confidencialidad con la lista privada ampliada con tokens de direcciones del export. Decisiones D7–D10 registradas. Siguiente: **F11**. |
+
 ---
 
 ## 7. Pendientes / ideas fuera de fase
 
 - Recibir del usuario los PDF de los informes y las 4 imágenes de referencia → el usuario los deja en la carpeta local de documentos del proyecto (fuera del repo; ruta en `demo-private/client-brief.md`): `Informes/`, `Referencias visuales/`; CSV reales en `Datos cliente/`. Revisarlos al inicio de la sesión correspondiente y verificar las cifras de `client-brief.md` / `report-summary.json`.
 - Vista por ciclo de inyección / comparativo de ciclos OK vs. NOK (opcional del prompt; solo si F3 queda estable).
-- Importación offline por lotes para archivos de decenas de millones de filas (F6 solo hace muestra). Diseño propuesto en `backend/app/connectors/README.md`.
+- ~~Importación offline por lotes para archivos de decenas de millones de filas~~ Hecho en F10 para exports largos de señales (`long_signal_batch`); un export ancho de decenas de millones de filas seguiría necesitando su propio adaptador.
 - **Vista A de F4** (mediciones dimensionales + sensores simulados unidos por tiempo, banner «Unión ilustrativa por tiempo; relación no validada»): ya es posible porque F5/F6 dan datasets dimensionales con marca de tiempo, pero no estaba en los entregables de F6. Candidata para F8; el panel de correlación sigue mostrando la tarjeta «Vista A pendiente».
 - Ancho/largo es la única distinción de formato: archivos con varias filas de encabezado o tolerancias en filas aparte (exportaciones PolyWorks/Calypso típicas) requieren limpieza previa o un adaptador específico.
 - Deuda previa (no introducida aquí): `ruff check app` reporta ~25 errores en archivos existentes (`demo_data.py`, `main.py`, `core/security.py`, `services/audit_service.py`…) y `ruff format` reformatearía ~15 archivos previos. Los archivos nuevos de IQ pasan ruff. El CI actual solo corre pruebas de `seed/`; los jobs backend/frontend siguen como comentario en `ci.yml`.

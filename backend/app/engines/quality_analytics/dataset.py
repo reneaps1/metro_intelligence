@@ -9,11 +9,35 @@ works unchanged.
 
 from __future__ import annotations
 
+from collections.abc import Sized
 from dataclasses import dataclass, field
 from typing import Literal
 
 # IMPORTED = a user-uploaded file analysed as-is: not verified by the platform.
+# REAL = the customer's closed historical period, converted offline and loaded
+# locally from a private path (IQ-F10, plan decision D8).
 SourceType = Literal["SIMULATED", "REAL", "IMPORTED"]
+# "spec": a piece is NOK when a selected variable is out of tolerance.
+# "reported": the machine's own verdicts (used when the source has no limits).
+NokBasis = Literal["spec", "reported"]
+
+
+@dataclass(frozen=True)
+class Station:
+    """An inspection station that reports its own OK/NOK verdict (IQ-F10)."""
+
+    key: str
+    name: str
+
+
+@dataclass(frozen=True)
+class Preset:
+    """A named filter shortcut carried by the source (e.g. one station by nest)."""
+
+    key: str
+    label: str
+    stations: tuple[str, ...]
+    group_by: Literal["nest", "mold_cavity"] = "nest"
 
 
 @dataclass(frozen=True)
@@ -28,6 +52,8 @@ class Variable:
     # False when the source gave only limits: `nominal` is then just the
     # reference the tolerances are relative to and must not be shown as one.
     nominal_given: bool = True
+    # Station that measures this variable, when the source says so (IQ-F10).
+    station: str | None = None
 
     @classmethod
     def from_limits(
@@ -93,11 +119,29 @@ class DimensionalDataset:
     # Piece verdict as reported by the source file (IQ-F6), kept apart from the
     # verdict recalculated from the specification; None = no such column.
     reported_nok: list[bool | None] | None = None
+    # --- IQ-F10, all optional (None/empty = the dataset does not carry them) ---
+    # Second grouping: the mold cavity, while `cavities` stays the nest.
+    mold_cavities: list[int | None] | None = None
+    # Stations in process order + their verdict per piece (True = NOK).
+    stations: tuple[Station, ...] = ()
+    station_nok: dict[str, list[bool | None]] = field(default_factory=dict)
+    # Per-piece data-quality bit mask (see `connectors/long_signal_batch.py`).
+    flags: list[int] | None = None
+    # Plant local time = UTC + offset; used for day/hour buckets only.
+    utc_offset_s: int = 0
+    nok_basis: NokBasis = "spec"
+    # False when pieces are not inspected in groups/shots (hides that KPI).
+    has_groups: bool = True
+    presets: tuple[Preset, ...] = ()
+    # Counts only (no identifiers): what the offline conversion found.
+    data_quality: dict[str, int] = field(default_factory=dict)
     nok: dict[str, list[bool]] = field(init=False)
+    # First failing station in process order (None = no station failed).
+    primary_fail: list[str | None] = field(init=False)
 
     def __post_init__(self) -> None:
         n = len(self.timestamps)
-        columns = [
+        columns: list[Sized] = [
             self.group_ids,
             self.machines,
             self.cavities,
@@ -105,11 +149,26 @@ class DimensionalDataset:
             self.batches,
             *self.values.values(),
             *([self.reported_nok] if self.reported_nok is not None else []),
+            *([self.mold_cavities] if self.mold_cavities is not None else []),
+            *([self.flags] if self.flags is not None else []),
+            *self.station_nok.values(),
         ]
         if any(len(col) != n for col in columns):
             raise ValueError("all dataset columns must have the same length")
+        if {s.key for s in self.stations} != set(self.station_nok):
+            raise ValueError("station_nok must carry exactly one column per station")
         by_key = {v.key: v for v in self.variables}
-        self.nok = {key: [by_key[key].is_nok(x) for x in column] for key, column in self.values.items()}
+        # Variables without tolerance are never NOK by spec: share one read-only
+        # column instead of evaluating every value (large real datasets).
+        never: list[bool] = [False] * n
+        self.nok = {
+            key: [by_key[key].is_nok(x) for x in column] if by_key[key].has_tolerance else never
+            for key, column in self.values.items()
+        }
+        order = [(s.key, self.station_nok[s.key]) for s in self.stations]
+        self.primary_fail = (
+            [next((key for key, col in order if col[i]), None) for i in range(n)] if order else [None] * n
+        )
 
     def __len__(self) -> int:
         return len(self.timestamps)
@@ -130,4 +189,13 @@ class DimensionalDataset:
             "cavity": any(c is not None for c in self.cavities),
             "shift": any(s is not None for s in self.shifts),
             "batch": any(b is not None for b in self.batches),
+            "mold_cavity": self.mold_cavities is not None and any(c is not None for c in self.mold_cavities),
+            "station": bool(self.stations),
+            "quality_flags": self.flags is not None and any(self.flags),
         }
+
+    def station(self, key: str) -> Station:
+        for s in self.stations:
+            if s.key == key:
+                return s
+        raise KeyError(key)

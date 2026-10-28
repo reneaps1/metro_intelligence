@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     dimensional_import_max_rows: int = Field(default=200_000, ge=1_000, le=2_000_000)
     dimensional_import_max_mb: int = Field(default=20, ge=1, le=200)
     dimensional_import_ttl_minutes: int = Field(default=240, ge=5, le=24 * 60)
+    # IQ-F10 (plan decision D8): optional path to the manifest.json of the
+    # customer's REAL dataset, converted offline into a PRIVATE folder. Local
+    # use only: ignored when APP_ENV=production. Unset = not offered.
+    demo_real_dataset_path: str | None = None
+    demo_real_dataset_max_mb: int = Field(default=200, ge=1, le=2_000)
+    demo_real_dataset_max_pieces: int = Field(default=1_000_000, ge=1_000, le=10_000_000)
 
     # --- Database (PostgreSQL 16) ---
     postgres_host: str

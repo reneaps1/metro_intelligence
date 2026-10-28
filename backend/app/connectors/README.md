@@ -42,9 +42,30 @@ at `DIMENSIONAL_IMPORT_MAX_ROWS`, and the report states the share analysed
 ("sample of X rows, ~Y % of the file"). The head is time-ordered in typical
 exports, so a sample covers the *first* period, not a random draw.
 
-Next step for full files (not implemented): an offline batch job run by an
-operator inside the customer network, reading the file from disk in chunks
-with the same `ColumnMapping` (exported from the UI as JSON), streaming rows
-through `build_dataset`'s validation and writing either a columnar file
-(Parquet) or, once D3 is revisited, persisted measurement runs with a
-`cavity_code`. It belongs in a CLI/worker, never in a request handler.
+### Offline batch converter (IQ-F10)
+
+`long_signal_batch.py` converts full *long signal* exports (`id,address,timestamp,value`,
+one row per value, tens of millions of rows) on the operator's machine:
+
+```
+python -m app.connectors.long_signal_batch inventory --out <private>/inventory.json FILE...
+python -m app.connectors.long_signal_batch convert --mapping <private>/mapping.json --out <private>/dataset FILE...
+```
+
+- A PRIVATE mapping assigns each address a role: nest, mold cavity, total
+  verdict, station verdicts (in process order), dimensional variables, the
+  empty-cycle rule and optional UI presets. Unmapped addresses are dropped on
+  read; piece identifiers and source paths are never written.
+- Bounded memory: pass 1 spills mapped rows into K hash partitions by piece
+  id; pass 2 rebuilds one partition at a time (last value per piece and
+  address by timestamp, then input order; piece time = first value); a final
+  ordered merge writes `pieces.csv.gz` (deterministic for any K) and a
+  `manifest.json` with a counts-only report (malformed rows by reason,
+  sentinels, out-of-range groupings, empty cycles, repeated value signatures).
+- Output is gzip CSV, not Parquet: the backend stays stdlib-only.
+  `pieces_file.read_pieces` validates the manifest and checksum and builds a
+  `DimensionalDataset` with `source_type="REAL"` and the machine's reported
+  verdicts as NOK basis (no tolerances in such exports).
+- The output directory must be outside the repository or under
+  `demo-private/`. The backend loads it only when `DEMO_REAL_DATASET_PATH` is
+  set and never in production (plan decision D8).

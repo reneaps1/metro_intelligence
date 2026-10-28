@@ -7,6 +7,9 @@ show the denominator and what "NOK" means:
 - A *piece* is NOK when at least one of the selected variables is NOK.
 - Relative risk of a nest = its piece NOK rate / pooled rate of the other
   selected nests. Association only -- it says nothing about cause.
+- Datasets without tolerances but with the machine's own verdicts (IQ-F10,
+  ``nok_basis="reported"``) count the reported verdict instead; a NOK piece
+  is attributed to the first station that failed, in process order.
 
 Capability (Cp/Cpk) and I-MR control limits reuse the existing SPC engines
 and are only computed when the variable has tolerances / enough values.
@@ -29,13 +32,22 @@ from app.engines.spc.capability import ToleranceSpec, cp, cpk
 from app.engines.spc.control_limits import individuals_moving_range_limits
 
 Granularity = Literal["day", "hour", "shift"]
-GroupBy = Literal["cavity", "machine", "shift", "batch"]
+GroupBy = Literal["cavity", "machine", "shift", "batch", "mold_cavity"]
 
 NOK_DEFINITION = "Pieza NOK = al menos una de las cotas seleccionadas fuera de tolerancia."
 REPORTED_NOK_DEFINITION = (
     "OK/NOK reportado por la fuente: veredicto que trae el archivo, sin recalcular; "
     "puede usar criterios que la plataforma no conoce."
 )
+REPORTED_BASIS_DEFINITION = (
+    "Pieza NOK = veredicto total reportado por la máquina (sin tolerancias en la fuente). "
+    "Cada pieza NOK se atribuye a la primera estación que falla en el orden del proceso."
+)
+STATION_BASIS_DEFINITION = (
+    "Pieza NOK = la primera estación que falla (orden del proceso) es una de las estaciones "
+    "seleccionadas; veredictos reportados por la máquina."
+)
+NO_STATION = "_none"
 MIN_PIECES_FOR_RANKING = 30
 MIN_VALUES_FOR_DAILY_CPK = 30
 HISTOGRAM_BINS = 30
@@ -52,6 +64,11 @@ class QualityFilter:
     batches: frozenset[str] | None = None
     # Variables that count towards piece NOK; None = all.
     variables: tuple[str, ...] | None = None
+    # IQ-F10: second grouping, stations that count towards NOK (reported basis)
+    # and data-quality flags to leave out (bit mask; 0 = keep everything).
+    mold_cavities: frozenset[int] | None = None
+    stations: tuple[str, ...] | None = None
+    exclude_flags: int = 0
 
 
 def select(ds: DimensionalDataset, f: QualityFilter) -> list[int]:
@@ -68,6 +85,12 @@ def select(ds: DimensionalDataset, f: QualityFilter) -> list[int]:
         if f.shifts is not None and ds.shifts[i] not in f.shifts:
             continue
         if f.batches is not None and ds.batches[i] not in f.batches:
+            continue
+        if f.mold_cavities is not None and (
+            ds.mold_cavities is None or ds.mold_cavities[i] not in f.mold_cavities
+        ):
+            continue
+        if f.exclude_flags and ds.flags is not None and ds.flags[i] & f.exclude_flags:
             continue
         out.append(i)
     return out
@@ -94,29 +117,122 @@ def _rate(k: int, n: int) -> float | None:
     return k / n if n else None
 
 
-def _bucket(ts: float, shift: str | None, granularity: Granularity) -> tuple[str, float | None]:
-    dt = datetime.fromtimestamp(ts, tz=UTC)
+def _bucket(
+    ts: float, shift: str | None, granularity: Granularity, offset_s: int = 0
+) -> tuple[str, float | None]:
+    """Bucket label in plant local time (UTC + offset); `start` stays a true epoch."""
+    dt = datetime.fromtimestamp(ts + offset_s, tz=UTC)
     if granularity == "day":
         day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-        return day.strftime("%Y-%m-%d"), day.timestamp()
+        return day.strftime("%Y-%m-%d"), day.timestamp() - offset_s
     if granularity == "hour":
         hour = dt.replace(minute=0, second=0, microsecond=0)
-        return hour.strftime("%Y-%m-%dT%H:00"), hour.timestamp()
+        return hour.strftime("%Y-%m-%dT%H:00"), hour.timestamp() - offset_s
     return f"Turno {shift or '—'}", None
 
 
+def piece_nok_flags(
+    ds: DimensionalDataset, f: QualityFilter, idx: list[int], keys: list[str]
+) -> list[bool | None]:
+    """Piece verdict per selected piece under the dataset's NOK basis (None = no verdict)."""
+    if ds.nok_basis == "reported":
+        if f.stations is not None:
+            chosen = set(f.stations)
+            return [ds.primary_fail[i] in chosen for i in idx]
+        if ds.reported_nok is not None:
+            return [ds.reported_nok[i] for i in idx]
+        return [ds.primary_fail[i] is not None for i in idx]
+    return [any(ds.nok[k][i] for k in keys) for i in idx]
+
+
+def _group_rates(column: list[int | None], idx: list[int], flags: list[bool]) -> list[dict[str, Any]]:
+    """Piece NOK rate per group with a Wilson interval and relative risk vs. the rest."""
+    counts: dict[int, list[int]] = defaultdict(lambda: [0, 0])
+    for i, bad in zip(idx, flags, strict=True):
+        g = column[i]
+        if g is None:
+            continue
+        counts[g][0] += 1
+        counts[g][1] += bad
+    total_n = sum(c[0] for c in counts.values())
+    total_k = sum(c[1] for c in counts.values())
+    rows = []
+    for g in sorted(counts):
+        n, k = counts[g]
+        rest_rate = _rate(total_k - k, total_n - n)
+        rate = _rate(k, n)
+        ci = wilson_interval(k, n)
+        rows.append(
+            {
+                "cavity": g,
+                "pieces": n,
+                "nok": k,
+                "rate": rate,
+                "ci_low": ci[0] if ci else None,
+                "ci_high": ci[1] if ci else None,
+                "relative_risk": (rate / rest_rate) if rate is not None and rest_rate else None,
+            }
+        )
+    return rows
+
+
+def _worst(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    # A group with no NOK is never "the riskiest" (e.g. a file without tolerances).
+    ranked = [c for c in rows if c["pieces"] >= MIN_PIECES_FOR_RANKING and c["nok"] > 0]
+    return max(ranked, key=lambda c: c["rate"]) if ranked else None
+
+
+def _station_pareto(ds: DimensionalDataset, idx: list[int], flags: list[bool]) -> list[dict[str, Any]]:
+    """NOK pieces by first failing station (process order) + raw failures per station."""
+    attributed: dict[str, int] = defaultdict(int)
+    for i, bad in zip(idx, flags, strict=True):
+        if bad:
+            attributed[ds.primary_fail[i] or NO_STATION] += 1
+    rows: list[dict[str, Any]] = [
+        {
+            "station": s.key,
+            "name": s.name,
+            "nok": attributed.get(s.key, 0),
+            "fails_any": sum(1 for i in idx if ds.station_nok[s.key][i]),
+        }
+        for s in ds.stations
+    ]
+    if attributed.get(NO_STATION):
+        rows.append(
+            {
+                "station": NO_STATION,
+                "name": "Sin estación identificada",
+                "nok": attributed[NO_STATION],
+                "fails_any": 0,
+            }
+        )
+    rows.sort(key=lambda r: -r["nok"])
+    total = sum(r["nok"] for r in rows)
+    cumulative = 0
+    for r in rows:
+        cumulative += r["nok"]
+        r["share"] = r["nok"] / total if total else None
+        r["cumulative_pct"] = cumulative / total if total else None
+    return rows
+
+
 def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity = "day") -> dict[str, Any]:
-    idx = select(ds, f)
+    reported = ds.nok_basis == "reported"
+    idx_all = select(ds, f)
     variables = selected_variables(ds, f)
     keys = [v.key for v in variables]
-    flags = [any(ds.nok[k][i] for k in keys) for i in idx]
+    verdicts = piece_nok_flags(ds, f, idx_all, keys)
+    # Pieces without any verdict leave the denominator (reported basis only).
+    idx = [i for i, v in zip(idx_all, verdicts, strict=True) if v is not None]
+    flags = [bool(v) for v in verdicts if v is not None]
+    without_verdict = len(idx_all) - len(idx)
     pieces = len(idx)
     nok_pieces = sum(flags)
 
     # --- trend ---
     buckets: dict[str, list[Any]] = {}
     for i, bad in zip(idx, flags, strict=True):
-        label, start = _bucket(ds.timestamps[i], ds.shifts[i], granularity)
+        label, start = _bucket(ds.timestamps[i], ds.shifts[i], granularity, ds.utc_offset_s)
         entry = buckets.setdefault(label, [start, 0, 0])
         entry[1] += 1
         entry[2] += bad
@@ -126,7 +242,7 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
     ]
 
     # --- pareto (measurement level) ---
-    pareto_rows = []
+    pareto_rows: list[dict[str, Any]] = []
     measurements = 0
     for v in variables:
         column = ds.values[v.key]
@@ -152,58 +268,50 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
             }
         )
     pareto_rows.sort(key=lambda r: (-r["nok"], r["variable"]))
+    if reported:
+        pareto_rows = []  # no tolerances: the station Pareto replaces it
     total_nok = sum(r["nok"] for r in pareto_rows)
     cumulative = 0
     for row in pareto_rows:
         cumulative += row["nok"]
         row["cumulative_pct"] = cumulative / total_nok if total_nok else None
 
-    # --- by cavity + heatmap ---
-    cav_counts: dict[int, list[int]] = defaultdict(lambda: [0, 0])
+    # --- by nest (and mold cavity) + heatmap ---
+    by_cavity = _group_rates(ds.cavities, idx, flags)
+    by_mold_cavity = _group_rates(ds.mold_cavities, idx, flags) if ds.mold_cavities is not None else []
+    cav_pieces = {c["cavity"]: c["pieces"] for c in by_cavity}
     cell_counts: dict[tuple[int, str], int] = defaultdict(int)
-    for i, bad in zip(idx, flags, strict=True):
-        cav = ds.cavities[i]
-        if cav is None:
-            continue
-        cav_counts[cav][0] += 1
-        cav_counts[cav][1] += bad
-        for k in keys:
-            if ds.nok[k][i]:
-                cell_counts[(cav, k)] += 1
-    by_cavity = []
-    for cav in sorted(cav_counts):
-        n, k = cav_counts[cav]
-        rest_n = sum(c[0] for c2, c in cav_counts.items() if c2 != cav)
-        rest_k = sum(c[1] for c2, c in cav_counts.items() if c2 != cav)
-        rest_rate = _rate(rest_k, rest_n)
-        rate = _rate(k, n)
-        ci = wilson_interval(k, n)
-        by_cavity.append(
-            {
-                "cavity": cav,
-                "pieces": n,
-                "nok": k,
-                "rate": rate,
-                "ci_low": ci[0] if ci else None,
-                "ci_high": ci[1] if ci else None,
-                "relative_risk": (rate / rest_rate) if rate is not None and rest_rate else None,
-            }
-        )
+    if reported:
+        # Nest x first failing station (process order).
+        axis = [s.key for s in ds.stations if f.stations is None or s.key in f.stations]
+        for i, bad in zip(idx, flags, strict=True):
+            cav, st = ds.cavities[i], ds.primary_fail[i]
+            if bad and cav is not None and st is not None:
+                cell_counts[(cav, st)] += 1
+    else:
+        axis = keys
+        for i in idx:
+            cav = ds.cavities[i]
+            if cav is None:
+                continue
+            for k in keys:
+                if ds.nok[k][i]:
+                    cell_counts[(cav, k)] += 1
     heatmap = [
         {
             "cavity": cav,
             "variable": k,
-            "pieces": cav_counts[cav][0],
+            "pieces": cav_pieces[cav],
             "nok": cell_counts[(cav, k)],
-            "rate": _rate(cell_counts[(cav, k)], cav_counts[cav][0]),
+            "rate": _rate(cell_counts[(cav, k)], cav_pieces[cav]),
         }
-        for cav in sorted(cav_counts)
-        for k in keys
+        for cav in sorted(cav_pieces)
+        for k in axis
     ]
 
     # --- verdict reported by the source vs. recalculated from the spec (IQ-F6) ---
     source_reported = None
-    if ds.reported_nok is not None:
+    if ds.reported_nok is not None and not reported:
         pairs = [(ds.reported_nok[i], bad) for i, bad in zip(idx, flags, strict=True)]
         known = [(rep, bad) for rep, bad in pairs if rep is not None]
         reported_nok = sum(1 for rep, _ in known if rep)
@@ -218,12 +326,14 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
             "definition": REPORTED_NOK_DEFINITION,
         }
 
-    # A nest with no NOK is never "the riskiest" (e.g. a file without tolerances).
-    ranked = [c for c in by_cavity if c["pieces"] >= MIN_PIECES_FOR_RANKING and c["nok"] > 0]
-    worst = max(ranked, key=lambda c: c["rate"]) if ranked else None
+    worst = _worst(by_cavity)
+    if reported:
+        definition = STATION_BASIS_DEFINITION if f.stations is not None else REPORTED_BASIS_DEFINITION
+    else:
+        definition = NOK_DEFINITION
     period = (ds.timestamps[idx[0]], ds.timestamps[idx[-1]]) if idx else (None, None)
     summary = {
-        "groups": len({ds.group_ids[i] for i in idx}),
+        "groups": len({ds.group_ids[i] for i in idx}) if ds.has_groups else pieces,
         "pieces": pieces,
         "measurements": measurements,
         "ok_pieces": pieces - nok_pieces,
@@ -235,17 +345,24 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
         "worst_cavity": worst,
         "period_start": period[0],
         "period_end": period[1],
-        "nok_definition": NOK_DEFINITION,
+        "nok_definition": definition,
         "variables_counted": keys,
         "variables_with_tolerance": sum(1 for v in variables if v.has_tolerance),
         "source_reported": source_reported,
+        "nok_basis": ds.nok_basis,
+        "stations_counted": list(f.stations) if f.stations is not None else [s.key for s in ds.stations],
+        "pieces_without_verdict": without_verdict,
+        "worst_mold_cavity": _worst(by_mold_cavity),
     }
     return {
         "summary": summary,
         "trend": trend,
         "pareto": pareto_rows,
         "by_cavity": by_cavity,
+        "by_mold_cavity": by_mold_cavity,
+        "station_pareto": _station_pareto(ds, idx, flags) if ds.stations else [],
         "heatmap": heatmap,
+        "heatmap_axis": "station" if reported else "variable",
     }
 
 
@@ -311,7 +428,15 @@ def variable_detail(
     if not values:
         return {"variable": key, "name": v.name, "spec": spec, "n": 0}
 
-    nok_count = sum(ds.nok[key][i] for i in idx)
+    if ds.nok_basis == "reported":
+        # No tolerances: mark the pieces whose first failing station measures this variable.
+        own = v.station
+        marks = {i: own is not None and ds.primary_fail[i] == own for i in idx}
+        nok_label = f"rechazadas por la estación «{ds.station(own).name}»" if own else "sin estación asociada"
+    else:
+        marks = {i: ds.nok[key][i] for i in idx}
+        nok_label = "fuera de tolerancia"
+    nok_count = sum(marks.values())
     lo = min([*values, *(x for x in (v.lsl, v.usl) if x is not None)])
     hi = max([*values, *(x for x in (v.lsl, v.usl) if x is not None)])
     width = (hi - lo) / HISTOGRAM_BINS or 1.0
@@ -333,11 +458,17 @@ def variable_detail(
     )
 
     step = max(1, math.ceil(len(idx) / MAX_SERIES_POINTS))
-    series = [[round(ds.timestamps[i] * 1000), float(column[i]), ds.nok[key][i]] for i in idx[::step]]  # type: ignore[arg-type]
+    series = [[round(ds.timestamps[i] * 1000), float(column[i]), marks[i]] for i in idx[::step]]  # type: ignore[arg-type]
 
-    column_for = {"cavity": ds.cavities, "machine": ds.machines, "shift": ds.shifts, "batch": ds.batches}[
-        group_by
-    ]
+    mold = ds.mold_cavities if ds.mold_cavities is not None else [None] * len(ds)
+    columns: dict[str, list[Any]] = {
+        "cavity": ds.cavities,
+        "machine": ds.machines,
+        "shift": ds.shifts,
+        "batch": ds.batches,
+        "mold_cavity": mold,
+    }
+    column_for = columns[group_by]
     grouped: dict[Any, list[float]] = defaultdict(list)
     grouped_nok: dict[Any, int] = defaultdict(int)
     for i in idx:
@@ -345,7 +476,7 @@ def variable_detail(
         if g is None:
             continue
         grouped[g].append(float(column[i]))  # type: ignore[arg-type]
-        grouped_nok[g] += ds.nok[key][i]
+        grouped_nok[g] += marks[i]
     groups = [
         {"group": str(g), **_box(vals), "nok": grouped_nok[g], "nok_rate": grouped_nok[g] / len(vals)}
         for g, vals in sorted(grouped.items())
@@ -353,7 +484,8 @@ def variable_detail(
 
     by_day: dict[str, list[float]] = defaultdict(list)
     for i in idx:
-        by_day[datetime.fromtimestamp(ds.timestamps[i], tz=UTC).strftime("%Y-%m-%d")].append(float(column[i]))  # type: ignore[arg-type]
+        day = datetime.fromtimestamp(ds.timestamps[i] + ds.utc_offset_s, tz=UTC).strftime("%Y-%m-%d")
+        by_day[day].append(float(column[i]))  # type: ignore[arg-type]
     cpk_by_day = [
         {
             "day": day,
@@ -382,4 +514,6 @@ def variable_detail(
         "group_by": group_by,
         "groups": groups,
         "cpk_by_day": cpk_by_day,
+        "nok_basis": ds.nok_basis,
+        "nok_label": nok_label,
     }
