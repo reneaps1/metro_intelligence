@@ -12,9 +12,11 @@ import {
   YAxis,
 } from "recharts";
 import { FlaskConical, Info } from "lucide-react";
-import clsx from "clsx";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { OriginBadge } from "../../components/ui/OriginBadge";
+import { Kpi } from "../../components/workbench/Kpi";
+import { Notice } from "../../components/workbench/Notice";
+import { WB, axisTick, gridProps, tooltipStyle } from "../../lib/demo/chartTheme";
 import { useAsync } from "../../lib/catalog/hooks";
 import { describeCorrelation, formatCoefficient } from "../../lib/industrial-signals/correlation";
 import { formatValue } from "../../lib/industrial-signals/explorer";
@@ -25,30 +27,26 @@ import { fetchProcessJoin, JOIN_SIGNALS, joinSignalId, REAL_DATASET_ID } from ".
 // IQ-F13 "Vista A" (docs/design/process-quality-join.md): the customer's REAL
 // pieces joined by time with simulated process signals on the same calendar.
 // Illustrative only: no cycle → piece traceability between the two sources.
+// IQ-F16: workbench look -- pane-header card, segmented control, KPI tiles,
+// neutral notice; neutral scatter, and in the time view the real NOK rate in
+// the muted NOK accent above the simulated signal in the dark neutral mark.
 
 const BUCKETS = [15, 30, 60] as const;
 const selectClass =
-  "mt-1 block w-full rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary";
-const axisTick = { fontSize: 11, fill: "var(--text-secondary)" };
-const tooltipStyle = { background: "var(--bg-surface-raised)", border: "1px solid var(--border-default)", fontSize: 12 };
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-border bg-surface p-3">
-      <p className="text-xs text-text-secondary">{label}</p>
-      <p className="whitespace-nowrap font-mono text-base font-semibold text-text-primary">{value}</p>
-    </div>
-  );
-}
+  "mt-1 block w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-medium normal-case tracking-normal text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-accent";
 
 function Header() {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <p className="text-sm font-semibold text-text-primary">Vista A: piezas reales + sensores simulados</p>
-      <OriginBadge origin="REAL" />
-      <OriginBadge origin="SIMULATED" />
-      <OriginBadge origin="EXPERIMENTAL" />
-    </div>
+    <CardHeader
+      title="Vista A: piezas reales + sensores simulados"
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          <OriginBadge origin="REAL" />
+          <OriginBadge origin="SIMULATED" />
+          <OriginBadge origin="EXPERIMENTAL" />
+        </div>
+      }
+    />
   );
 }
 
@@ -113,7 +111,7 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
     <Card className="space-y-3">
       <Header />
       <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-        <label className="text-xs text-text-secondary">
+        <label className="wb-label">
           Señal simulada (X)
           <select className={selectClass} value={signal} onChange={(e) => setSignal(e.target.value)} aria-label="Señal simulada">
             {JOIN_SIGNALS.map((s) => (
@@ -123,7 +121,7 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
             ))}
           </select>
         </label>
-        <label className="text-xs text-text-secondary">
+        <label className="wb-label">
           NOK real (Y)
           <select className={selectClass} value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Objetivo NOK">
             {targets.map((t) => (
@@ -133,9 +131,9 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
             ))}
           </select>
         </label>
-        <fieldset className="text-xs text-text-secondary">
-          <legend>Intervalo</legend>
-          <div className="mt-1 flex rounded border border-border">
+        <fieldset>
+          <legend className="wb-label">Intervalo</legend>
+          <div className="wb-seg mt-1">
             {BUCKETS.map((b) => (
               <button
                 key={b}
@@ -145,21 +143,17 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
                   setBucket(b);
                   setLag(0);
                 }}
-                className={clsx(
-                  "px-3 py-1.5 text-xs font-medium",
-                  bucket === b ? "bg-brand-primary text-text-on-brand" : "bg-surface text-text-secondary",
-                )}
               >
                 {b} min
               </button>
             ))}
           </div>
         </fieldset>
-        <label className="text-xs text-text-secondary">
+        <label className="wb-label">
           Desfase (min)
           <input
             type="number"
-            className={selectClass}
+            className={`${selectClass} font-mono`}
             value={lag}
             min={-180}
             max={180}
@@ -169,8 +163,8 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
           />
         </label>
       </div>
-      <p className="flex items-start gap-2 text-xs text-text-secondary">
-        <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <p className="flex items-start gap-2 text-sm text-text-secondary">
+        <Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
         Por intervalo de tiempo: media de la señal simulada en los ciclos frente a la tasa NOK de las piezas reales inspeccionadas en
         el mismo intervalo (hora de planta). Un desfase positivo compara el proceso con la inspección posterior.
       </p>
@@ -184,25 +178,21 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
 
       {data && (
         <>
-          <div
-            className={clsx(
-              "flex items-start gap-2 rounded px-3 py-2 text-sm",
-              data.causal_imposed ? "bg-status-warning-bg text-status-warning" : "bg-status-info-bg text-status-info",
-            )}
-          >
-            <FlaskConical size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          {/* Provenance caveat (illustrative join, imposed or control relation), not an alarm. */}
+          <Notice icon={<FlaskConical size={16} aria-hidden="true" />}>
             <div className="space-y-1">
               {data.notes.map((note) => (
                 <p key={note}>{note}</p>
               ))}
             </div>
-          </div>
+          </Notice>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat label="Intervalos (n)" value={data.n.toLocaleString("es-MX")} />
-            <Stat label="r de Pearson" value={formatCoefficient(data.pearson_r)} />
-            <Stat label="R²" value={formatCoefficient(data.r_squared)} />
-            <Stat
+          <div className="wb-kpis cols-4">
+            <Kpi size="sm" label="Intervalos (n)" value={data.n.toLocaleString("es-MX")} />
+            <Kpi size="sm" label="r de Pearson" value={formatCoefficient(data.pearson_r)} />
+            <Kpi size="sm" label="R²" value={formatCoefficient(data.r_squared)} />
+            <Kpi
+              size="sm"
               label={`Pendiente (pts de % NOK por ${data.signal.unit || "unidad"})`}
               value={data.slope === null ? "—" : formatCoefficient(data.slope * 100)}
             />
@@ -210,11 +200,7 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
           <p className="text-sm text-text-primary" aria-live="polite">
             {describeCorrelation(data.pearson_r)}{" "}
             {data.best_lag_minutes !== null && data.best_lag_minutes !== data.lag_minutes && (
-              <button
-                type="button"
-                onClick={() => setLag(data.best_lag_minutes ?? 0)}
-                className="ml-1 rounded border border-brand-primary px-2 py-0.5 text-xs font-medium text-brand-primary"
-              >
+              <button type="button" onClick={() => setLag(data.best_lag_minutes ?? 0)} className="wb-chip ml-1">
                 Usar desfase óptimo ({data.best_lag_minutes} min)
               </button>
             )}
@@ -225,7 +211,7 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
               <CardHeader title="Dispersión por intervalo" />
               <ResponsiveContainer width="100%" height={300}>
                 <ScatterChart margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                  <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+                  <CartesianGrid {...gridProps} />
                   <XAxis
                     type="number"
                     dataKey="x"
@@ -243,8 +229,8 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
                     tick={axisTick}
                   />
                   <Tooltip formatter={(value: number) => formatValue(value)} contentStyle={tooltipStyle} />
-                  <Scatter data={series} fill="var(--chart-1)" fillOpacity={0.55} isAnimationActive={false} />
-                  {fitSegment && <ReferenceLine segment={fitSegment} stroke="var(--text-primary)" strokeWidth={2} ifOverflow="extendDomain" />}
+                  <Scatter data={series} fill={WB.bar} fillOpacity={0.6} isAnimationActive={false} />
+                  {fitSegment && <ReferenceLine segment={fitSegment} stroke={WB.ref} strokeWidth={2} ifOverflow="extendDomain" />}
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
@@ -252,7 +238,7 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
               <CardHeader title="En el tiempo (hora de planta)" />
               <ResponsiveContainer width="100%" height={140}>
                 <LineChart data={timeline} syncId="vista-a" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
-                  <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+                  <CartesianGrid {...gridProps} />
                   <XAxis dataKey="start_ts" type="number" domain={["dataMin", "dataMax"]} hide />
                   <YAxis width={56} tick={axisTick} tickFormatter={(v: number) => `${formatValue(v)} %`} />
                   <Tooltip
@@ -260,12 +246,12 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
                     labelFormatter={(ts: number) => plantLabel(ts, offset)}
                     formatter={(v: number) => [`${formatValue(v)} %`, data.target_label]}
                   />
-                  <Line dataKey="nok" stroke="var(--chart-1)" dot={false} isAnimationActive={false} />
+                  <Line dataKey="nok" stroke={WB.nok} strokeWidth={2} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={timeline} syncId="vista-a" margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-                  <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+                  <CartesianGrid {...gridProps} />
                   <XAxis
                     dataKey="start_ts"
                     type="number"
@@ -279,7 +265,7 @@ function JoinView({ targets }: { targets: { value: string; label: string }[] }) 
                     labelFormatter={(ts: number) => plantLabel(ts, offset)}
                     formatter={(v: number) => [`${formatValue(v)} ${data.signal.unit}`, `${data.signal.name} (simulada)`]}
                   />
-                  <Line dataKey="x" stroke="var(--chart-2)" dot={false} isAnimationActive={false} />
+                  <Line dataKey="x" stroke={WB.mark} strokeWidth={1.5} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
               <p className="text-xs text-text-secondary">

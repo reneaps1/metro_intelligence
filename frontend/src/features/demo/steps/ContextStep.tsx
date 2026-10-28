@@ -1,7 +1,7 @@
 import { ArrowRight, BadgeCheck, Box, Flame, LayoutGrid, Ruler } from "lucide-react";
 import { Card, CardHeader } from "../../../components/ui/Card";
 import { OriginBadge } from "../../../components/ui/OriginBadge";
-import { StatusChip, type ChipStatus } from "../../../components/ui/StatusChip";
+import type { ChipStatus } from "../../../components/ui/StatusChip";
 import type { DataOrigin } from "../../../lib/demo/origin";
 
 const FLOW = [
@@ -107,7 +107,7 @@ export function ContextStep() {
             <li key={title} className="flex flex-1 items-stretch gap-2">
               <div className="flex-1 rounded border border-border bg-surface-app p-3">
                 <div className="mb-1 flex items-center gap-2">
-                  <Icon size={18} className="text-brand-primary" aria-hidden="true" />
+                  <Icon size={18} className="text-text-secondary" aria-hidden="true" />
                   <span className="text-sm font-semibold text-text-primary">{title}</span>
                 </div>
                 <p className="text-xs text-text-secondary">{text}</p>
@@ -128,7 +128,7 @@ export function ContextStep() {
         <CardHeader title="Estado de las fuentes de datos" />
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-text-secondary">
+            <thead className="wb-label">
               <tr>
                 <th className="py-2 pr-3 font-medium">Fuente</th>
                 <th className="py-2 pr-3 font-medium">Procedencia</th>
@@ -142,7 +142,8 @@ export function ContextStep() {
                   <td className="py-2 pr-3 font-medium text-text-primary">{source}</td>
                   <td className="py-2 pr-3">{origin ? <OriginBadge origin={origin} /> : "—"}</td>
                   <td className="py-2 pr-3">
-                    <StatusChip status={status} label={statusLabel} />
+                    {/* IQ-F16: a source's state is metadata -- a neutral tag; "not available" is dashed. */}
+                    <span className={status === "neutral" ? "wb-tag dashed" : "wb-tag"}>{statusLabel}</span>
                   </td>
                   <td className="py-2 text-text-secondary">{note}</td>
                 </tr>

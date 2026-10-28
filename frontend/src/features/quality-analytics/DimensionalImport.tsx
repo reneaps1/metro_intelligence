@@ -1,6 +1,8 @@
 import { useRef, useState, type DragEvent } from "react";
-import { AlertTriangle, FileSpreadsheet, UploadCloud } from "lucide-react";
+import { AlertTriangle, FileSpreadsheet, Info, UploadCloud } from "lucide-react";
 import clsx from "clsx";
+import { Button } from "../../components/ui/Button";
+import { Notice } from "../../components/workbench/Notice";
 import { ApiError } from "../../lib/api";
 import {
   ROLE_DEFS,
@@ -26,6 +28,9 @@ import type { QualityDataset } from "../../lib/quality-analytics/types";
 // IQ-F6: CSV -> column mapping -> validated dimensional dataset. Used by the
 // import page (industrial edition) and inline in demo steps 2/3. Whatever
 // happens here, the preloaded demo dataset is untouched.
+// IQ-F16: it also renders on the import page, outside the workbench (.wb-root),
+// so the wb-* classes go next to plain fallbacks; inside the workbench the
+// scoped wb-* rules win and it takes the line panel's look.
 
 const DELIMITERS: { id: Delimiter; label: string }[] = [
   { id: ",", label: "Coma (,)" },
@@ -48,7 +53,12 @@ const KIND_LABEL: Record<ColumnKind, string> = {
 const EMPTY_SPEC: VariableSpecInput = { nominal: null, lsl: null, usl: null, unit: null };
 const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toLocaleString("es-MX", { maximumFractionDigits: 1 })} MB`;
 const n = (v: number) => v.toLocaleString("es-MX");
-const selectClass = "w-full rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary";
+const selectClass =
+  "w-full rounded border border-border bg-surface px-2 py-1.5 text-sm font-medium normal-case tracking-normal text-text-primary";
+const inlineSelect = "ml-2 rounded border border-border bg-surface px-2 py-1 text-sm font-medium normal-case tracking-normal text-text-primary";
+const fieldLabel = "wb-label text-xs font-semibold text-text-secondary";
+// Fallback look of a notice outside the workbench; .wb-notice overrides it inside.
+const noticeFallback = "flex items-start gap-2 rounded bg-status-warning-bg px-3 py-2 text-sm text-status-warning";
 
 function errorText(err: unknown): string {
   return err instanceof ApiError ? err.message : "No se pudo procesar el archivo. Intenta de nuevo.";
@@ -143,10 +153,10 @@ export function DimensionalImport({ onImported }: { onImported: (dataset: Qualit
           onDrop={handleDrop}
           className={clsx(
             "flex min-h-[140px] cursor-pointer flex-col items-center justify-center gap-2 rounded border-2 border-dashed p-6 text-center",
-            dragActive ? "border-brand-primary bg-status-info-bg" : "border-border hover:border-brand-primary",
+            dragActive ? "border-brand-accent bg-wb-selected" : "border-border hover:border-brand-accent",
           )}
         >
-          <UploadCloud size={28} className="text-status-info" aria-hidden="true" />
+          <UploadCloud size={28} className="text-text-secondary" aria-hidden="true" />
           <p className="text-sm text-text-primary">
             {busy ? "Leyendo el archivo…" : "Arrastra un CSV de mediciones dimensionales o haz clic para elegirlo"}
           </p>
@@ -244,10 +254,10 @@ function MappingEditor({
         <span className="text-text-secondary">
           {mb(file.size)} · codificación {preview.encoding} · {preview.header.length} columnas
         </span>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className={fieldLabel}>
           Delimitador
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={inlineSelect}
             value={mapping.delimiter}
             disabled={busy}
             onChange={(e) => onDelimiter(e.target.value as Delimiter)}
@@ -259,10 +269,10 @@ function MappingEditor({
             ))}
           </select>
         </label>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className={fieldLabel}>
           Decimal
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={inlineSelect}
             value={mapping.decimal}
             onChange={(e) => setMapping({ ...mapping, decimal: e.target.value as "." | "," })}
           >
@@ -270,10 +280,10 @@ function MappingEditor({
             <option value=",">Coma (1,25)</option>
           </select>
         </label>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className={fieldLabel}>
           Fechas
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={inlineSelect}
             value={mapping.date_order}
             onChange={(e) => setMapping({ ...mapping, date_order: e.target.value as DateOrder })}
           >
@@ -287,15 +297,14 @@ function MappingEditor({
       </div>
 
       {willSample && (
-        <p className="flex items-start gap-2 rounded bg-status-warning-bg px-3 py-2 text-sm text-status-warning">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <Notice className={noticeFallback} icon={<Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />}>
           Archivo grande: se analizará una muestra del inicio (hasta {mb(preview.limits.max_bytes)} y{" "}
           {n(preview.limits.max_rows)} filas) de {mb(file.size)}.
-        </p>
+        </Notice>
       )}
 
       <fieldset>
-        <legend className="mb-1 text-xs font-semibold text-text-secondary">Formato del archivo</legend>
+        <legend className={clsx(fieldLabel, "mb-1.5")}>Formato del archivo</legend>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Formato del archivo">
           {(
             [
@@ -309,7 +318,7 @@ function MappingEditor({
               aria-pressed={mapping.layout === id}
               onClick={() => setMapping({ ...mapping, layout: id })}
               className={clsx(
-                "rounded border px-3 py-1.5 text-sm",
+                "wb-chip rounded border px-3 py-1.5 text-sm",
                 mapping.layout === id
                   ? "border-brand-primary bg-brand-primary text-text-on-brand"
                   : "border-border bg-surface text-text-secondary",
@@ -323,9 +332,9 @@ function MappingEditor({
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Mapeo de columnas">
         {roles.map((def) => (
-          <label key={def.role} className="text-xs font-semibold text-text-secondary">
+          <label key={def.role} className={fieldLabel}>
             {def.label}
-            {def.required && <span className="text-status-nok"> *</span>}
+            {def.required && <span className="text-text-primary"> *</span>}
             <select
               className={clsx(selectClass, "mt-1")}
               value={mapping.roles[def.role] ?? ""}
@@ -339,7 +348,7 @@ function MappingEditor({
                 </option>
               ))}
             </select>
-            {def.hint && <span className="mt-0.5 block font-normal">{def.hint}</span>}
+            {def.hint && <span className="wb-label-inline mt-0.5 block font-normal">{def.hint}</span>}
           </label>
         ))}
       </div>
@@ -354,7 +363,7 @@ function MappingEditor({
       )}
 
       <div>
-        <p className="mb-1 text-xs font-semibold text-text-secondary">
+        <p className={clsx(fieldLabel, "mb-1.5")}>
           Primeras {preview.rows.length} filas (de {n(preview.sampled_rows)} leídas para detectar tipos)
         </p>
         <div className="max-h-72 overflow-auto rounded border border-border">
@@ -366,7 +375,7 @@ function MappingEditor({
                   return (
                     <th key={col} className="whitespace-nowrap border-b border-border p-2 font-medium text-text-primary">
                       {col}
-                      <span className={clsx("block font-normal", role ? "text-brand-primary" : "text-text-disabled")}>
+                      <span className={clsx("block", role ? "font-semibold text-text-primary" : "font-normal text-text-disabled")}>
                         {role ?? "ignorada"}
                       </span>
                     </th>
@@ -390,28 +399,21 @@ function MappingEditor({
       </div>
 
       {errors.length > 0 && (
-        <ul className="list-disc pl-5 text-sm text-status-warning" aria-label="Problemas del mapeo">
-          {errors.map((e) => (
-            <li key={e}>{e}</li>
-          ))}
-        </ul>
+        <Notice attention className={noticeFallback} icon={<AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />}>
+          <ul className="list-disc pl-5" aria-label="Problemas del mapeo">
+            {errors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </Notice>
       )}
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy || errors.length > 0}
-          onClick={onAnalyse}
-          className="rounded bg-brand-primary px-4 py-2 text-sm font-medium text-text-on-brand disabled:opacity-50"
-        >
+        <Button type="button" disabled={busy || errors.length > 0} onClick={onAnalyse}>
           {busy ? "Analizando…" : "Validar y analizar"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded border border-border px-4 py-2 text-sm text-text-secondary hover:border-brand-primary"
-        >
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
           Cambiar archivo
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -440,12 +442,12 @@ function WideVariables({
     });
   return (
     <div className="space-y-2">
-      <p className="text-xs font-semibold text-text-secondary">
+      <p className={fieldLabel}>
         Columnas de variables dimensionales y su especificación (opcional; sin LIE/LSE no se calcula NOK ni Cp/Cpk)
       </p>
       <div className="overflow-x-auto rounded border border-border">
         <table className="w-full text-left text-sm" aria-label="Variables y tolerancias">
-          <thead className="text-xs text-text-secondary">
+          <thead className="bg-wb-pane-header text-xs text-text-secondary">
             <tr className="border-b border-border">
               <th className="p-2 font-medium">Variable</th>
               <th className="p-2 font-medium">Nominal</th>
@@ -516,23 +518,25 @@ function ImportResult({
           ["Piezas", n(report.pieces)],
           ["Variables", n(report.variables)],
         ].map(([label, value]) => (
-          <div key={label} className="rounded border border-border bg-surface p-3">
-            <p className="text-xs text-text-secondary">{label}</p>
-            <p className="font-mono text-lg font-semibold text-text-primary">{value}</p>
+          <div key={label} className="wb-kpi sm rounded border border-border bg-surface p-3">
+            <p className="wb-label text-xs text-text-secondary">{label}</p>
+            <p className="wb-kpi-v font-mono text-lg font-semibold text-text-primary">{value}</p>
           </div>
         ))}
       </div>
       {notice && (
-        <p className="rounded bg-status-warning-bg px-3 py-2 text-sm text-status-warning" role="status">
+        <Notice role="status" className={noticeFallback} icon={<Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />}>
           {notice}
-        </p>
+        </Notice>
       )}
       {report.warnings.length > 0 && (
-        <ul className="list-disc pl-5 text-sm text-status-warning">
-          {report.warnings.map((w) => (
-            <li key={w}>{w}</li>
-          ))}
-        </ul>
+        <Notice className={noticeFallback} icon={<AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />}>
+          <ul className="list-disc pl-5">
+            {report.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </Notice>
       )}
       {report.quarantine_by_reason.length > 0 && (
         <details className="rounded border border-border p-3 text-sm">
@@ -543,7 +547,7 @@ function ImportResult({
             <tbody>
               {report.quarantine_by_reason.map((q) => (
                 <tr key={q.reason} className="border-t border-border">
-                  <td className="p-2 text-status-warning">{q.reason}</td>
+                  <td className="p-2 text-text-primary">{q.reason}</td>
                   <td className="p-2 text-right font-mono">{n(q.rows)}</td>
                 </tr>
               ))}
@@ -569,28 +573,16 @@ function ImportResult({
       </p>
       <div className="flex flex-wrap gap-2">
         {dataset && (
-          <button
-            type="button"
-            onClick={onUse}
-            className="rounded bg-brand-primary px-4 py-2 text-sm font-medium text-text-on-brand"
-          >
+          <Button type="button" onClick={onUse}>
             Ver analíticas de este archivo
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          onClick={onAdjust}
-          className="rounded border border-border px-4 py-2 text-sm text-text-secondary hover:border-brand-primary"
-        >
+        <Button type="button" variant="secondary" onClick={onAdjust}>
           Ajustar mapeo
-        </button>
-        <button
-          type="button"
-          onClick={onAnother}
-          className="rounded border border-border px-4 py-2 text-sm text-text-secondary hover:border-brand-primary"
-        >
+        </Button>
+        <Button type="button" variant="secondary" onClick={onAnother}>
           Importar otro archivo
-        </button>
+        </Button>
       </div>
     </div>
   );

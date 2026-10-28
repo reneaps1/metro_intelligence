@@ -51,7 +51,7 @@ export function ProjectTree({
       <nav aria-label="Pasos de la demo" className="px-1.5">
         {groupSteps().map(({ group, steps }) => (
           <div key={group} className="pt-2.5">
-            <h2 className="px-2 pb-0.5 text-xs font-semibold text-text-secondary">{group}</h2>
+            <h2 className="wb-label px-2 pb-1 !text-[11px]">{group}</h2>
             <ol>
               {steps.map((step) => (
                 <li key={step.id}>
@@ -75,14 +75,14 @@ export function ProjectTree({
         ))}
       </nav>
       <div className="mt-3 border-t border-border px-1.5 pt-2.5">
-        <h2 className="px-2 pb-0.5 text-xs font-semibold text-text-secondary">Pantallas de planta</h2>
+        <h2 className="wb-label px-2 pb-1 !text-[11px]">Pantallas de planta</h2>
         <Link to={LINE_PANEL_PATH} title="Pantalla completa para la línea" className={row(false)}>
           <MonitorDot size={14} className="text-text-secondary" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">Panel de calidad en línea</span>
         </Link>
       </div>
       <div className="mt-3 border-t border-border px-1.5 py-2.5">
-        <h2 className="px-2 pb-0.5 text-xs font-semibold text-text-secondary">Activos · Planta demo, línea 2</h2>
+        <h2 className="wb-label px-2 pb-1 !text-[11px]">Activos · Planta demo, línea 2</h2>
         <ul className="text-[13px]">
           <li className="flex min-h-[32px] items-center gap-2 px-2">
             <Cpu size={15} className="text-text-secondary" aria-hidden="true" />

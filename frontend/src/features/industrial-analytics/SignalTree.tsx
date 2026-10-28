@@ -6,6 +6,7 @@ import type { SignalInfo, SignalTreeNode } from "../../lib/industrial-signals/ty
 // IQ-F3: plant -> area -> line -> machine -> group -> channel tree. Leaves are
 // draggable onto the chart area; the "Agregar" button is the accessible
 // fallback for keyboards, touch screens and browsers where DnD misbehaves.
+// IQ-F16: signals already on the chart take the teal "selected" tint.
 export const SIGNAL_DRAG_MIME = "application/x-mi-signal";
 
 const VALUE_TYPE_LABEL: Record<SignalInfo["value_type"], string> = {
@@ -85,7 +86,7 @@ export function SignalTree({ root, activeIds, full, onAdd }: SignalTreeProps) {
           }}
           className={clsx(
             "group flex items-center gap-1 rounded px-1 py-1 text-xs",
-            active ? "opacity-60" : "cursor-grab hover:bg-surface-app",
+            active ? "bg-wb-selected" : "cursor-grab hover:bg-surface-app",
           )}
           style={{ paddingLeft: depth * 12 }}
           data-signal-id={signal.signal_id}
@@ -97,7 +98,7 @@ export function SignalTree({ root, activeIds, full, onAdd }: SignalTreeProps) {
             </span>
             <span className="block truncate text-text-secondary">
               {signal.unit} · {rateLabel(signal)} · {VALUE_TYPE_LABEL[signal.value_type]}
-              {signal.causal_imposed && <span className="ml-1 font-semibold text-status-warning">· Vista B</span>}
+              {signal.causal_imposed && <span className="ml-1 font-semibold text-text-primary">· Vista B</span>}
               {!signal.informative && <span className="ml-1 italic">· control</span>}
             </span>
           </span>
@@ -107,7 +108,7 @@ export function SignalTree({ root, activeIds, full, onAdd }: SignalTreeProps) {
             disabled={active || full}
             aria-label={`Agregar ${signal.name} ${signal.machine_code}`}
             title={active ? "Ya está en la gráfica" : full ? "Máximo de señales alcanzado" : "Agregar a la gráfica"}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-surface hover:text-brand-primary disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-transparent text-text-secondary hover:border-brand-accent hover:bg-surface hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={14} aria-hidden="true" />
           </button>
@@ -143,7 +144,7 @@ export function SignalTree({ root, activeIds, full, onAdd }: SignalTreeProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar señal, unidad o máquina"
-          className="w-full rounded border border-border bg-surface py-1.5 pl-7 pr-2 text-xs text-text-primary"
+          className="w-full rounded-md border border-border bg-surface py-1.5 pl-7 pr-2 text-sm text-text-primary"
         />
       </label>
       <div className="min-h-0 flex-1 overflow-y-auto">

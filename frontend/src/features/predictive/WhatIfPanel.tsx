@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
+import { FlaskConical } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Card, CardHeader } from "../../components/ui/Card";
+import { Notice } from "../../components/workbench/Notice";
 import { useAsync } from "../../lib/catalog/hooks";
+import { WB, gridProps, lineLabel, refLine } from "../../lib/demo/chartTheme";
 import { fetchWhatIf, type WhatIfParams } from "../../lib/predictive/api";
 import { formatPct } from "../../lib/quality-analytics/filters";
-import { Callout, LoadState, Metric, PanelHeader, axisTick, n, tooltipStyle } from "./shared";
+import { LoadState, Metric, PanelHeader, axisTick, fieldControl, n, tooltipStyle } from "./shared";
 
 // IQ-F7: HYPOTHETICAL what-if over the Vista B synthetic mechanism. It
 // evaluates the simulator's own formula, so it says what the simulator would
 // do -- never what a real press would do.
+// IQ-F16: neutral curves with the current setting as a labelled reference; a
+// high hypothetical P(NOK) takes the muted NOK accent.
 
 const DEFAULTS: WhatIfParams = { holdPressure: 620, moldDelta: 0, nest: null, wornInsert: false };
 
@@ -29,19 +35,19 @@ function Sweep({
 }) {
   const rows = data.map((d) => ({ x: d.x, pct: d.nok_probability * 100 }));
   return (
-    <div className="rounded border border-border p-2">
-      <p className="text-sm font-semibold text-text-primary">P(NOK) según {xLabel}</p>
+    <Card>
+      <CardHeader title={`P(NOK) según ${xLabel}`} />
       <ResponsiveContainer width="100%" height={170}>
-        <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+        <LineChart data={rows} margin={{ top: 18, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid {...gridProps} />
           <XAxis dataKey="x" type="number" domain={["dataMin", "dataMax"]} tick={axisTick} unit={unit} />
           <YAxis tick={axisTick} width={44} unit=" %" domain={[0, 100]} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${n(v, 2)} %`, "P(NOK)"]} labelFormatter={(v: number) => `${v}${unit}`} />
-          <Line dataKey="pct" stroke="var(--status-nok)" dot={false} isAnimationActive={false} />
-          <ReferenceLine x={current} stroke="var(--brand-primary)" />
+          <Line dataKey="pct" stroke={WB.mark} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+          <ReferenceLine x={current} {...refLine} label={{ ...lineLabel("Ajuste"), position: "top" }} />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </Card>
   );
 }
 
@@ -58,13 +64,14 @@ export function WhatIfPanel() {
   return (
     <section className="space-y-4" aria-label="Simulación what-if">
       <PanelHeader title="What-if sobre el mecanismo sintético" origins={["SIMULATED", "EXPERIMENTAL"]} />
-      <Callout tone="warning">
+      <Notice role="note" icon={<FlaskConical size={16} aria-hidden="true" />}>
         <strong>HIPOTÉTICO — mecanismo sintético.</strong> Evalúa la fórmula impuesta en el simulador (Vista B). No es una
         predicción de la prensa real ni una recomendación de ajuste.
-      </Callout>
+      </Notice>
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-xs font-semibold text-text-secondary">
-          Presión de mantenimiento: <span className="font-mono text-text-primary">{draft.holdPressure} bar</span>
+        <label className="wb-label">
+          Presión de mantenimiento:{" "}
+          <span className="wb-label-inline font-mono text-text-primary">{draft.holdPressure} bar</span>
           <input
             type="range"
             min={540}
@@ -72,13 +79,13 @@ export function WhatIfPanel() {
             step={5}
             value={draft.holdPressure}
             onChange={(e) => setDraft({ ...draft, holdPressure: Number(e.target.value) })}
-            className="mt-1 block w-full"
+            className="mt-1 block w-full accent-brand-accent"
             aria-label="Presión de mantenimiento"
           />
         </label>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Temperatura de molde (Δ vs. nominal):{" "}
-          <span className="font-mono text-text-primary">
+          <span className="wb-label-inline font-mono text-text-primary">
             {draft.moldDelta > 0 ? "+" : ""}
             {draft.moldDelta} °C
           </span>
@@ -89,14 +96,14 @@ export function WhatIfPanel() {
             step={0.5}
             value={draft.moldDelta}
             onChange={(e) => setDraft({ ...draft, moldDelta: Number(e.target.value) })}
-            className="mt-1 block w-full"
+            className="mt-1 block w-full accent-brand-accent"
             aria-label="Temperatura de molde"
           />
         </label>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Nido
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={fieldControl}
             value={draft.nest ?? ""}
             onChange={(e) => setDraft({ ...draft, nest: e.target.value ? Number(e.target.value) : null })}
           >
@@ -113,6 +120,7 @@ export function WhatIfPanel() {
             type="checkbox"
             checked={draft.wornInsert}
             onChange={(e) => setDraft({ ...draft, wornInsert: e.target.checked })}
+            className="accent-brand-accent"
           />
           Inserto desgastado en el nido 7 (+0.04 mm)
         </label>
@@ -129,7 +137,7 @@ export function WhatIfPanel() {
             <Metric
               label="P(NOK) hipotética"
               value={prob(r.nok_probability)}
-              tone={r.nok_probability > 0.01 ? "nok" : r.nok_probability > 0.001 ? "warning" : "ok"}
+              tone={r.nok_probability > 0.01 ? "nok" : undefined}
             />
             <Metric label="Con ajustes nominales" value={prob(r.reference_nok_probability)} hint="620 bar, ΔT = 0 °C, sin desgaste" />
           </div>

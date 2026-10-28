@@ -16,6 +16,7 @@ import { Inspector, type InspectorSection } from "./workbench/Inspector";
 import { MenuBar, type Menu } from "./workbench/MenuBar";
 import { ProjectTree } from "./workbench/ProjectTree";
 import { Toolbar, type ToolbarPopover } from "./workbench/Toolbar";
+import "./workbench/workbench.css";
 
 // Demo workbench (design-system.md §4.1, decisions.md 2026-10-28): menu bar,
 // toolbar, project tree, document, inspector and status bar. Every fact lives

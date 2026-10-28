@@ -1,6 +1,5 @@
 import { useEffect, useRef, type ComponentType, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import clsx from "clsx";
 import { Card } from "../../../components/ui/Card";
 import { useAsync } from "../../../lib/catalog/hooks";
 import { AI_DATA_PARAM, AI_VIEW_PARAM, parseAiView, visibleAiViews, type AiViewId } from "../../../lib/demo/aiViews";
@@ -20,6 +19,8 @@ import { WhatIfPanel } from "../../predictive/WhatIfPanel";
 // open view lives in the URL (?vista=) so the workbench ribbon can switch it
 // and a link opens it directly. Tabs are styled as tabs (accent underline),
 // not as buttons, so "Siguiente" stays the only primary action on screen.
+// IQ-F16: data switch and tabs are workbench segmented controls; the panel
+// sits first in its card so its title becomes the card's pane-header band.
 // IQ-F12: when the customer's REAL dataset is configured locally the lab runs
 // on it by default (?datos=sintetico switches back); the REAL-only studies
 // (alarm per cavity, risk per piece) appear only then.
@@ -92,42 +93,26 @@ export function AiStep() {
   return (
     <div className="space-y-4">
       {real && (
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Datos del laboratorio">
-          <span className="text-xs font-semibold text-text-secondary">Datos del laboratorio</span>
-          {(
-            [
-              ["real", `Reales · ${real.name.replace(/^Datos reales · /, "")}`],
-              ["sintetico", "Sintéticos (demo)"],
-            ] as const
-          ).map(([value, label]) => {
-            const active = (value === "real") === useReal;
-            return (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setData(value)}
-                className={
-                  active
-                    ? "min-h-[32px] rounded border border-brand-accent bg-surface-app px-3 text-sm font-medium text-text-primary"
-                    : "min-h-[32px] rounded border border-border bg-surface px-3 text-sm text-text-secondary hover:border-brand-accent"
-                }
-              >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="wb-label">Datos del laboratorio</span>
+          <div className="wb-seg" role="group" aria-label="Datos del laboratorio">
+            {(
+              [
+                ["real", `Reales · ${real.name.replace(/^Datos reales · /, "")}`],
+                ["sintetico", "Sintéticos (demo)"],
+              ] as const
+            ).map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={(value === "real") === useReal} onClick={() => setData(value)}>
                 {label}
               </button>
-            );
-          })}
+            ))}
+          </div>
           <span className="text-xs text-text-secondary">
             Modelos ML/DL, What-if y Fallas de máquina no dependen de esta selección.
           </span>
         </div>
       )}
-      <div
-        role="tablist"
-        aria-label="Laboratorio predictivo"
-        onKeyDown={onKeyDown}
-        className="flex flex-wrap gap-1 border-b border-border"
-      >
+      <div role="tablist" aria-label="Laboratorio predictivo" onKeyDown={onKeyDown} className="wb-seg lg">
         {AI_VIEWS.map((v, i) => {
           const selected = v.id === view;
           return (
@@ -143,23 +128,17 @@ export function AiStep() {
               aria-controls="ai-panel"
               tabIndex={selected ? 0 : -1}
               onClick={() => select(v.id)}
-              className={clsx(
-                "-mb-px min-h-[36px] border-b-2 px-3 text-sm transition-colors",
-                selected
-                  ? "border-brand-accent font-semibold text-text-primary"
-                  : "border-transparent text-text-secondary hover:border-border hover:text-text-primary",
-              )}
             >
               {v.label}
             </button>
           );
         })}
       </div>
-      <Card>
-        <div id="ai-panel" role="tabpanel" aria-labelledby={`ai-tab-${view}`}>
+      <div id="ai-panel" role="tabpanel" aria-labelledby={`ai-tab-${view}`}>
+        <Card>
           {ready ? <Panel key={source.datasetId} source={source} /> : <p className="text-sm text-text-secondary">Cargando…</p>}
-        </div>
-      </Card>
+        </Card>
+      </div>
       <p className="text-xs text-text-secondary">
         Lenguaje de este paso: indicio, asociación, hipótesis. Nada aquí actúa sobre producción; todo requiere validación
         en planta con señales reales vinculadas a cada ciclo/pieza.

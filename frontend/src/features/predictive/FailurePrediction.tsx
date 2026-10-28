@@ -13,7 +13,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Card, CardHeader } from "../../components/ui/Card";
 import { useAsync } from "../../lib/catalog/hooks";
+import { WB, gridProps, limitLine, lineLabel, refLine } from "../../lib/demo/chartTheme";
 import { fetchFailureStudy } from "../../lib/predictive/api";
 import type { FailureStudy, ThresholdRow } from "../../lib/predictive/types";
 import { formatPct } from "../../lib/quality-analytics/filters";
@@ -23,6 +25,8 @@ import { Callout, LoadState, Metric, PanelHeader, axisTick, n, tooltipStyle } fr
 // The threshold is interactive because the model produced real (simulated)
 // scores; every number is computed on the same unseen test period as the
 // baselines.
+// IQ-F16: neutral lines and bars, the threshold as a labelled limit; the
+// failures that had a precursor carry the muted NOK accent.
 
 const DEFAULT_THRESHOLD = 0.5;
 const fmt = (v: number | null, digits = 2) => (v === null ? "—" : n(v, digits));
@@ -36,7 +40,7 @@ function Timeline({ study, threshold }: { study: FailureStudy; threshold: number
     <div className="space-y-1">
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+          <CartesianGrid {...gridProps} />
           <XAxis dataKey="day" type="number" domain={["dataMin", "dataMax"]} tick={axisTick} tickFormatter={(v: number) => `día ${n(v)}`} />
           <YAxis yAxisId="score" tick={axisTick} width={40} domain={[0, 1]} />
           <YAxis yAxisId="vib" orientation="right" tick={axisTick} width={40} />
@@ -45,11 +49,11 @@ function Timeline({ study, threshold }: { study: FailureStudy; threshold: number
             labelFormatter={(v: number) => `Día ${n(v, 1)} del período de prueba`}
             formatter={(v: number, name: string) => [n(v, name === "score" ? 2 : 1), name === "score" ? "Probabilidad de falla (6 h)" : "Vibración mm/s"]}
           />
-          <Line yAxisId="vib" dataKey="vibration" stroke="var(--chart-2)" strokeOpacity={0.5} dot={false} isAnimationActive={false} />
-          <Line yAxisId="score" dataKey="score" stroke="var(--brand-primary)" dot={false} isAnimationActive={false} />
-          <ReferenceLine yAxisId="score" y={threshold} stroke="var(--status-warning)" strokeDasharray="4 3" />
+          <Line yAxisId="vib" dataKey="vibration" stroke={WB.bar} strokeOpacity={0.6} dot={false} isAnimationActive={false} />
+          <Line yAxisId="score" dataKey="score" stroke={WB.mark} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+          <ReferenceLine yAxisId="score" y={threshold} {...limitLine} label={lineLabel(`Umbral ${n(threshold, 2)}`, "insideTopRight")} />
           {t.maintenance_h.map((h) => (
-            <ReferenceLine key={`m${h}`} yAxisId="score" x={day(h)} stroke="var(--status-ok)" strokeDasharray="2 3" />
+            <ReferenceLine key={`m${h}`} yAxisId="score" x={day(h)} {...refLine} stroke={WB.bar} />
           ))}
           {t.failures.map((f) => (
             <ReferenceDot
@@ -58,16 +62,16 @@ function Timeline({ study, threshold }: { study: FailureStudy; threshold: number
               x={day(f.hour)}
               y={0.98}
               r={6}
-              fill={f.has_precursor ? "var(--status-nok)" : "var(--text-secondary)"}
+              fill={f.has_precursor ? WB.nok : WB.bar}
               stroke="none"
             />
           ))}
         </LineChart>
       </ResponsiveContainer>
       <p className="text-xs text-text-secondary">
-        Máquina {t.machine}, período de prueba. Azul: probabilidad de falla en las próximas {study.horizon_h} h. Gris claro:
-        vibración. Puntos: fallas (rojo = con precursor, gris = sin precursor). Verde punteado: mantenimiento preventivo.
-        Amarillo: umbral.
+        Máquina {t.machine}, período de prueba. Línea oscura: probabilidad de falla en las próximas {study.horizon_h} h.
+        Gris claro: vibración. Puntos: fallas (resaltados = con precursor, grises = sin precursor). Punteadas verticales:
+        mantenimiento preventivo. Discontinua: umbral.
       </p>
     </div>
   );
@@ -78,11 +82,11 @@ function PrCurve({ study, row }: { study: FailureStudy; row: ThresholdRow }) {
     .filter((r) => r.precision !== null)
     .map((r) => ({ recall: r.recall * 100, precision: (r.precision ?? 0) * 100, threshold: r.threshold }));
   return (
-    <div className="rounded border border-border p-2">
-      <p className="text-sm font-semibold text-text-primary">Precisión vs. recall por umbral (por hora)</p>
+    <Card>
+      <CardHeader title="Precisión vs. recall por umbral (por hora)" />
       <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+        <LineChart data={data} margin={{ top: 8, right: 76, bottom: 0, left: 0 }}>
+          <CartesianGrid {...gridProps} />
           <XAxis dataKey="recall" type="number" domain={[0, 100]} tick={axisTick} unit=" %" />
           <YAxis tick={axisTick} width={44} unit=" %" domain={[0, 100]} />
           <Tooltip
@@ -90,45 +94,52 @@ function PrCurve({ study, row }: { study: FailureStudy; row: ThresholdRow }) {
             formatter={(v: number, name: string) => [`${n(v, 1)} %`, name === "precision" ? "Precisión" : name]}
             labelFormatter={(v: number) => `Recall ${n(v, 1)} %`}
           />
-          <Line dataKey="precision" stroke="var(--chart-1)" isAnimationActive={false} />
-          <ReferenceLine y={study.split.test_positive_rate * 100} stroke="var(--text-secondary)" strokeDasharray="4 3" />
+          <Line
+            dataKey="precision"
+            stroke={WB.mark}
+            strokeWidth={1.5}
+            dot={{ r: 2, fill: WB.mark, strokeWidth: 0 }}
+            isAnimationActive={false}
+          />
+          <ReferenceLine y={study.split.test_positive_rate * 100} {...refLine} label={lineLabel("Tasa base")} />
           {row.precision !== null && (
-            <ReferenceDot x={row.recall * 100} y={row.precision * 100} r={6} fill="var(--status-warning)" stroke="none" />
+            // The chosen threshold: a ring on the curve (a selection, not an alarm).
+            <ReferenceDot x={row.recall * 100} y={row.precision * 100} r={6} fill="var(--bg-surface)" stroke={WB.mark} strokeWidth={2} />
           )}
         </LineChart>
       </ResponsiveContainer>
       <p className="text-xs text-text-secondary">
         Calculada con los scores reales del modelo simulado. Línea punteada = tasa base (lo que logra alertar al azar).
+        Círculo = umbral elegido.
       </p>
-    </div>
+    </Card>
   );
 }
 
 function Coefficients({ study }: { study: FailureStudy }) {
   const data = study.features.map((f) => ({ label: f.label, value: f.coefficient }));
   return (
-    <div className="rounded border border-border p-2">
-      <p className="text-sm font-semibold text-text-primary">Qué pesa en el modelo (coeficientes estandarizados)</p>
+    <Card>
+      <CardHeader title="Qué pesa en el modelo (coeficientes estandarizados)" />
       <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, bottom: 0, left: 8 }}>
-          <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} horizontal={false} />
           <XAxis type="number" tick={axisTick} />
           <YAxis type="category" dataKey="label" tick={{ ...axisTick, fontSize: 10 }} width={190} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [n(v, 2), "Coeficiente"]} />
-          <ReferenceLine x={0} stroke="var(--text-secondary)" />
+          <ReferenceLine x={0} stroke={WB.ref} />
           <Bar dataKey="value" isAnimationActive={false}>
             {data.map((d) => (
-              <Cell key={d.label} fill={d.value >= 0 ? "var(--status-nok)" : "var(--chart-2)"} />
+              <Cell key={d.label} fill={d.value >= 0 ? WB.mark : WB.bar} />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
       <p className="text-xs text-text-secondary">
-        Regresión logística sobre variables estandarizadas: positivo (rojo) sube el riesgo, negativo lo baja. Variables
-        correlacionadas (p. ej. vibración media y su tendencia) se reparten el efecto, así que un signo aislado no es una
-        explicación causal.
+        Regresión logística sobre variables estandarizadas: positivo (oscuro, a la derecha) sube el riesgo, negativo (gris)
+        lo baja. Variables correlacionadas (p. ej. vibración media y su tendencia) se reparten el efecto, así que un signo
+        aislado no es una explicación causal.
       </p>
-    </div>
+    </Card>
   );
 }
 
@@ -151,8 +162,8 @@ export function FailurePrediction() {
             {s.split.description} Entrenamiento: {n(s.split.train_rows)} horas, {s.split.train_failures} fallas. Prueba:{" "}
             {n(s.split.test_rows)} horas, {s.split.test_failures} fallas. Objetivo: falla en las próximas {s.horizon_h} h.
           </p>
-          <label className="block text-xs font-semibold text-text-secondary">
-            Umbral de alerta: <span className="font-mono text-text-primary">{n(row.threshold, 2)}</span>
+          <label className="wb-label block">
+            Umbral de alerta: <span className="wb-label-inline font-mono text-text-primary">{n(row.threshold, 2)}</span>
             <input
               type="range"
               min={0.05}
@@ -160,7 +171,7 @@ export function FailurePrediction() {
               step={0.05}
               value={threshold}
               onChange={(e) => setThreshold(Number(e.target.value))}
-              className="mt-1 block w-full max-w-md"
+              className="mt-1 block w-full max-w-md accent-brand-accent"
               aria-label="Umbral de alerta"
             />
           </label>
@@ -168,14 +179,12 @@ export function FailurePrediction() {
             <Metric
               label="Fallas anticipadas"
               value={`${row.episodes_anticipated} de ${row.episodes_total}`}
-              tone={row.episodes_anticipated ? "ok" : "nok"}
               hint={`alerta dentro de las ${s.horizon_h} h previas`}
             />
             <Metric label="Anticipación media" value={row.mean_lead_h === null ? "—" : `${n(row.mean_lead_h, 1)} h`} />
             <Metric
               label="Falsas alarmas"
               value={n(row.false_alarms_per_shift, 2)}
-              tone={row.false_alarms_per_shift > 0.5 ? "nok" : row.false_alarms_per_shift > 0.1 ? "warning" : undefined}
               hint={`por turno de 8 h · ${row.alert_events} eventos de alerta`}
             />
             <Metric label="Precisión (por hora)" value={formatPct(row.precision, 1)} hint={`${row.tp} VP · ${row.fp} FP`} />
@@ -228,8 +237,8 @@ export function FailurePrediction() {
             <PrCurve study={s} row={row} />
             <Coefficients study={s} />
           </div>
-          <div className="rounded border border-dashed border-status-nok p-3">
-            <p className="mb-1 text-sm font-semibold text-text-primary">Limitaciones y qué haría falta en planta</p>
+          <div className="rounded border border-dashed border-border p-3">
+            <p className="wb-label mb-1">Limitaciones y qué haría falta en planta</p>
             <ul className="list-disc pl-5 text-sm text-text-secondary">
               {s.limitations.map((l) => (
                 <li key={l}>{l}</li>

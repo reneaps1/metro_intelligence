@@ -73,7 +73,7 @@ export function IntegrationStep() {
           {CHAIN.map((step, i) => (
             <li key={step.title} className="flex flex-1 items-stretch gap-2">
               <div className="flex-1 rounded border border-border bg-surface-app p-3">
-                <step.icon size={18} className="mb-1 text-brand-primary" aria-hidden="true" />
+                <step.icon size={18} className="mb-1 text-text-secondary" aria-hidden="true" />
                 <p className="text-sm font-semibold text-text-primary">{step.title}</p>
                 <p className="text-xs text-text-secondary">{step.text}</p>
               </div>
@@ -89,7 +89,7 @@ export function IntegrationStep() {
         <CardHeader title="Hoy en la demo vs. con integración" />
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm" aria-label="Hoy vs. con integración">
-            <thead className="text-xs text-text-secondary">
+            <thead className="wb-label">
               <tr className="border-b border-border">
                 <th className="p-2 font-medium">Tema</th>
                 <th className="p-2 font-medium">Hoy en la demo</th>
@@ -134,7 +134,7 @@ export function IntegrationStep() {
         </Card>
       </div>
 
-      <blockquote className="rounded border-l-4 border-brand-primary bg-status-info-bg px-4 py-3 text-sm text-text-primary">
+      <blockquote className="wb-notice !text-text-primary">
         Metro Intelligence conecta mediciones dimensionales y contexto de proceso en un mismo lugar para pasar de
         visualizar los NOK a investigar sus patrones, generar hipótesis y evaluar anticipadamente riesgos. La capa IIoT
         mostrada aquí es simulada: para validar causalidad y predicción necesitamos capturar señales reales de máquina,

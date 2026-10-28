@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import type { CategoricalChartState } from "recharts/types/chart/types";
+import { WB, axisTick, gridProps, tooltipStyle } from "../../lib/demo/chartTheme";
 import {
   formatRelative,
   formatValue,
@@ -20,18 +21,47 @@ import {
   type Trace,
 } from "../../lib/industrial-signals/explorer";
 import type { ProcessEvent, SignalSeries } from "../../lib/industrial-signals/types";
+import { LpSymbol } from "../line-panel/parts";
 
 // IQ-F3: one chart sharing the explorer's time axis. In "tracks" layout it
 // holds one unit; in "overlay" layout it gets one Y axis per unit, so curves
-// in °C and bar never share a scale.
+// in °C and bar never share a scale. IQ-F16: each pen keeps its categorical
+// --chart-* color (each one is a different signal); the chrome around them is
+// neutral -- event markers and cursors in the text color, the zoom selection in
+// the teal "selected" tint, and only warning/critical events carry their
+// priority symbol (line panel's LpSymbol) next to the marker.
 
-const SEVERITY_COLOR: Record<ProcessEvent["severity"], string> = {
-  info: "var(--status-info)",
-  warning: "var(--status-warning)",
-  critical: "var(--status-nok)",
-};
+// Cursor A solid, cursor B dashed: told apart by line and label, not by hue.
+const CURSOR_DASH: Record<CursorId, string | undefined> = { a: undefined, b: "6 3" };
 
-const CURSOR_COLOR: Record<CursorId, string> = { a: "var(--brand-primary)", b: "var(--chart-4)" };
+// Recharts label content for an event marker: "E<n>", preceded by the priority
+// symbol when the event asks for attention (warning -> P2, critical -> P1).
+function EventMarker({
+  viewBox,
+  marker,
+  severity,
+}: {
+  viewBox?: { x: number; y: number };
+  marker: string;
+  severity: ProcessEvent["severity"];
+}) {
+  if (!viewBox) return null;
+  const x = viewBox.x + 3;
+  const y = viewBox.y + 3;
+  const symbol = severity === "info" ? null : severity === "critical" ? 1 : 2;
+  return (
+    <g pointerEvents="none">
+      {symbol !== null && (
+        <g transform={`translate(${x},${y})`}>
+          <LpSymbol priority={symbol} size={12} />
+        </g>
+      )}
+      <text x={x + (symbol !== null ? 15 : 0)} y={y + 10} fontSize={10} fontWeight={700} fill={WB.ref}>
+        {marker}
+      </text>
+    </g>
+  );
+}
 
 interface TrackChartProps {
   title: string;
@@ -111,16 +141,17 @@ export function TrackChart({
     });
 
   return (
-    <figure className="rounded border border-border bg-surface-app p-2" aria-label={`Pista ${title}`}>
-      <figcaption className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        <span className="font-semibold text-text-primary">{title}</span>
+    <figure className="overflow-hidden rounded-md border border-border bg-surface" aria-label={`Pista ${title}`}>
+      <figcaption className="flex min-h-[32px] flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-wb-pane-header px-3 py-1 text-xs">
+        <span className="wb-label">{title}</span>
         {visible.map((trace) => (
-          <span key={trace.signal.signal_id} className="inline-flex items-center gap-1 text-text-secondary">
-            <span className="inline-block h-2 w-3 rounded-sm" style={{ background: trace.color }} aria-hidden="true" />
+          <span key={trace.signal.signal_id} className="inline-flex items-center gap-1.5 font-medium text-text-primary">
+            <span className="inline-block h-[3px] w-4 rounded-sm" style={{ background: trace.color }} aria-hidden="true" />
             {trace.signal.machine_code} · {trace.signal.name}
           </span>
         ))}
       </figcaption>
+      <div className="p-2">
       <ResponsiveContainer width="100%" height={height}>
         <LineChart
           data={data}
@@ -145,14 +176,14 @@ export function TrackChart({
           }}
           style={{ cursor: "crosshair", userSelect: "none" }}
         >
-          <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+          <CartesianGrid {...gridProps} />
           <XAxis
             dataKey="t"
             type="number"
             domain={[window.start, window.end]}
             allowDataOverflow
             tickFormatter={(t: number) => formatRelative(t, origin, withSeconds)}
-            tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+            tick={axisTick}
             minTickGap={40}
           />
           {units.map((unit, i) => (
@@ -162,7 +193,7 @@ export function TrackChart({
               orientation={i % 2 === 0 ? "left" : "right"}
               domain={["auto", "auto"]}
               width={58}
-              tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+              tick={axisTick}
               tickFormatter={(v: number) => formatValue(v)}
               label={{ value: unit, angle: -90, position: i % 2 === 0 ? "insideLeft" : "insideRight", fontSize: 11, fill: "var(--text-secondary)" }}
             />
@@ -174,26 +205,18 @@ export function TrackChart({
               const trace = visible.find((tr) => tr.signal.signal_id === name);
               return [`${formatValue(value)} ${trace?.signal.unit ?? ""}`, trace?.signal.name ?? name];
             }}
-            contentStyle={{
-              background: "var(--bg-surface-raised)",
-              border: "1px solid var(--border-default)",
-              borderRadius: 6,
-              fontSize: 12,
-            }}
+            contentStyle={tooltipStyle}
           />
           {windowEvents.map(({ event, marker }) => {
-            const color = SEVERITY_COLOR[event.severity];
-            const label = showEventLabels
-              ? { value: marker, position: "insideTopLeft" as const, fontSize: 10, fontWeight: 600, fill: color }
-              : undefined;
+            const label = showEventLabels ? <EventMarker marker={marker} severity={event.severity} /> : undefined;
             return event.end ? (
               <ReferenceArea
                 key={event.id}
                 yAxisId={units[0]}
                 x1={Math.max(Date.parse(event.start), window.start)}
                 x2={Math.min(Date.parse(event.end), window.end)}
-                fill={color}
-                fillOpacity={0.1}
+                fill={WB.mark}
+                fillOpacity={0.08}
                 ifOverflow="hidden"
                 label={label}
               />
@@ -202,7 +225,7 @@ export function TrackChart({
                 key={event.id}
                 yAxisId={units[0]}
                 x={Date.parse(event.start)}
-                stroke={color}
+                stroke={WB.text}
                 strokeDasharray="3 3"
                 label={label}
               />
@@ -228,9 +251,10 @@ export function TrackChart({
                 key={id}
                 yAxisId={units[0]}
                 x={cursors[id]!}
-                stroke={CURSOR_COLOR[id]}
+                stroke={WB.ref}
                 strokeWidth={1.5}
-                label={{ value: id.toUpperCase(), position: "top", fontSize: 11, fill: CURSOR_COLOR[id] }}
+                strokeDasharray={CURSOR_DASH[id]}
+                label={{ value: id.toUpperCase(), position: "top", fontSize: 11, fontWeight: 700, fill: WB.ref }}
               />
             ) : null,
           )}
@@ -239,12 +263,13 @@ export function TrackChart({
               yAxisId={units[0]}
               x1={Math.min(dragStart, dragEnd)}
               x2={Math.max(dragStart, dragEnd)}
-              fill="var(--brand-primary)"
-              fillOpacity={0.12}
+              fill="var(--brand-accent)"
+              fillOpacity={0.14}
             />
           )}
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </figure>
   );
 }

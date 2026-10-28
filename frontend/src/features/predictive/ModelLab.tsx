@@ -1,16 +1,27 @@
 import { useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AlertTriangle, FlaskConical } from "lucide-react";
+import { Bar, BarChart, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Card, CardHeader } from "../../components/ui/Card";
+import { Notice } from "../../components/workbench/Notice";
 import { useAsync } from "../../lib/catalog/hooks";
+import { WB, barValueLabel, lineLabel, refLine } from "../../lib/demo/chartTheme";
 import { fetchModelLab } from "../../lib/predictive/api";
 import type { ModelLab as ModelLabData, ModelMetrics } from "../../lib/predictive/types";
 import { formatPct } from "../../lib/quality-analytics/filters";
-import { Callout, LoadState, Metric, PanelHeader, axisTick, n, tooltipStyle } from "./shared";
+import { Callout, LoadState, Metric, PanelHeader, axisTick, fieldControl, n, tooltipStyle } from "./shared";
 
 // IQ-F7: results of a closed historical ML/DL study (PRECOMPUTED). No ROC/PR
 // curves and no threshold slider: per-threshold results were not delivered,
 // so nothing is drawn that the study did not produce.
+// IQ-F16: neutral marks -- ML tabular in the dark mark, deep learning outlined
+// in it, the baseline in the plain bar gray; the NOK that escape carry the
+// muted NOK accent.
 
-const FAMILY_COLOR = { ml_tabular: "var(--chart-1)", deep_learning: "var(--chart-2)", baseline: "var(--chart-4)" } as const;
+const FAMILY_STYLE = {
+  ml_tabular: { fill: WB.mark, stroke: WB.mark },
+  deep_learning: { fill: WB.soft, stroke: WB.mark },
+  baseline: { fill: WB.bar, stroke: WB.bar },
+} as const;
 const FAMILY_LABEL = { ml_tabular: "ML tabular", deep_learning: "Deep learning", baseline: "Línea base" } as const;
 
 type MetricKey = "roc_auc" | "pr_auc" | "recall" | "precision";
@@ -25,60 +36,63 @@ function MetricChart({ lab, metric }: { lab: ModelLabData; metric: (typeof METRI
   const data = lab.models.map((m) => ({ name: m.name, value: m[metric.key] * 100, family: m.family }));
   const reference = metric.key === "pr_auc" ? lab.prevalence * 100 : metric.key === "roc_auc" ? 50 : null;
   return (
-    <div className="rounded border border-border p-2">
-      <p className="text-sm font-semibold text-text-primary">
-        {metric.label} <span className="text-xs font-normal text-text-secondary">({metric.hint})</span>
-      </p>
+    <Card>
+      <CardHeader title={metric.label} action={<span className="text-xs text-text-secondary">{metric.hint}</span>} />
       <ResponsiveContainer width="100%" height={170}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 8 }}>
-          <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} horizontal={false} />
+        <BarChart data={data} layout="vertical" margin={{ top: 16, right: 40, bottom: 0, left: 8 }}>
           <XAxis type="number" tick={axisTick} unit=" %" domain={[0, metric.key === "roc_auc" ? 100 : "auto"]} />
           <YAxis type="category" dataKey="name" tick={axisTick} width={180} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${n(v, 2)} %`, metric.label]} />
-          {reference !== null && <ReferenceLine x={reference} stroke="var(--text-secondary)" strokeDasharray="4 3" />}
-          <Bar dataKey="value" isAnimationActive={false} label={{ position: "right", fontSize: 11, formatter: (v: number) => `${n(v, 1)}` }}>
+          <Bar
+            dataKey="value"
+            isAnimationActive={false}
+            label={{ ...barValueLabel, position: "right", formatter: (v: number) => `${n(v, 1)}` }}
+          >
             {data.map((d) => (
-              <Cell key={d.name} fill={FAMILY_COLOR[d.family]} />
+              <Cell key={d.name} {...FAMILY_STYLE[d.family]} strokeWidth={1.5} />
             ))}
           </Bar>
+          {reference !== null && (
+            <ReferenceLine x={reference} {...refLine} ifOverflow="extendDomain" label={{ ...lineLabel("Azar"), position: "top" }} />
+          )}
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </Card>
   );
 }
 
 function ConfusionMatrix({ m }: { m: ModelMetrics }) {
   const c = m.confusion;
-  const cells: [string, number, string][] = [
-    ["NOK detectados (VP)", c.tp, "text-status-ok"],
-    ["Falsas alarmas (FP)", c.fp, "text-status-warning"],
-    ["NOK no detectados (FN)", c.fn, "text-status-nok"],
-    ["OK sin alerta (VN)", c.tn, "text-text-primary"],
+  // The NOK that escape (FN) are what has to stand out.
+  const cells: [string, number, boolean][] = [
+    ["NOK detectados (VP)", c.tp, false],
+    ["Falsas alarmas (FP)", c.fp, false],
+    ["NOK no detectados (FN)", c.fn, true],
+    ["OK sin alerta (VN)", c.tn, false],
   ];
   return (
-    <div className="space-y-2 rounded border border-border p-3" aria-label={`Matriz de confusión ${m.name}`}>
-      <p className="text-sm font-semibold text-text-primary">
-        {m.name}{" "}
-        <span className="text-xs font-normal text-text-secondary">· {FAMILY_LABEL[m.family]}</span>
-      </p>
-      <div className="grid grid-cols-2 gap-1">
-        {cells.map(([label, value, tone]) => (
-          <div key={label} className="rounded bg-surface-app p-2">
-            <p className="text-xs text-text-secondary">{label}</p>
-            <p className={`font-mono text-base font-semibold ${tone}`}>{n(value)}</p>
-          </div>
-        ))}
-      </div>
-      <p className="text-sm text-text-primary">
-        <span className="font-mono font-semibold text-status-warning">{m.fp_per_tp === null ? "—" : n(m.fp_per_tp, 1)}</span>{" "}
-        falsas alarmas por cada NOK detectado · {formatPct(m.alarm_rate, 1)} de las piezas a revisión
-      </p>
-      {m.confusion_approximate && <p className="text-xs text-text-secondary">Matriz aproximada. {m.note}</p>}
-      {!m.consistent && (
-        <p className="text-xs text-status-nok">
-          Recall/precisión reportados no coinciden con la matriz: revisar la fuente antes de presentar.
+    <div aria-label={`Matriz de confusión ${m.name}`}>
+      <Card className="h-full space-y-2">
+        <CardHeader title={m.name} action={<span className="text-xs text-text-secondary">{FAMILY_LABEL[m.family]}</span>} />
+        <div className="grid grid-cols-2 gap-1.5">
+          {cells.map(([label, value, nok]) => (
+            <div key={label} className="rounded border border-border px-2.5 py-2">
+              <p className="text-xs text-text-secondary">{label}</p>
+              <p className={`font-mono text-lg font-semibold ${nok ? "wb-nok" : "text-text-primary"}`}>{n(value)}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-sm text-text-primary">
+          <span className="font-mono font-semibold">{m.fp_per_tp === null ? "—" : n(m.fp_per_tp, 1)}</span> falsas alarmas
+          por cada NOK detectado · {formatPct(m.alarm_rate, 1)} de las piezas a revisión
         </p>
-      )}
+        {m.confusion_approximate && <p className="text-xs text-text-secondary">Matriz aproximada. {m.note}</p>}
+        {!m.consistent && (
+          <Notice attention icon={<AlertTriangle size={16} aria-hidden="true" />}>
+            Recall/precisión reportados no coinciden con la matriz: revisar la fuente antes de presentar.
+          </Notice>
+        )}
+      </Card>
     </div>
   );
 }
@@ -120,10 +134,10 @@ export function ModelLab() {
       </PanelHeader>
       <LoadState loading={lab.loading} error={lab.error} onRetry={lab.refetch} />
       {studies.length > 1 && (
-        <label className="block text-xs font-semibold text-text-secondary">
+        <label className="wb-label block">
           Estudio
           <select
-            className="ml-2 max-w-[36rem] rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary"
+            className={`${fieldControl} max-w-[36rem]`}
             value={Math.min(index, studies.length - 1)}
             onChange={(e) => setIndex(Number(e.target.value))}
             aria-label="Estudio"
@@ -139,14 +153,19 @@ export function ModelLab() {
       {data && (
         <>
           {data.illustrative && (
-            <Callout tone="warning">
+            <Notice role="note" icon={<FlaskConical size={16} aria-hidden="true" />}>
               <strong>Ejemplo ilustrativo (cifras ficticias).</strong> Configure el archivo privado del estudio para
               mostrar las cifras reales.
-            </Callout>
+            </Notice>
           )}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Piezas de prueba" value={n(data.test_n)} hint={data.study_date} />
-            <Metric label="NOK en prueba" value={n(data.test_positives)} hint={`prevalencia ${formatPct(data.prevalence, 2)}`} />
+            <Metric
+              label="NOK en prueba"
+              value={n(data.test_positives)}
+              hint={`prevalencia ${formatPct(data.prevalence, 2)}`}
+              tone="nok"
+            />
             <Metric label="Variables" value={data.variables === null ? "—" : n(data.variables)} hint="variables del modelo" />
             <Metric label="Modelos comparados" value={n(data.models.length)} hint="mismo conjunto de prueba" />
           </div>
@@ -157,8 +176,12 @@ export function ModelLab() {
             {(Object.keys(FAMILY_LABEL) as (keyof typeof FAMILY_LABEL)[])
               .filter((family) => data.models.some((m) => m.family === family))
               .map((family) => (
-              <span key={family} className="inline-flex items-center gap-1">
-                <span className="inline-block h-3 w-3 rounded-sm" style={{ background: FAMILY_COLOR[family] }} aria-hidden="true" />
+              <span key={family} className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-3 w-3 rounded-sm"
+                  style={{ background: FAMILY_STYLE[family].fill, border: `1.5px solid ${FAMILY_STYLE[family].stroke}` }}
+                  aria-hidden="true"
+                />
                 {FAMILY_LABEL[family]}
               </span>
             ))}

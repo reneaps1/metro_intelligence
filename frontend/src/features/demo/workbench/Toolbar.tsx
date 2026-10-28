@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { Scenario } from "../../../lib/industrial-signals/types";
 import type { SimulatedAlarm } from "../../../lib/demo/alarms";
 import { topPriority } from "../../../lib/demo/alarms";
+import { Key } from "../../../components/workbench/Key";
 import { AlarmIcon } from "./AlarmIcon";
 import { usePopover } from "./usePopover";
 
@@ -13,7 +14,7 @@ import { usePopover } from "./usePopover";
 // so the two never look alike (ISA-101).
 
 const iconButton =
-  "flex h-[34px] w-[34px] items-center justify-center rounded-sm text-text-primary hover:bg-wb-pane-header";
+  "flex h-[34px] w-[34px] items-center justify-center rounded-md text-text-primary hover:bg-wb-pane-header";
 
 export type ToolbarPopover = "scenario" | "alarms" | null;
 
@@ -77,7 +78,10 @@ export function Toolbar(props: ToolbarProps) {
       <span className="flex-1" />
       <ScenarioControl {...props} />
       <AlarmsControl {...props} />
-      <div role="group" aria-label="Recorrido" className="flex items-center rounded-sm border border-border">
+      <div role="group" aria-label="Recorrido" className="flex items-center gap-0.5 rounded-md border border-border bg-surface px-1">
+        <span className="hidden pl-1 2xl:inline-grid">
+          <Key>Re Pág</Key>
+        </span>
         <button
           type="button"
           onClick={props.onPrev}
@@ -88,7 +92,7 @@ export function Toolbar(props: ToolbarProps) {
         >
           <ChevronLeft size={16} strokeWidth={2.5} aria-hidden="true" />
         </button>
-        <span className="min-w-[56px] text-center font-mono text-[13px]">{props.position}</span>
+        <span className="min-w-[56px] text-center font-mono text-[13px] font-semibold">{props.position}</span>
         <button
           type="button"
           onClick={props.onNext}
@@ -98,6 +102,9 @@ export function Toolbar(props: ToolbarProps) {
         >
           <ChevronRight size={16} strokeWidth={2.5} aria-hidden="true" />
         </button>
+        <span className="hidden pr-1 2xl:inline-grid">
+          <Key>Av Pág</Key>
+        </span>
       </div>
       <button
         type="button"
@@ -133,7 +140,7 @@ function ScenarioControl(props: ToolbarProps) {
         onClick={() => props.onPopover(open ? null : "scenario")}
         title="Escenario simulado: cambiar"
         className={clsx(
-          "flex min-h-[36px] items-center gap-2 rounded-sm border border-l-4 pl-2.5 pr-3 hover:bg-wb-pane-header",
+          "flex min-h-[36px] items-center gap-2 rounded-md border border-l-4 pl-2.5 pr-3 hover:bg-wb-pane-header",
           abnormal ? "border-status-warning bg-status-warning-bg" : "border-border",
         )}
       >
@@ -152,7 +159,7 @@ function ScenarioControl(props: ToolbarProps) {
         <div
           role="dialog"
           aria-label="Escenario simulado"
-          className="absolute right-0 top-full z-dropdown mt-1 w-[380px] max-w-[92vw] rounded-sm border border-border bg-surface-raised p-3 shadow-md"
+          className="absolute right-0 top-full z-dropdown mt-1 w-[380px] max-w-[92vw] rounded-md border border-border bg-surface-raised p-3 shadow-md"
         >
           <p className="mb-2 text-[13px] text-text-secondary">
             Afecta a Laboratorio IIoT y Relación proceso–calidad. Elige y aplica; no modifica datos guardados.
@@ -168,7 +175,7 @@ function ScenarioControl(props: ToolbarProps) {
                   aria-checked={checked}
                   onClick={() => setPending(scenario.id)}
                   className={clsx(
-                    "flex min-h-[44px] items-start gap-2.5 rounded-sm border px-2.5 py-1.5 text-left",
+                    "flex min-h-[44px] items-start gap-2.5 rounded-md border px-2.5 py-1.5 text-left",
                     checked ? "border-brand-primary bg-wb-selected" : "border-border hover:bg-wb-pane-header",
                   )}
                 >
@@ -201,7 +208,7 @@ function ScenarioControl(props: ToolbarProps) {
                 props.onApplyScenario(pending);
                 close();
               }}
-              className="min-h-[38px] flex-1 rounded-sm bg-brand-primary font-semibold text-text-on-brand disabled:opacity-40"
+              className="min-h-[38px] flex-1 rounded-md bg-brand-primary font-semibold text-text-on-brand disabled:opacity-40"
             >
               Aplicar escenario
             </button>
@@ -211,7 +218,7 @@ function ScenarioControl(props: ToolbarProps) {
                 props.onResetScenario();
                 close();
               }}
-              className="min-h-[38px] rounded-sm border border-border px-3 text-sm hover:bg-wb-pane-header"
+              className="min-h-[38px] rounded-md border border-border px-3 text-sm hover:bg-wb-pane-header"
             >
               Restaurar escenario demo
             </button>
@@ -237,7 +244,7 @@ function AlarmsControl(props: ToolbarProps) {
         aria-expanded={open}
         aria-label={`Alarmas: ${alarms.length} activas, ${unacknowledged} sin reconocer`}
         onClick={() => props.onPopover(open ? null : "alarms")}
-        className="flex min-h-[36px] items-center gap-2 rounded-sm border border-border px-3 hover:bg-wb-pane-header"
+        className="flex min-h-[36px] items-center gap-2 rounded-md border border-border px-3 hover:bg-wb-pane-header"
       >
         {top ? (
           <AlarmIcon priority={top} blinking={unacknowledged > 0} />
@@ -245,7 +252,7 @@ function AlarmsControl(props: ToolbarProps) {
           <Bell size={16} className="text-text-secondary" aria-hidden="true" />
         )}
         <span className="text-sm">Alarmas</span>
-        <span className="min-w-[22px] rounded-sm bg-surface-app px-1.5 font-mono text-[13px] font-semibold">
+        <span className="min-w-[22px] rounded-md bg-surface-app px-1.5 font-mono text-[13px] font-semibold">
           {alarms.length}
         </span>
       </button>
@@ -253,7 +260,7 @@ function AlarmsControl(props: ToolbarProps) {
         <div
           role="dialog"
           aria-label="Resumen de alarmas"
-          className="absolute right-0 top-full z-dropdown mt-1 w-[480px] max-w-[92vw] rounded-sm border border-border bg-surface-raised shadow-md"
+          className="absolute right-0 top-full z-dropdown mt-1 w-[480px] max-w-[92vw] rounded-md border border-border bg-surface-raised shadow-md"
         >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <h2 className="flex-1 text-[15px] font-semibold">Resumen de alarmas</h2>
@@ -261,7 +268,7 @@ function AlarmsControl(props: ToolbarProps) {
               <button
                 type="button"
                 onClick={props.onAcknowledgeAll}
-                className="min-h-[32px] rounded-sm bg-brand-primary px-3 text-sm font-semibold text-text-on-brand"
+                className="min-h-[32px] rounded-md bg-brand-primary px-3 text-sm font-semibold text-text-on-brand"
               >
                 Reconocer todas
               </button>

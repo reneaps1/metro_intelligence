@@ -1,4 +1,5 @@
 import { Card, CardHeader } from "../../components/ui/Card";
+import { Kpi } from "../../components/workbench/Kpi";
 import { useAsync } from "../../lib/catalog/hooks";
 import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import { fetchVariableDetail } from "../../lib/quality-analytics/api";
@@ -7,7 +8,8 @@ import type { GroupBy, QualityDataset } from "../../lib/quality-analytics/types"
 import { BoxplotChart, DailyCpkChart, HistogramChart, IndividualsChart } from "./DimensionalCharts";
 import { QualityFilterBar } from "./QualityFilterBar";
 
-// IQ-F5: demo step 3 -- one dimensional variable in depth.
+// IQ-F5: demo step 3 -- one dimensional variable in depth. IQ-F16: workbench
+// look -- uppercase labels, KPI tiles, neutral charts with the NOK accent.
 
 const GROUP_LABEL: Record<GroupBy, string> = {
   cavity: "Nido",
@@ -20,15 +22,7 @@ const fmt = (v: number | null | undefined, digits = 4) =>
   v === null || v === undefined ? "—" : v.toLocaleString("es-MX", { maximumFractionDigits: digits });
 const index = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toFixed(2));
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded border border-border bg-surface p-3">
-      <p className="text-xs text-text-secondary">{label}</p>
-      <p className="font-mono text-lg font-semibold text-text-primary">{value}</p>
-      {hint && <p className="text-xs text-text-secondary">{hint}</p>}
-    </div>
-  );
-}
+const select = "ml-2 rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-semibold normal-case tracking-normal text-text-primary";
 
 export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
   const { qualityFilters: f, setQualityFilters } = useDemoSession();
@@ -49,10 +43,10 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
     <div className="space-y-4">
       <QualityFilterBar dataset={dataset} showVariables={false} />
       <Card className="flex flex-wrap items-end gap-4">
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Cota
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary"
+            className={select}
             value={f.detailVariable}
             onChange={(e) => setQualityFilters((prev) => ({ ...prev, detailVariable: e.target.value }))}
             aria-label="Cota a explorar"
@@ -64,10 +58,10 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
             ))}
           </select>
         </label>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Comparar por
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary"
+            className={select}
             value={f.groupBy}
             onChange={(e) => setQualityFilters((prev) => ({ ...prev, groupBy: e.target.value as GroupBy }))}
             aria-label="Comparar por"
@@ -80,7 +74,7 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
           </select>
         </label>
         {d && (
-          <p className="text-xs text-text-secondary">
+          <p className="text-sm text-text-secondary">
             {reported && noSpec
               ? "Sin tolerancias en la fuente: los NOK marcados son piezas rechazadas por la estación que mide esta cota."
               : `Especificación: nominal ${fmt(d.spec.nominal)} ${d.spec.unit} · LSL ${fmt(d.spec.lsl)} · USL ${fmt(d.spec.usl)}`}
@@ -97,13 +91,19 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
 
       {d && d.n > 0 && (
         <>
-          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6" aria-label="Estadística de la cota">
-            <Tile label="Mediciones" value={d.n.toLocaleString("es-MX")} />
-            <Tile label="Media" value={fmt(d.mean)} hint={`desv. est. ${fmt(d.std)}`} />
-            <Tile label="Rango" value={`${fmt(d.min)} – ${fmt(d.max)}`} />
-            <Tile label="NOK" value={formatPct(d.nok_rate)} hint={`${d.nok.toLocaleString("es-MX")} ${d.nok_label ?? "fuera de tolerancia"}`} />
-            <Tile label="Cp" value={index(d.capability?.cp)} hint={d.capability?.cp === null ? d.capability?.reason ?? undefined : "global (desv. total)"} />
-            <Tile label="Cpk" value={index(d.capability?.cpk)} hint={d.capability?.cpk === null ? d.capability?.reason ?? undefined : "global (desv. total)"} />
+          <div className="wb-kpis" aria-label="Estadística de la cota">
+            <Kpi size="sm" label="Mediciones" value={d.n.toLocaleString("es-MX")} />
+            <Kpi size="sm" label="Media" value={fmt(d.mean)} hint={`desv. est. ${fmt(d.std)}`} />
+            <Kpi size="sm" label="Rango" value={`${fmt(d.min)} – ${fmt(d.max)}`} />
+            <Kpi
+              size="sm"
+              label="NOK"
+              value={formatPct(d.nok_rate)}
+              hint={`${d.nok.toLocaleString("es-MX")} ${d.nok_label ?? "fuera de tolerancia"}`}
+              tone="nok"
+            />
+            <Kpi size="sm" label="Cp" value={index(d.capability?.cp)} hint={d.capability?.cp === null ? d.capability?.reason ?? undefined : "global (desv. total)"} />
+            <Kpi size="sm" label="Cpk" value={index(d.capability?.cpk)} hint={d.capability?.cpk === null ? d.capability?.reason ?? undefined : "global (desv. total)"} />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
@@ -114,15 +114,18 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
             <Card>
               <CardHeader title={`Comparativo por ${GROUP_LABEL[f.groupBy].toLowerCase()}`} />
               <BoxplotChart groups={d.groups} spec={d.spec} label={groupLabel} />
-              <p className="text-xs text-text-secondary">Caja = Q1–Q3, línea = mediana, bigotes = 1.5 × IQR. En rojo, grupos con NOK &gt; 5 %.</p>
+              <p className="text-xs text-text-secondary">
+                Caja = Q1–Q3, línea = mediana, bigotes = 1.5 × IQR; puntos = extremos atípicos. Resaltado, el grupo con la
+                mayor tasa NOK.
+              </p>
             </Card>
             <Card>
               <CardHeader title="Carta de individuales (I-MR)" />
               <IndividualsChart detail={d} offsetMinutes={offset} />
               <p className="text-xs text-text-secondary">
-                {noSpec ? "Sin límites de especificación en la fuente." : "Rojo discontinuo = límites de especificación (cliente)."} Azul
-                punteado = límites de control calculados del proceso ({d.control_limits?.engine ?? "—"}). Triángulos = piezas{" "}
-                {reported ? "rechazadas por su estación" : "fuera de tolerancia"}.
+                {noSpec ? "Sin límites de especificación en la fuente." : "Discontinuo = límites de especificación (cliente)."}{" "}
+                Punteado = límites de control calculados del proceso ({d.control_limits?.engine ?? "—"}). Triángulos = piezas{" "}
+                {reported ? "rechazadas por su estación" : "fuera de tolerancia"}; círculos huecos = fuera de control.
                 {offset ? " Horas en hora local de planta." : ""}
                 {d.series_thinned ? " Se muestra una muestra uniforme de la serie; los límites usan todos los datos." : ""}
               </p>

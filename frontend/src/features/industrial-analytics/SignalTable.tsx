@@ -12,6 +12,7 @@ import {
 import type { SignalSeries } from "../../lib/industrial-signals/types";
 
 // IQ-F3: legend + statistics table (visible / color / unit / A / B / Δ / min / max).
+// IQ-F16: uppercase header band like the panel; the swatch keeps the pen color.
 
 interface SignalTableProps {
   traces: Trace[];
@@ -28,18 +29,18 @@ export function SignalTable({ traces, seriesById, cursors, dispatch }: SignalTab
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-xs" aria-label="Señales en la gráfica">
-        <thead className="text-text-secondary">
+        <thead className="bg-wb-pane-header text-[11px] uppercase tracking-wide text-text-secondary">
           <tr>
-            <th className="py-1 pr-2 font-medium">Ver</th>
-            <th className="py-1 pr-2 font-medium">Señal</th>
-            <th className="py-1 pr-2 font-medium">Unidad</th>
-            <th className="py-1 pr-2 text-right font-medium">Cursor A</th>
-            <th className="py-1 pr-2 text-right font-medium">Cursor B</th>
-            <th className="py-1 pr-2 text-right font-medium">Δ (B−A)</th>
-            <th className="py-1 pr-2 text-right font-medium">Mín.</th>
-            <th className="py-1 pr-2 text-right font-medium">Máx.</th>
-            <th className="py-1 pr-2 font-medium">Muestras</th>
-            <th className="py-1 font-medium">
+            <th className="py-1.5 pl-2 pr-2 font-semibold">Ver</th>
+            <th className="py-1.5 pr-2 font-semibold">Señal</th>
+            <th className="py-1.5 pr-2 font-semibold">Unidad</th>
+            <th className="py-1.5 pr-2 text-right font-semibold">Cursor A</th>
+            <th className="py-1.5 pr-2 text-right font-semibold">Cursor B</th>
+            <th className="py-1.5 pr-2 text-right font-semibold">Δ (B−A)</th>
+            <th className="py-1.5 pr-2 text-right font-semibold">Mín.</th>
+            <th className="py-1.5 pr-2 text-right font-semibold">Máx.</th>
+            <th className="py-1.5 pr-2 font-semibold">Muestras</th>
+            <th className="py-1.5 font-semibold">
               <span className="sr-only">Acciones</span>
             </th>
           </tr>
@@ -60,7 +61,7 @@ export function SignalTable({ traces, seriesById, cursors, dispatch }: SignalTab
             const approxTitle = approx ? "Valor aproximado sobre la envolvente: acerca el zoom para leer el valor exacto" : undefined;
             return (
               <tr key={signal.signal_id} className="border-t border-border" data-testid={`row-${signal.signal_id}`}>
-                <td className="py-1 pr-2">
+                <td className="py-1 pl-2 pr-2">
                   <input
                     type="checkbox"
                     checked={trace.visible}
@@ -70,7 +71,7 @@ export function SignalTable({ traces, seriesById, cursors, dispatch }: SignalTab
                 </td>
                 <td className="py-1 pr-2">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-3 rounded-sm" style={{ background: trace.color }} aria-hidden="true" />
+                    <span className="inline-block h-[3px] w-4 rounded-sm" style={{ background: trace.color }} aria-hidden="true" />
                     <span className={trace.visible ? "text-text-primary" : "text-text-secondary line-through"}>
                       {signal.machine_code} · {signal.name}
                     </span>

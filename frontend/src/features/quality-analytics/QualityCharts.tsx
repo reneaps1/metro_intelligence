@@ -7,24 +7,19 @@ import {
   ErrorBar,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import { WB, axisTick, gridProps, lineLabel, rampFill, refLine, secondaryLine, tooltipStyle } from "../../lib/demo/chartTheme";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import type { CavityRate, HeatmapCell, ParetoRow, StationParetoRow, TrendBucket } from "../../lib/quality-analytics/types";
 
 // IQ-F5: charts for the quality diagnosis step. Rates are shown in %, always
-// next to their denominator (pieces) in tooltips.
-
-const axisTick = { fontSize: 11, fill: "var(--text-secondary)" };
-const tooltipStyle = {
-  background: "var(--bg-surface-raised)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  fontSize: 12,
-};
+// next to their denominator (pieces) in tooltips. IQ-F16: workbench chart
+// theme -- neutral bars, the worst group in the muted NOK accent.
 
 const HOUR_MS = 3_600_000;
 
@@ -41,7 +36,7 @@ export function NokTrendChart({ trend }: { trend: TrendBucket[] }) {
   return (
     <ResponsiveContainer width="100%" height={240}>
       <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+        <CartesianGrid {...gridProps} />
         <XAxis dataKey="label" tick={axisTick} minTickGap={24} />
         <YAxis tick={axisTick} width={48} unit=" %" />
         <Tooltip
@@ -51,7 +46,13 @@ export function NokTrendChart({ trend }: { trend: TrendBucket[] }) {
             "Tasa NOK",
           ]}
         />
-        <Line dataKey="pct" stroke="var(--status-nok)" strokeWidth={2} dot={data.length < 40} isAnimationActive={false} />
+        <Line
+          dataKey="pct"
+          stroke={WB.nok}
+          strokeWidth={2}
+          dot={data.length < 40 ? { r: 2.5, fill: WB.nok, strokeWidth: 0 } : false}
+          isAnimationActive={false}
+        />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -65,7 +66,6 @@ export function ParetoChart({ pareto }: { pareto: ParetoRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 56, left: 32 }}>
-        <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} vertical={false} />
         <XAxis dataKey="name" tick={{ ...axisTick, fontSize: 10 }} angle={-25} textAnchor="end" interval={0} />
         <YAxis yAxisId="count" tick={axisTick} width={40} allowDecimals={false} />
         <YAxis yAxisId="pct" orientation="right" tick={axisTick} width={40} domain={[0, 100]} unit=" %" />
@@ -77,8 +77,8 @@ export function ParetoChart({ pareto }: { pareto: ParetoRow[] }) {
               : [`${value} (↑${item.payload?.above ?? 0} / ↓${item.payload?.below ?? 0})`, "Mediciones NOK"]
           }
         />
-        <Bar yAxisId="count" dataKey="nok" fill="var(--chart-1)" isAnimationActive={false} />
-        <Line yAxisId="pct" dataKey="cumulative" stroke="var(--chart-4)" strokeWidth={2} isAnimationActive={false} />
+        <Bar yAxisId="count" dataKey="nok" fill={WB.bar} isAnimationActive={false} />
+        <Line yAxisId="pct" dataKey="cumulative" {...secondaryLine} dot={false} isAnimationActive={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -93,7 +93,6 @@ export function StationParetoChart({ rows }: { rows: StationParetoRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 80, left: 24 }}>
-        <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} vertical={false} />
         <XAxis dataKey="name" tick={{ ...axisTick, fontSize: 9 }} angle={-40} textAnchor="end" interval={0} />
         <YAxis yAxisId="count" tick={axisTick} width={48} allowDecimals={false} />
         <YAxis yAxisId="pct" orientation="right" tick={axisTick} width={40} domain={[0, 100]} unit=" %" />
@@ -108,8 +107,8 @@ export function StationParetoChart({ rows }: { rows: StationParetoRow[] }) {
                 ]
           }
         />
-        <Bar yAxisId="count" dataKey="nok" fill="var(--chart-1)" isAnimationActive={false} />
-        <Line yAxisId="pct" dataKey="cumulative" stroke="var(--chart-4)" strokeWidth={2} isAnimationActive={false} />
+        <Bar yAxisId="count" dataKey="nok" fill={WB.bar} isAnimationActive={false} />
+        <Line yAxisId="pct" dataKey="cumulative" {...secondaryLine} dot={false} isAnimationActive={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -136,10 +135,12 @@ export function CavityRateChart({
         ? [0, 0]
         : [(r.rate - r.ci_low) * 100, (r.ci_high - r.rate) * 100],
   }));
+  // Pooled rate of the groups shown: the reference every bar is read against.
+  const pieces = rows.reduce((a, r) => a + r.pieces, 0);
+  const pooled = pieces ? (rows.reduce((a, r) => a + r.nok, 0) / pieces) * 100 : null;
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} vertical={false} />
+      <BarChart data={data} margin={{ top: 14, right: pooled === null ? 8 : 76, bottom: 0, left: 0 }}>
         <XAxis dataKey="label" tick={{ ...axisTick, fontSize: data.length > 16 ? 9 : 11 }} interval={0} />
         <YAxis tick={axisTick} width={48} unit=" %" />
         <Tooltip
@@ -152,10 +153,13 @@ export function CavityRateChart({
         />
         <Bar dataKey="pct" isAnimationActive={false}>
           {data.map((d) => (
-            <Cell key={d.cavity} fill={d.cavity === worst ? "var(--status-nok)" : "var(--chart-1)"} />
+            <Cell key={d.cavity} fill={d.cavity === worst ? WB.nok : WB.bar} />
           ))}
           <ErrorBar dataKey="ci" width={4} stroke="var(--text-secondary)" />
         </Bar>
+        {pooled !== null && (
+          <ReferenceLine y={pooled} {...refLine} ifOverflow="extendDomain" label={lineLabel(`Media ${pooled.toFixed(1)}%`)} />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );
@@ -199,16 +203,18 @@ export function CavityHeatmap({
               </th>
               {cavities.map((cav) => {
                 const c = cell(cav, key);
-                const intensity = max > 0 && c?.rate ? Math.round((c.rate / max) * 85) + 10 : 0;
+                // Neutral single-hue ramp (workbench chart theme); the busiest cell is outlined in the NOK accent.
+                const fill = max > 0 && c?.rate ? rampFill(c.rate / max) : null;
+                const top = max > 0 && c?.rate === max;
                 return (
                   <td
                     key={cav}
                     title={`${name(key)} · nido ${cav}: ${c?.nok ?? 0} NOK / ${c?.pieces ?? 0} piezas (${formatPct(c?.rate ?? null)})`}
-                    className="h-7 min-w-[34px] rounded-sm text-center font-mono text-[10px] text-text-primary"
+                    className="h-7 min-w-[34px] rounded-sm text-center font-mono text-[10px]"
                     style={{
-                      background: intensity
-                        ? `color-mix(in srgb, var(--status-nok) ${intensity}%, transparent)`
-                        : "var(--bg-app)",
+                      background: fill?.background ?? "var(--bg-app)",
+                      color: fill?.color ?? "var(--text-primary)",
+                      boxShadow: top ? `inset 0 0 0 2px ${WB.nok}` : undefined,
                     }}
                   >
                     {c?.nok ? c.nok : ""}
@@ -220,7 +226,7 @@ export function CavityHeatmap({
         </tbody>
       </table>
       <p className="mt-1 text-xs text-text-secondary">
-        Número = {countLabel}; color proporcional a la tasa (máx. {formatPct(max)}).
+        Número = {countLabel}; tono proporcional a la tasa (máx. {formatPct(max)}, recuadrada).
       </p>
     </div>
   );

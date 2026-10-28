@@ -12,9 +12,11 @@ import {
   YAxis,
 } from "recharts";
 import { FlaskConical, Info } from "lucide-react";
-import clsx from "clsx";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { OriginBadge } from "../../components/ui/OriginBadge";
+import { Kpi } from "../../components/workbench/Kpi";
+import { Notice } from "../../components/workbench/Notice";
+import { WB, axisTick, gridProps, lineLabel, refLine, tooltipStyle } from "../../lib/demo/chartTheme";
 import { useAsync } from "../../lib/catalog/hooks";
 import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import { collectSignals, fetchCorrelation, fetchSignalTree } from "../../lib/industrial-signals/api";
@@ -25,6 +27,8 @@ import { QualityJoinPanel } from "./QualityJoinPanel";
 
 // IQ-F4: real scatter / OLS / Pearson / lag scan computed by the backend on
 // time-aligned simulated pairs. Wording stays at "association" level.
+// IQ-F16: workbench look -- chips, segmented control, KPI tiles, neutral notice;
+// neutral scatter with the regression line in the text color.
 
 const SID = (key: string) => `L1.INY-01.${key}`;
 
@@ -67,7 +71,8 @@ const PRESETS: Preset[] = [
   },
 ];
 
-const selectClass = "w-full rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary";
+const selectClass =
+  "mt-1 block w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-medium normal-case tracking-normal text-text-primary";
 
 export function CorrelationPanel() {
   const { scenarioId, setScenarioId } = useDemoSession();
@@ -113,18 +118,13 @@ export function CorrelationPanel() {
       <Card className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => applyPreset(preset)}
-              className="rounded border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:border-brand-primary hover:text-text-primary"
-            >
+            <button key={preset.label} type="button" onClick={() => applyPreset(preset)} className="wb-chip">
               {preset.label}
             </button>
           ))}
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-          <label className="text-xs text-text-secondary">
+          <label className="wb-label">
             Señal X (predictora)
             <select className={selectClass} value={x} onChange={(e) => setX(e.target.value)} aria-label="Señal X">
               {options.map((s) => (
@@ -134,7 +134,7 @@ export function CorrelationPanel() {
               ))}
             </select>
           </label>
-          <label className="text-xs text-text-secondary">
+          <label className="wb-label">
             Señal Y (respuesta)
             <select className={selectClass} value={y} onChange={(e) => setY(e.target.value)} aria-label="Señal Y">
               {options.map((s) => (
@@ -144,9 +144,9 @@ export function CorrelationPanel() {
               ))}
             </select>
           </label>
-          <fieldset className="text-xs text-text-secondary">
-            <legend>Alineación</legend>
-            <div className="mt-1 flex rounded border border-border">
+          <fieldset>
+            <legend className="wb-label">Alineación</legend>
+            <div className="wb-seg mt-1">
               {(["cycle", "time"] as const).map((m) => (
                 <button
                   key={m}
@@ -156,21 +156,17 @@ export function CorrelationPanel() {
                     setMode(m);
                     setLag(0);
                   }}
-                  className={clsx(
-                    "px-3 py-1.5 text-xs font-medium",
-                    mode === m ? "bg-brand-primary text-text-on-brand" : "bg-surface text-text-secondary",
-                  )}
                 >
                   {m === "cycle" ? "Por ciclo" : "Por tiempo"}
                 </button>
               ))}
             </div>
           </fieldset>
-          <label className="text-xs text-text-secondary">
+          <label className="wb-label">
             Desfase ({lagUnit})
             <input
               type="number"
-              className={selectClass}
+              className={`${selectClass} font-mono`}
               value={lag}
               step={mode === "cycle" ? 1 : 30}
               onChange={(e) => setLag(Number(e.target.value) || 0)}
@@ -178,8 +174,8 @@ export function CorrelationPanel() {
             />
           </label>
         </div>
-        <p className="flex items-start gap-2 text-xs text-text-secondary">
-          <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <p className="flex items-start gap-2 text-sm text-text-secondary">
+          <Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
           {mode === "cycle"
             ? "Por ciclo: un par por disparo. Equivale a tener trazabilidad ciclo → pieza, perfecta en la simulación y que en planta exige integración."
             : "Por tiempo: x(t) frente a y(t + desfase), sin trazabilidad. El retraso de inspección debe estimarse; el barrido de desfase lo busca."}
@@ -195,24 +191,21 @@ export function CorrelationPanel() {
 
       {data && (
         <>
-          <p
-            className={clsx(
-              "flex items-start gap-2 rounded px-3 py-2 text-sm",
-              data.causal_imposed ? "bg-status-warning-bg text-status-warning" : "bg-status-info-bg text-status-info",
-            )}
-          >
-            <FlaskConical size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          {/* Provenance caveat, not an alarm: a neutral notice either way. */}
+          <Notice icon={<FlaskConical size={16} aria-hidden="true" />}>
             {data.causal_imposed
               ? "Simulación: relación causal impuesta. La cota sintética se programó para depender de temperatura de molde, presión de mantenimiento y nido; sirve para demostrar la técnica, no como evidencia de planta."
               : "Asociación entre señales simuladas. Una correlación no implica causalidad."}
-          </p>
+          </Notice>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <Stat label="Pares (n)" value={data.n.toLocaleString("es-MX")} />
-            <Stat label="r de Pearson" value={formatCoefficient(data.pearson_r)} />
-            <Stat label="R²" value={formatCoefficient(data.r_squared)} />
-            <Stat label="Ecuación" value={equation(data.slope, data.intercept)} wide />
-            <Stat label={`Desfase (${lagUnit})`} value={formatValue(data.lag)} />
+          <div className="wb-kpis">
+            <Kpi size="sm" label="Pares (n)" value={data.n.toLocaleString("es-MX")} />
+            <Kpi size="sm" label="r de Pearson" value={formatCoefficient(data.pearson_r)} />
+            <Kpi size="sm" label="R²" value={formatCoefficient(data.r_squared)} />
+            <div className="col-span-2 grid min-w-0">
+              <Kpi size="sm" label="Ecuación" value={equation(data.slope, data.intercept)} />
+            </div>
+            <Kpi size="sm" label={`Desfase (${lagUnit})`} value={formatValue(data.lag)} />
           </div>
           <p className="text-sm text-text-primary" aria-live="polite">
             {describeCorrelation(data.pearson_r)}{" "}
@@ -226,13 +219,13 @@ export function CorrelationPanel() {
               <CardHeader title="Dispersión y recta de regresión" action={<OriginBadge origin="SIMULATED" />} />
               <ResponsiveContainer width="100%" height={300}>
                 <ScatterChart margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                  <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+                  <CartesianGrid {...gridProps} />
                   <XAxis
                     type="number"
                     dataKey="x"
                     domain={["auto", "auto"]}
                     tickFormatter={(v: number) => formatValue(v)}
-                    tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+                    tick={axisTick}
                     label={{ value: `${data.x.name} (${data.x.unit})`, position: "insideBottom", offset: -12, fontSize: 11, fill: "var(--text-secondary)" }}
                   />
                   <YAxis
@@ -241,17 +234,12 @@ export function CorrelationPanel() {
                     domain={["auto", "auto"]}
                     width={64}
                     tickFormatter={(v: number) => formatValue(v)}
-                    tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+                    tick={axisTick}
                     label={{ value: data.y.unit, angle: -90, position: "insideLeft", fontSize: 11, fill: "var(--text-secondary)" }}
                   />
-                  <Tooltip
-                    formatter={(value: number) => formatValue(value)}
-                    contentStyle={{ background: "var(--bg-surface-raised)", border: "1px solid var(--border-default)", fontSize: 12 }}
-                  />
-                  <Scatter data={scatter} fill="var(--chart-1)" fillOpacity={0.45} isAnimationActive={false} />
-                  {fitSegment && (
-                    <ReferenceLine segment={fitSegment} stroke="var(--status-nok)" strokeWidth={2} ifOverflow="extendDomain" />
-                  )}
+                  <Tooltip formatter={(value: number) => formatValue(value)} contentStyle={tooltipStyle} />
+                  <Scatter data={scatter} fill={WB.bar} fillOpacity={0.5} isAnimationActive={false} />
+                  {fitSegment && <ReferenceLine segment={fitSegment} stroke={WB.ref} strokeWidth={2} ifOverflow="extendDomain" />}
                 </ScatterChart>
               </ResponsiveContainer>
             </Card>
@@ -261,11 +249,7 @@ export function CorrelationPanel() {
                 title="Barrido de desfase"
                 action={
                   data.best_lag !== null && data.best_lag !== data.lag ? (
-                    <button
-                      type="button"
-                      onClick={() => setLag(data.best_lag ?? 0)}
-                      className="rounded border border-brand-primary px-2 py-1 text-xs font-medium text-brand-primary"
-                    >
+                    <button type="button" onClick={() => setLag(data.best_lag ?? 0)} className="wb-chip">
                       Usar desfase óptimo ({formatValue(data.best_lag)} {lagUnit})
                     </button>
                   ) : null
@@ -275,19 +259,25 @@ export function CorrelationPanel() {
                 <>
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={data.lag_scan} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                      <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} />
+                      <CartesianGrid {...gridProps} />
                       <XAxis
                         dataKey="lag"
                         type="number"
                         domain={["dataMin", "dataMax"]}
-                        tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+                        tick={axisTick}
                         label={{ value: `Desfase (${lagUnit})`, position: "insideBottom", offset: -12, fontSize: 11, fill: "var(--text-secondary)" }}
                       />
-                      <YAxis domain={[-1, 1]} tick={{ fontSize: 11, fill: "var(--text-secondary)" }} width={40} />
-                      <Tooltip formatter={(value: number) => formatCoefficient(value)} labelFormatter={(l: number) => `Desfase ${l} ${lagUnit}`} />
-                      <ReferenceLine y={0} stroke="var(--text-secondary)" strokeDasharray="3 3" />
-                      {data.best_lag !== null && <ReferenceLine x={data.best_lag} stroke="var(--brand-primary)" strokeDasharray="4 2" />}
-                      <Line dataKey="pearson_r" stroke="var(--chart-2)" dot={false} isAnimationActive={false} connectNulls />
+                      <YAxis domain={[-1, 1]} tick={axisTick} width={40} />
+                      <Tooltip
+                        contentStyle={tooltipStyle}
+                        formatter={(value: number) => formatCoefficient(value)}
+                        labelFormatter={(l: number) => `Desfase ${l} ${lagUnit}`}
+                      />
+                      <ReferenceLine y={0} {...refLine} stroke={WB.text} />
+                      {data.best_lag !== null && (
+                        <ReferenceLine x={data.best_lag} {...refLine} label={bestLagLabel(data.best_lag, data.lag_scan)} />
+                      )}
+                      <Line dataKey="pearson_r" stroke={WB.mark} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
                   <p className="text-xs text-text-secondary">
@@ -308,11 +298,9 @@ export function CorrelationPanel() {
   );
 }
 
-function Stat({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
-  return (
-    <div className={clsx("rounded border border-border bg-surface p-3", wide && "sm:col-span-2")}>
-      <p className="text-xs text-text-secondary">{label}</p>
-      <p className="whitespace-nowrap font-mono text-base font-semibold text-text-primary">{value}</p>
-    </div>
-  );
+// "MÁX. |R|" label on the best-lag line, set on the side with room for it.
+function bestLagLabel(best: number, scan: { lag: number }[]) {
+  const lags = scan.map((p) => p.lag);
+  const mid = (Math.min(...lags) + Math.max(...lags)) / 2;
+  return lineLabel("Máx. |r|", best > mid ? "insideTopRight" : "insideTopLeft");
 }

@@ -65,7 +65,7 @@ describe("QualityStep with the REAL dataset", () => {
     render(<QualityStep />);
     await screen.findByLabelText("Indicadores de calidad");
     expect(
-      screen.getByText("Pareto NOK por estación (primera que falla)"),
+      screen.getByText("Dónde falla · 1ª estación"),
     ).toBeInTheDocument();
     expect(
       screen.getByText("NOK por cavidad de molde · IC 95 %"),

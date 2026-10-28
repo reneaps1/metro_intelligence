@@ -1,35 +1,53 @@
 import type { ReactNode } from "react";
-import clsx from "clsx";
+import { AlertTriangle, Info } from "lucide-react";
+import { CardHeader } from "../../components/ui/Card";
 import { OriginBadge } from "../../components/ui/OriginBadge";
+import { Kpi } from "../../components/workbench/Kpi";
+import { Notice } from "../../components/workbench/Notice";
 import type { DataOrigin } from "../../lib/demo/origin";
 
 // IQ-F7: small building blocks shared by the predictive-lab panels.
+// IQ-F16: workbench look (design-system.md §4.3) -- the panel title is the
+// card's pane-header band, metrics are KPI tiles and callouts neutral notices.
 
-export const axisTick = { fontSize: 11, fill: "var(--text-secondary)" };
-export const tooltipStyle = {
-  background: "var(--bg-surface-raised)",
-  border: "1px solid var(--border-default)",
-  borderRadius: 6,
-  fontSize: 12,
-};
+export { axisTick, tooltipStyle } from "../../lib/demo/chartTheme";
 
 export const n = (v: number, digits = 0) =>
   v.toLocaleString("es-MX", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
+/** Chart legend text in the neutral text color (recharts paints it in the series color otherwise). */
+export function legendText(text: string) {
+  return <span style={{ color: "var(--text-secondary)", fontSize: 12 }}>{text}</span>;
+}
+
+/** Select or number input inside a `wb-label` field label (undoes the label's uppercase). */
+export const fieldControl =
+  "ml-2 rounded-md border border-border bg-surface px-2 py-1 text-sm font-medium normal-case tracking-normal text-text-primary";
+
+/**
+ * Title of a lab panel. It is the panel's first child and the step puts the
+ * panel first in its card, so the title becomes the card's pane-header band;
+ * the description goes under the band.
+ */
 export function PanelHeader({ title, origins, children }: { title: string; origins: DataOrigin[]; children?: ReactNode }) {
   return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
-        {origins.map((o) => (
-          <OriginBadge key={o} origin={o} />
-        ))}
-      </div>
+    <>
+      <CardHeader
+        title={title}
+        action={
+          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+            {origins.map((o) => (
+              <OriginBadge key={o} origin={o} />
+            ))}
+          </div>
+        }
+      />
       {children && <p className="text-sm text-text-secondary">{children}</p>}
-    </div>
+    </>
   );
 }
 
+/** KPI tile. Only `tone="nok"` (NOK pieces and rates) takes the muted accent; "ok" and "warning" stay neutral. */
 export function Metric({
   label,
   value,
@@ -41,38 +59,16 @@ export function Metric({
   hint?: string;
   tone?: "ok" | "nok" | "warning";
 }) {
-  return (
-    <div className="rounded border border-border bg-surface p-3">
-      <p className="text-xs text-text-secondary">{label}</p>
-      <p
-        className={clsx(
-          "font-mono text-xl font-semibold",
-          tone === "ok" && "text-status-ok",
-          tone === "nok" && "text-status-nok",
-          tone === "warning" && "text-status-warning",
-          !tone && "text-text-primary",
-        )}
-      >
-        {value}
-      </p>
-      {hint && <p className="text-xs text-text-secondary">{hint}</p>}
-    </div>
-  );
+  return <Kpi label={label} value={value} hint={hint} tone={tone === "nok" ? "nok" : undefined} size="sm" />;
 }
 
+/** Neutral notice: the tone only picks the icon, since none of these asks the user to act. */
 export function Callout({ tone = "info", children }: { tone?: "info" | "warning" | "nok"; children: ReactNode }) {
+  const Icon = tone === "info" ? Info : AlertTriangle;
   return (
-    <div
-      role="note"
-      className={clsx(
-        "rounded px-3 py-2 text-sm",
-        tone === "info" && "bg-status-info-bg text-status-info",
-        tone === "warning" && "bg-status-warning-bg text-status-warning",
-        tone === "nok" && "bg-status-nok-bg text-status-nok",
-      )}
-    >
+    <Notice role="note" icon={<Icon size={16} aria-hidden="true" />}>
       {children}
-    </div>
+    </Notice>
   );
 }
 

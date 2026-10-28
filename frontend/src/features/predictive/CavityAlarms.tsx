@@ -1,21 +1,23 @@
 import { useState } from "react";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAsync } from "../../lib/catalog/hooks";
+import { WB } from "../../lib/demo/chartTheme";
 import { fetchGroupAlarms, type GroupAlarmParams } from "../../lib/predictive/api";
 import { plantLabel, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
 import { formatPct } from "../../lib/quality-analytics/filters";
-import { Callout, LoadState, Metric, PanelHeader, axisTick, n, tooltipStyle } from "./shared";
+import { Callout, LoadState, Metric, PanelHeader, axisTick, fieldControl, legendText, n, tooltipStyle } from "./shared";
 
 // IQ-F12: retrospective evaluation of a per-cavity (or per-nest) alarm over the
 // REAL dataset: when each group would have alarmed, how much NOK came after
 // that alarm (what a timely reaction could protect, as an upper bound) and the
 // review burden it creates. Shadow mode: nothing here acts on production.
+// IQ-F16: neutral bars; the NOK that came after the alarm carry the muted NOK accent.
 
 const TOP_GROUPS = 12;
 
 function NumberInput({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
   return (
-    <label className="text-xs font-semibold text-text-secondary">
+    <label className="wb-label">
       {label}
       <input
         type="number"
@@ -26,7 +28,7 @@ function NumberInput({ label, value, min, max, onChange }: { label: string; valu
           const v = Number(e.target.value);
           if (Number.isInteger(v) && v >= min && v <= max) onChange(v);
         }}
-        className="ml-2 w-16 rounded border border-border bg-surface px-2 py-1 font-mono text-sm text-text-primary"
+        className={`${fieldControl} w-16 font-mono`}
       />
     </label>
   );
@@ -62,10 +64,10 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
         Evaluación retrospectiva sobre el período real: la regla solo usa piezas ya inspeccionadas de cada {groupWord}.
       </PanelHeader>
       <div className="flex flex-wrap items-center gap-4">
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Agrupar por
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={fieldControl}
             value={p.grouping}
             onChange={(e) => setP({ ...p, grouping: e.target.value as GroupAlarmParams["grouping"] })}
             aria-label="Agrupar por"
@@ -74,10 +76,10 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
             <option value="nest">Nido</option>
           </select>
         </label>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           NOK que cuenta
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={fieldControl}
             value={p.target}
             onChange={(e) => setP({ ...p, target: e.target.value })}
             aria-label="NOK que cuenta"
@@ -91,10 +93,10 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
         </label>
         <NumberInput label="Alarma con" value={p.k} min={1} max={200} onChange={(k) => setP({ ...p, k: Math.min(k, p.n) })} />
         <NumberInput label="NOK en las últimas (piezas)" value={p.n} min={1} max={500} onChange={(nn) => setP({ ...p, n: nn, k: Math.min(p.k, nn) })} />
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Período
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={fieldControl}
             value={p.scope}
             onChange={(e) => setP({ ...p, scope: e.target.value as GroupAlarmParams["scope"] })}
             aria-label="Período evaluado"
@@ -119,7 +121,7 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
               label="NOK después de la alarma de su grupo"
               value={formatPct(d.share_after_first_alarm, 1)}
               hint={`${n(d.nok_after_first_alarm)} de ${n(d.nok)} piezas NOK`}
-              tone="warning"
+              tone="nok"
             />
             <Metric
               label="Primera alarma"
@@ -135,16 +137,16 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={chart} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} vertical={false} />
               <XAxis dataKey="label" tick={axisTick} interval={0} />
               <YAxis tick={axisTick} width={48} allowDecimals={false} />
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(v: number, name: string) => [`${n(v)} piezas`, name === "after" ? "NOK después de la alarma" : "NOK antes de la alarma"]}
               />
-              <Legend formatter={(v: string) => (v === "after" ? "NOK después de la alarma" : "NOK antes de la alarma")} />
-              <Bar dataKey="before" stackId="nok" fill="var(--chart-1)" isAnimationActive={false} />
-              <Bar dataKey="after" stackId="nok" fill="var(--status-nok)" isAnimationActive={false} />
+              <Legend formatter={(v: string) => legendText(v === "after" ? "NOK después de la alarma" : "NOK antes de la alarma")} />
+              {/* The accent marks what the rule missed (NOK before the alarm); detected NOK stays neutral. */}
+              <Bar dataKey="before" stackId="nok" fill={WB.nok} isAnimationActive={false} />
+              <Bar dataKey="after" stackId="nok" fill={WB.bar} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
           <table className="w-full text-left text-sm" aria-label="Alarma por grupo">

@@ -15,9 +15,7 @@ import type { QualityDataset } from "../../lib/quality-analytics/types";
 // IQ-F5: coordinated filters for steps 2 and 3. Filters the dataset cannot
 // support (missing metadata) are disabled with an explanation -- never faked.
 
-const chip =
-  "rounded border px-2 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
-
+// IQ-F16: chips and labels in the workbench style (features/demo/workbench/workbench.css).
 function Chip({ active, onClick, children, label }: { active: boolean; onClick: () => void; children: ReactNode; label?: string }) {
   return (
     <button
@@ -25,10 +23,7 @@ function Chip({ active, onClick, children, label }: { active: boolean; onClick: 
       aria-pressed={active}
       aria-label={label}
       onClick={onClick}
-      className={clsx(
-        chip,
-        active ? "border-brand-primary bg-brand-primary text-text-on-brand" : "border-border bg-surface text-text-secondary hover:border-brand-primary",
-      )}
+      className={clsx("wb-chip", typeof children === "number" && "num")}
     >
       {children}
     </button>
@@ -38,14 +33,16 @@ function Chip({ active, onClick, children, label }: { active: boolean; onClick: 
 function Group({ title, enabled, children }: { title: string; enabled: boolean; children: ReactNode }) {
   return (
     <fieldset className="min-w-0" disabled={!enabled}>
-      <legend className="mb-1 text-xs font-semibold text-text-secondary">
+      <legend className="wb-label mb-1.5">
         {title}
-        {!enabled && <span className="ml-1 font-normal italic">(no disponible en este dataset)</span>}
+        {!enabled && <span className="wb-label-inline ml-1 italic">(no disponible en este dataset)</span>}
       </legend>
-      <div className="flex flex-wrap gap-1">{children}</div>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
     </fieldset>
   );
 }
+
+const select = "ml-2 rounded-md border border-border bg-surface px-2 py-1 text-sm font-medium normal-case tracking-normal text-text-primary";
 
 export function QualityFilterBar({ dataset, showVariables = true }: { dataset: QualityDataset; showVariables?: boolean }) {
   const { qualityFilters: f, setQualityFilters } = useDemoSession();
@@ -63,10 +60,10 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
   return (
     <Card className="space-y-3">
       <div className="flex flex-wrap items-end gap-4">
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Desde
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-xs text-text-primary"
+            className={select}
             value={f.startDay ?? ""}
             onChange={(e) => set({ startDay: e.target.value || null })}
             aria-label="Desde el día"
@@ -79,10 +76,10 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
             ))}
           </select>
         </label>
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Hasta
           <select
-            className="ml-2 rounded border border-border bg-surface px-2 py-1 text-xs text-text-primary"
+            className={select}
             value={f.endDay ?? ""}
             onChange={(e) => set({ endDay: e.target.value || null })}
             aria-label="Hasta el día"
@@ -130,7 +127,7 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
             }))
           }
           disabled={active === 0}
-          className={clsx(chip, "ml-auto inline-flex items-center gap-1 border-border text-text-secondary")}
+          className="wb-chip ml-auto"
         >
           <FilterX size={14} aria-hidden="true" /> Limpiar filtros{active ? ` (${active})` : ""}
         </button>

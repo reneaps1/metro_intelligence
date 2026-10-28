@@ -24,11 +24,11 @@ export function Inspector({ origins, sections }: { origins: DataOrigin[]; sectio
       aria-label="Inspector"
       className="hidden w-[288px] flex-none flex-col overflow-y-auto border-l border-border bg-surface text-[13px] xl:flex"
     >
-      <h2 className="border-b border-border px-3.5 py-2.5 text-xs font-semibold text-text-secondary">
+      <h2 className="wb-label flex min-h-[42px] items-center border-b border-border bg-wb-pane-header px-3.5">
         Detalles técnicos de la vista
       </h2>
       <section aria-label="Procedencia" className="border-b border-border px-3.5 py-3">
-        <h3 className="mb-2 text-[13px] font-semibold">Procedencia</h3>
+        <h3 className="wb-label mb-2 !text-[11.5px]">Procedencia</h3>
         {origins.length === 0 ? (
           <p className="text-text-secondary">Sin datos medidos ni simulados: es un paso de contexto.</p>
         ) : (
@@ -44,12 +44,12 @@ export function Inspector({ origins, sections }: { origins: DataOrigin[]; sectio
       </section>
       {sections.map((section) => (
         <section key={section.title} aria-label={section.title} className="border-b border-border px-3.5 py-3">
-          <h3 className="mb-1 text-[13px] font-semibold">{section.title}</h3>
+          <h3 className="wb-label mb-1 !text-[11.5px]">{section.title}</h3>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)]">
             {section.rows.map((row) => (
               <Fragment key={row.label}>
                 <dt className="border-b border-border py-1.5 pr-3 text-text-secondary">{row.label}</dt>
-                <dd className={`break-words border-b border-border py-1.5 ${row.mono ? "font-mono" : ""}`}>
+                <dd className={`break-words border-b border-border py-1.5 font-medium ${row.mono ? "font-mono" : ""}`}>
                   {row.value}
                 </dd>
               </Fragment>

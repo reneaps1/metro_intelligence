@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { CheckCircle, Clock, XCircle } from "lucide-react";
 import {
   Bar,
-  CartesianGrid,
   Cell,
   ComposedChart,
   ReferenceArea,
@@ -11,24 +11,26 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { StatusChip } from "../../components/ui/StatusChip";
 import { useAsync } from "../../lib/catalog/hooks";
+import { WB } from "../../lib/demo/chartTheme";
 import { fetchNokWaves, type WaveParams } from "../../lib/predictive/api";
 import type { EpisodeStatus, WaveStudy } from "../../lib/predictive/types";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import { SYNTHETIC_SOURCE, plantLabel, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
-import { Callout, LoadState, Metric, PanelHeader, axisTick, n, tooltipStyle } from "./shared";
+import { Callout, LoadState, Metric, PanelHeader, axisTick, fieldControl, n, tooltipStyle } from "./shared";
 
 // IQ-F7: NOK waves. A persistence rule (past NOK only) evaluated per
 // independent episode against the waves injected in the synthetic dataset:
 // detecting a started streak is not predicting its start.
 // IQ-F12: on the REAL dataset one piece = one group and episodes are labelled
 // with hindsight (no injected truth); times are plant local time.
+// IQ-F16: neutral marks; the NOK inside a wave, the wave band and the missed
+// waves carry the muted NOK accent.
 
-const STATUS: Record<EpisodeStatus, { label: string; chip: "ok" | "warning" | "nok" }> = {
-  anticipated: { label: "Anticipada", chip: "ok" },
-  detected: { label: "Detectada ya iniciada", chip: "warning" },
-  missed: { label: "No detectada", chip: "nok" },
+const STATUS: Record<EpisodeStatus, { label: string; tag: string; icon: typeof CheckCircle }> = {
+  anticipated: { label: "Anticipada", tag: "wb-tag", icon: CheckCircle },
+  detected: { label: "Detectada ya iniciada", tag: "wb-tag", icon: Clock },
+  missed: { label: "No detectada", tag: "wb-tag nok", icon: XCircle },
 };
 
 const MAX_EPISODE_ROWS = 20;
@@ -42,7 +44,6 @@ function WaveTimeline({ study }: { study: WaveStudy }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <ComposedChart data={data} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="var(--border-default)" strokeOpacity={0.5} vertical={false} />
         <XAxis
           dataKey="ts"
           type="number"
@@ -58,16 +59,22 @@ function WaveTimeline({ study }: { study: WaveStudy }) {
           formatter={(value: number, name: string) => (name === "nok_pieces" ? [`${value} piezas`, "NOK en la hora"] : [null, null])}
         />
         {study.episodes.map((e) => (
-          <ReferenceArea key={e.start} x1={e.start} x2={e.end} fill="var(--status-nok)" fillOpacity={0.12} ifOverflow="visible" />
+          <ReferenceArea key={e.start} x1={e.start} x2={e.end} fill={WB.nok} fillOpacity={0.12} ifOverflow="visible" />
         ))}
         <Bar dataKey="nok_pieces" isAnimationActive={false} barSize={3}>
           {data.map((d) => (
-            <Cell key={d.ts} fill={d.in_wave ? "var(--status-nok)" : "var(--chart-1)"} />
+            <Cell key={d.ts} fill={d.in_wave ? WB.nok : WB.bar} />
           ))}
         </Bar>
+        {/* Alert starts: solid triangle = alert in a wave, hollow = false alarm. */}
         <Scatter data={alerts} dataKey="y" isAnimationActive={false} shape="triangle" legendType="none">
           {alerts.map((a) => (
-            <Cell key={a.ts} fill={a.false_alarm ? "var(--status-warning)" : "var(--brand-primary)"} />
+            <Cell
+              key={a.ts}
+              fill={a.false_alarm ? "var(--bg-surface)" : WB.mark}
+              stroke={WB.mark}
+              strokeWidth={1.5}
+            />
           ))}
         </Scatter>
       </ComposedChart>
@@ -89,7 +96,7 @@ function NumberField({
   onChange: (v: number) => void;
 }) {
   return (
-    <label className="text-xs font-semibold text-text-secondary">
+    <label className="wb-label">
       {label}
       <input
         type="number"
@@ -100,7 +107,7 @@ function NumberField({
           const v = Number(e.target.value);
           if (Number.isInteger(v) && v >= min && v <= max) onChange(v);
         }}
-        className="ml-2 w-16 rounded border border-border bg-surface px-2 py-1 font-mono text-sm text-text-primary"
+        className={`${fieldControl} w-16 font-mono`}
       />
     </label>
   );
@@ -132,10 +139,10 @@ export function NokWaves({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSou
       </PanelHeader>
       <div className="flex flex-wrap items-center gap-4">
         {real ? (
-          <label className="text-xs font-semibold text-text-secondary">
+          <label className="wb-label">
             NOK que cuenta
             <select
-              className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+              className={fieldControl}
               value={p.target}
               onChange={(e) => setP({ ...p, target: e.target.value })}
               aria-label="NOK que cuenta"
@@ -148,13 +155,9 @@ export function NokWaves({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSou
             </select>
           </label>
         ) : (
-          <label className="text-xs font-semibold text-text-secondary">
+          <label className="wb-label">
             Máquina
-            <select
-              className="ml-2 rounded border border-border bg-surface px-2 py-1 text-sm text-text-primary"
-              value={p.machine}
-              onChange={(e) => setP({ ...p, machine: e.target.value })}
-            >
+            <select className={fieldControl} value={p.machine} onChange={(e) => setP({ ...p, machine: e.target.value })}>
               <option value="INY-01">INY-01 (3 oleadas)</option>
               <option value="INY-02">INY-02 (1 oleada)</option>
             </select>
@@ -174,11 +177,10 @@ export function NokWaves({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSou
               value={n(s.episodes)}
               hint={`${study.data.machine}, ${n(days, 1)} días`}
             />
-            <Metric label="Anticipadas" value={`${s.anticipated} de ${s.episodes}`} tone={s.anticipated ? "ok" : "nok"} hint="alerta antes del inicio" />
+            <Metric label="Anticipadas" value={`${s.anticipated} de ${s.episodes}`} hint="alerta antes del inicio" />
             <Metric
               label="Detectadas ya iniciadas"
               value={`${s.detected} de ${s.episodes}`}
-              tone="warning"
               hint={s.mean_delay_min === null ? undefined : `retraso medio ${n(s.mean_delay_min)} min`}
             />
             <Metric
@@ -189,15 +191,14 @@ export function NokWaves({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSou
             <Metric
               label="Falsas alarmas"
               value={n(s.false_alarm_events)}
-              tone={s.false_alarm_events ? "warning" : undefined}
               hint={`${n(s.false_alarms_per_day, 1)} por día · ${s.alert_events} eventos de alerta`}
             />
           </div>
           <WaveTimeline study={study.data} />
           <p className="text-xs text-text-secondary">
-            Barras: piezas NOK por hora (rojo = dentro de una oleada). Franja:{" "}
+            Barras: piezas NOK por hora (resaltadas = dentro de una oleada). Franja:{" "}
             {real ? "episodio etiquetado a posteriori" : "oleada inyectada"}. Triángulos: inicio de cada evento de alerta
-            (amarillo = falsa alarma).{real ? " Horas en hora local de planta." : ""}
+            (hueco = falsa alarma).{real ? " Horas en hora local de planta." : ""}
           </p>
           <table className="w-full text-left text-sm" aria-label="Episodios">
             <thead className="text-xs text-text-secondary">
@@ -210,25 +211,31 @@ export function NokWaves({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSou
               </tr>
             </thead>
             <tbody>
-              {episodes.slice(0, MAX_EPISODE_ROWS).map((e) => (
-                <tr key={e.start} className="border-b border-border last:border-0">
-                  <td className="p-2 font-mono">{plantLabel(e.start, offset)}</td>
-                  <td className="p-2 font-mono">
-                    {n(e.groups)} {unit} (~{n((e.end - e.start) / 3600, 1)} h)
-                  </td>
-                  <td className="p-2">
-                    <StatusChip status={STATUS[e.status].chip} label={STATUS[e.status].label} />
-                  </td>
-                  <td className="p-2 font-mono">
-                    {e.delay_min === null
-                      ? "—"
-                      : e.delay_min < 0
-                        ? `${n(-e.delay_min)} min antes`
-                        : `${n(e.delay_min)} min después`}
-                  </td>
-                  <td className="p-2 font-mono">{formatPct(e.remaining_share, 0)}</td>
-                </tr>
-              ))}
+              {episodes.slice(0, MAX_EPISODE_ROWS).map((e) => {
+                const status = STATUS[e.status];
+                return (
+                  <tr key={e.start} className="border-b border-border last:border-0">
+                    <td className="p-2 font-mono">{plantLabel(e.start, offset)}</td>
+                    <td className="p-2 font-mono">
+                      {n(e.groups)} {unit} (~{n((e.end - e.start) / 3600, 1)} h)
+                    </td>
+                    <td className="p-2">
+                      <span className={status.tag}>
+                        <status.icon size={14} aria-hidden="true" />
+                        {status.label}
+                      </span>
+                    </td>
+                    <td className="p-2 font-mono">
+                      {e.delay_min === null
+                        ? "—"
+                        : e.delay_min < 0
+                          ? `${n(-e.delay_min)} min antes`
+                          : `${n(e.delay_min)} min después`}
+                    </td>
+                    <td className="p-2 font-mono">{formatPct(e.remaining_share, 0)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {episodes.length > MAX_EPISODE_ROWS && (

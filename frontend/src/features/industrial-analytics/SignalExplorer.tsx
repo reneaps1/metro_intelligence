@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer, useState, type DragEvent } from "react"
 import {
   ChevronLeft,
   ChevronRight,
+  Info,
   Layers,
   Pause,
   Play,
@@ -12,8 +13,8 @@ import {
   ZoomOut,
 } from "lucide-react";
 import clsx from "clsx";
-import { Card } from "../../components/ui/Card";
-import { StatusChip, type ChipStatus } from "../../components/ui/StatusChip";
+import { Card, CardHeader } from "../../components/ui/Card";
+import { Notice } from "../../components/workbench/Notice";
 import { useAsync } from "../../lib/catalog/hooks";
 import { collectSignals, fetchProcessEvents, fetchSignalTree } from "../../lib/industrial-signals/api";
 import {
@@ -30,13 +31,16 @@ import {
 } from "../../lib/industrial-signals/explorer";
 import type { ProcessEventSeverity, Scenario, SignalInfo } from "../../lib/industrial-signals/types";
 import { useSeries } from "../../lib/industrial-signals/useSeries";
+import { LpSymbol } from "../line-panel/parts";
 import { SIGNAL_DRAG_MIME, SignalTree } from "./SignalTree";
 import { SignalTable } from "./SignalTable";
 import { TrackChart } from "./TrackChart";
 
 // IQ-F3: iba-Analyzer-style explorer over the simulated signals API --
 // tree with drag & drop, unit-separated tracks or multi-axis overlay, brush
-// zoom, pan, A/B cursors, event annotations and replay.
+// zoom, pan, A/B cursors, event annotations and replay. IQ-F16: workbench
+// chrome -- chips and segmented controls, pane-header cards, neutral notices;
+// the pens keep their categorical colors (TrackChart).
 
 const PRESETS: { label: string; ms: number | null }[] = [
   { label: "Todo", ms: null },
@@ -56,11 +60,19 @@ const SUGGESTED: Record<string, string[]> = {
   intermittent_fault_cavity_change: ["motor_current", "vibration", "alarm", "auto_mode"],
 };
 
-const SEVERITY_CHIP: Record<ProcessEventSeverity, ChipStatus> = { info: "info", warning: "warning", critical: "critical" };
 const SEVERITY_LABEL: Record<ProcessEventSeverity, string> = { info: "Info", warning: "Aviso", critical: "Crítico" };
 
-const toolButton =
-  "inline-flex h-8 items-center gap-1 rounded border border-border bg-surface px-2 text-xs font-medium text-text-secondary hover:border-brand-primary hover:text-text-primary disabled:opacity-40";
+// Severity as a neutral tag; warning and critical events carry their priority symbol (P2 / P1).
+function SeverityTag({ severity }: { severity: ProcessEventSeverity }) {
+  return (
+    <span className="wb-tag shrink-0">
+      {severity !== "info" && <LpSymbol priority={severity === "critical" ? 1 : 2} size={14} />}
+      {SEVERITY_LABEL[severity]}
+    </span>
+  );
+}
+
+const toolButton = "wb-chip";
 
 export function SignalExplorer({ scenario }: { scenario: Scenario }) {
   const [state, dispatch] = useReducer(explorerReducer, INITIAL_EXPLORER_STATE);
@@ -138,9 +150,13 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <Card className="lg:max-h-[860px]">
-        <p className="mb-2 text-sm font-semibold text-text-primary">Árbol de señales</p>
+        <CardHeader title="Árbol de señales" />
         {tree.loading && <p className="text-xs text-text-secondary">Cargando árbol…</p>}
-        {tree.error && <p className="text-xs text-status-nok">{tree.error}</p>}
+        {tree.error && (
+          <p role="alert" className="text-xs text-status-nok">
+            {tree.error}
+          </p>
+        )}
         {tree.data && (
           <SignalTree root={tree.data.root} activeIds={activeIds} full={full} onAdd={(signal) => dispatch({ type: "add", signal })} />
         )}
@@ -149,10 +165,9 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
       <div className="min-w-0 space-y-3">
         <Card className="space-y-2">
           <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Herramientas de la gráfica">
-            <div className="flex rounded border border-border" role="group" aria-label="Distribución">
+            <div className="wb-seg" role="group" aria-label="Distribución">
               <button
                 type="button"
-                className={clsx(toolButton, "rounded-r-none border-0", state.layout === "tracks" && "bg-surface-app text-text-primary")}
                 aria-pressed={state.layout === "tracks"}
                 onClick={() => dispatch({ type: "setLayout", layout: "tracks" })}
               >
@@ -160,7 +175,6 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
               </button>
               <button
                 type="button"
-                className={clsx(toolButton, "rounded-l-none border-0", state.layout === "overlay" && "bg-surface-app text-text-primary")}
                 aria-pressed={state.layout === "overlay"}
                 onClick={() => dispatch({ type: "setLayout", layout: "overlay" })}
               >
@@ -182,29 +196,31 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
             <button type="button" className={toolButton} aria-label="Restablecer zoom" onClick={() => setWindow(null)}>
               <RotateCcw size={14} aria-hidden="true" />
             </button>
-            {PRESETS.map((preset) => (
-              <button key={preset.label} type="button" className={toolButton} onClick={() => applyPreset(preset.ms)}>
-                {preset.label}
-              </button>
-            ))}
-            <span className="ml-auto text-xs text-text-secondary" aria-live="polite">
+            <div className="wb-seg" role="group" aria-label="Ventana rápida">
+              {PRESETS.map((preset) => (
+                <button key={preset.label} type="button" onClick={() => applyPreset(preset.ms)}>
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <span className="ml-auto font-mono text-xs text-text-primary" aria-live="polite">
               Ventana: {formatRelative(window.start, bounds.start, true)} → {formatRelative(window.end, bounds.start, true)} (
               {formatDuration(span)})
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2 text-sm">
             <button type="button" className={toolButton} onClick={togglePlay} aria-label={playing ? "Pausar" : "Reproducir"}>
               {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
               {playing ? "Pausar" : "Reproducir"}
             </button>
-            <label className="inline-flex items-center gap-1 text-text-secondary">
+            <label className="wb-label inline-flex items-center gap-2">
               Velocidad
               <select
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
                 aria-label="Velocidad de reproducción"
-                className="rounded border border-border bg-surface px-1 py-1 text-text-primary"
+                className="rounded-md border border-border bg-surface px-1.5 py-1 font-mono text-sm font-semibold normal-case tracking-normal text-text-primary"
               >
                 {SPEEDS.map((s) => (
                   <option key={s} value={s}>
@@ -213,9 +229,13 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
                 ))}
               </select>
             </label>
-            <span className="text-status-warning">Replay de simulación: no es telemetría en vivo.</span>
-            {series.loading && <span className="text-text-secondary">Actualizando…</span>}
-            {series.error && <span className="text-status-nok">{series.error}</span>}
+            <span className="wb-tag dashed">Replay de simulación: no es telemetría en vivo.</span>
+            {series.loading && <span className="text-xs text-text-secondary">Actualizando…</span>}
+            {series.error && (
+              <span role="alert" className="text-xs text-status-nok">
+                {series.error}
+              </span>
+            )}
           </div>
         </Card>
 
@@ -230,11 +250,11 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
           data-testid="explorer-drop-zone"
           className={clsx(
             "space-y-2 rounded border-2 border-dashed p-2 transition-colors",
-            dragOver ? "border-brand-primary bg-surface-app" : "border-transparent",
+            dragOver ? "border-brand-accent bg-wb-selected" : "border-transparent",
           )}
         >
           {state.traces.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded border border-dashed border-border px-4 py-10 text-center">
+            <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-surface px-4 py-10 text-center">
               <p className="text-sm text-text-secondary">
                 Arrastra señales desde el árbol o usa el botón <strong>+</strong> para agregarlas.
               </p>
@@ -247,9 +267,9 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
           ) : state.layout === "overlay" ? (
             <>
               {tracks.length > 3 && (
-                <p className="text-xs text-status-warning">
+                <Notice icon={<Info size={16} aria-hidden="true" />}>
                   Hay {tracks.length} unidades distintas: para leer escalas con claridad usa «Pistas por unidad».
-                </p>
+                </Notice>
               )}
               <TrackChart
                 title={`Superpuesto · ${tracks.map((t) => t.unit).join(" / ")}`}
@@ -287,20 +307,31 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
         {full && <p className="text-xs text-text-secondary">Máximo de {MAX_TRACES} señales en la gráfica.</p>}
 
         <Card className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="font-semibold text-text-primary">Cursores</span>
+          <CardHeader
+            title="Cursores"
+            action={
+              <span className="font-mono text-sm text-text-primary" aria-live="polite">
+                A: {a !== null ? formatRelative(a, bounds.start, true) : "—"} · B:{" "}
+                {b !== null ? formatRelative(b, bounds.start, true) : "—"} · Δt:{" "}
+                {a !== null && b !== null ? formatDuration(b - a) : "—"}
+              </span>
+            }
+          />
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <span className="text-text-secondary">Clic en la gráfica coloca el cursor:</span>
-            {(["a", "b"] as const).map((id) => (
-              <button
-                key={id}
-                type="button"
-                className={clsx(toolButton, state.activeCursor === id && "border-brand-primary text-text-primary")}
-                aria-pressed={state.activeCursor === id}
-                onClick={() => dispatch({ type: "setActiveCursor", cursor: id })}
-              >
-                {id.toUpperCase()}
-              </button>
-            ))}
+            <div className="wb-seg" role="group" aria-label="Cursor activo">
+              {(["a", "b"] as const).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="font-mono"
+                  aria-pressed={state.activeCursor === id}
+                  onClick={() => dispatch({ type: "setActiveCursor", cursor: id })}
+                >
+                  {id.toUpperCase()}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className={toolButton}
@@ -311,19 +342,14 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
             >
               Limpiar cursores
             </button>
-            <span className="ml-auto font-mono text-text-primary" aria-live="polite">
-              A: {a !== null ? formatRelative(a, bounds.start, true) : "—"} · B:{" "}
-              {b !== null ? formatRelative(b, bounds.start, true) : "—"} · Δt:{" "}
-              {a !== null && b !== null ? formatDuration(b - a) : "—"}
-            </span>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {(["a", "b"] as const).map((id) => (
-              <label key={id} className="flex items-center gap-2 text-xs text-text-secondary">
+              <label key={id} className="flex items-center gap-2 font-mono text-xs font-semibold text-text-secondary">
                 {id.toUpperCase()}
                 <input
                   type="range"
-                  className="flex-1"
+                  className="flex-1 accent-[var(--brand-accent)]"
                   min={window.start}
                   max={window.end}
                   step={sliderStep}
@@ -338,9 +364,13 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
         </Card>
 
         <Card>
-          <p className="mb-2 text-sm font-semibold text-text-primary">Eventos del escenario</p>
+          <CardHeader title="Eventos del escenario" />
           {events.loading && <p className="text-xs text-text-secondary">Cargando eventos…</p>}
-          {events.error && <p className="text-xs text-status-nok">{events.error}</p>}
+          {events.error && (
+            <p role="alert" className="text-xs text-status-nok">
+              {events.error}
+            </p>
+          )}
           <ol className="space-y-1.5" aria-label="Eventos del escenario">
             {events.data?.items.map((event, index) => (
               <li key={event.id} className="flex items-center gap-3 text-sm">
@@ -349,7 +379,7 @@ export function SignalExplorer({ scenario }: { scenario: Scenario }) {
                   {formatRelative(Date.parse(event.start), bounds.start)}
                 </span>
                 <span className="flex-1 text-text-primary">{event.label}</span>
-                <StatusChip status={SEVERITY_CHIP[event.severity]} label={SEVERITY_LABEL[event.severity]} />
+                <SeverityTag severity={event.severity} />
                 <button
                   type="button"
                   className={toolButton}

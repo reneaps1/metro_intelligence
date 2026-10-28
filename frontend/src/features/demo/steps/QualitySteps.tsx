@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Database, Trash2, Upload, X } from "lucide-react";
 import { Card } from "../../../components/ui/Card";
+import { Notice } from "../../../components/workbench/Notice";
 import { useAsync } from "../../../lib/catalog/hooks";
 import { useDemoSession } from "../../../lib/demo/DemoSessionProvider";
 import { fetchDatasets } from "../../../lib/quality-analytics/api";
@@ -22,16 +23,10 @@ const SOURCE_PREFIX: Record<QualityDataset["source_type"], string> = {
   IMPORTED: "Importado · ",
 };
 
+// IQ-F16: provenance is metadata, so the banner is a neutral notice for every source.
 function DatasetBanner({ dataset }: { dataset: QualityDataset }) {
-  const tone =
-    dataset.source_type === "SIMULATED"
-      ? "bg-status-warning-bg text-status-warning"
-      : dataset.source_type === "IMPORTED"
-        ? "bg-status-info-bg text-status-info"
-        : "bg-status-ok-bg text-status-ok";
   return (
-    <p className={`flex items-start gap-2 rounded px-3 py-2 text-sm ${tone}`}>
-      <Database size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+    <Notice icon={<Database size={16} aria-hidden="true" />}>
       <span>
         <strong>{dataset.name}.</strong> {dataset.description}{" "}
         {dataset.source_type === "SIMULATED"
@@ -40,7 +35,7 @@ function DatasetBanner({ dataset }: { dataset: QualityDataset }) {
             ? "Se analiza tal como viene; las conclusiones dependen de la calidad y representatividad del archivo."
             : `Horas en hora local de planta (${offsetLabel(dataset.utc_offset_minutes ?? 0)}).`}
       </span>
-    </p>
+    </Notice>
   );
 }
 
@@ -82,10 +77,10 @@ function DatasetPicker({
   return (
     <Card className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-xs font-semibold text-text-secondary">
+        <label className="wb-label">
           Dataset
           <select
-            className="ml-2 max-w-[22rem] rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-primary"
+            className="ml-2 max-w-[22rem] rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-semibold normal-case tracking-normal text-text-primary"
             value={dataset.id}
             onChange={(e) => {
               const ds = items.find((d) => d.id === e.target.value);
@@ -105,7 +100,7 @@ function DatasetPicker({
           type="button"
           aria-expanded={importing}
           onClick={() => setImporting((v) => !v)}
-          className="inline-flex items-center gap-1 rounded border border-border px-3 py-1.5 text-sm text-text-secondary hover:border-brand-primary"
+          className="wb-chip !min-h-[34px]"
         >
           {importing ? <X size={14} aria-hidden="true" /> : <Upload size={14} aria-hidden="true" />}
           {importing ? "Cerrar importación" : "Importar CSV propio"}
@@ -114,7 +109,7 @@ function DatasetPicker({
           <button
             type="button"
             onClick={() => void discard()}
-            className="inline-flex items-center gap-1 rounded border border-border px-3 py-1.5 text-sm text-text-secondary hover:border-status-nok"
+            className="wb-chip !min-h-[34px]"
           >
             <Trash2 size={14} aria-hidden="true" /> Descartar archivo
           </button>

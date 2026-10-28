@@ -55,7 +55,7 @@ export function DemoStepPage() {
         </div>
         {origins.length > 0 && (
           <div className="flex flex-wrap items-center gap-2" aria-label="Procedencia de los datos de esta vista">
-            <span className="text-xs text-text-secondary">Datos</span>
+            <span className="wb-label">Datos</span>
             {origins.map((origin) => (
               <OriginBadge key={origin} origin={origin} />
             ))}

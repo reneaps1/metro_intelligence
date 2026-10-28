@@ -67,7 +67,7 @@ export function DemoHomePage() {
       </Card>
 
       <section aria-labelledby="quick-access-title" className="space-y-2">
-        <h2 id="quick-access-title" className="text-lg font-semibold text-text-primary">
+        <h2 id="quick-access-title" className="wb-label">
           Accesos rápidos
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -79,9 +79,9 @@ export function DemoHomePage() {
                 if (scenario) setScenarioId(scenario);
                 navigate(`${DEMO_BASE_PATH}/${step}`);
               }}
-              className="flex items-start gap-3 rounded border border-border bg-surface p-4 text-left transition-colors hover:border-brand-primary"
+              className="flex items-start gap-3 rounded-md border border-border bg-surface p-4 text-left transition-colors hover:border-brand-accent"
             >
-              <Icon size={20} className="mt-0.5 shrink-0 text-brand-primary" aria-hidden="true" />
+              <Icon size={20} className="mt-0.5 shrink-0 text-text-secondary" aria-hidden="true" />
               <span>
                 <span className="block text-sm font-semibold text-text-primary">{label}</span>
                 <span className="block text-xs text-text-secondary">{description}</span>
