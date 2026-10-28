@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_QUALITY_FILTERS, activeFilterCount, daysBetween, filterParams, formatPct, toggle } from "./filters";
+import {
+  DEFAULT_QUALITY_FILTERS,
+  DEMO_DATASET_ID,
+  activeFilterCount,
+  daysBetween,
+  filterParams,
+  formatPct,
+  offsetSuffix,
+  toggle,
+} from "./filters";
+import { stepOrigins } from "../demo/stepOrigins";
+import { DEMO_STEPS } from "../demo/steps";
 import { cavityCsv } from "./export";
 
 describe("quality filters", () => {
@@ -28,6 +39,30 @@ describe("quality filters", () => {
     expect(activeFilterCount({ ...DEFAULT_QUALITY_FILTERS, cavities: [4], startDay: "2026-10-14" })).toBe(2);
     expect(formatPct(0.0938)).toBe("9.38 %");
     expect(formatPct(null)).toBe("—");
+  });
+
+  it("uses plant local days and serialises the REAL dataset filters", () => {
+    const params = filterParams(
+      { ...DEFAULT_QUALITY_FILTERS, startDay: "2026-01-05", endDay: "2026-01-05", moldCavities: [3, 17], excludeSuspect: true },
+      -300,
+    );
+    expect(params.get("start")).toBe("2026-01-05T00:00:00-05:00");
+    expect(params.get("end")).toBe("2026-01-06T00:00:00-05:00");
+    expect(params.get("mold_cavities")).toBe("3,17");
+    expect(params.get("exclude_flags")).toBe("2");
+    expect(offsetSuffix(330)).toBe("+05:30");
+    // 2026-01-06T03:00Z is still the 5th in plant time (UTC-5).
+    expect(daysBetween("2026-01-05T13:00:00Z", "2026-01-06T03:00:00Z", -300)).toEqual(["2026-01-05"]);
+    expect(activeFilterCount({ ...DEFAULT_QUALITY_FILTERS, stations: ["a"], moldCavities: [1], excludeSuspect: true })).toBe(3);
+  });
+
+  it("labels the REAL dataset as real in steps 2 and 3", () => {
+    const quality = DEMO_STEPS.find((s) => s.id === "quality")!;
+    const dimensional = DEMO_STEPS.find((s) => s.id === "dimensional")!;
+    expect(stepOrigins(quality, "real-dimensional")).toEqual(["REAL", "PRECOMPUTED"]);
+    expect(stepOrigins(dimensional, "real-dimensional")).toEqual(["REAL"]);
+    expect(stepOrigins(quality, "import-1")).toEqual(["HISTORICAL"]);
+    expect(stepOrigins(quality, DEMO_DATASET_ID)).toEqual(quality.origins);
   });
 
   it("exports the per-nest table as aggregated CSV", () => {

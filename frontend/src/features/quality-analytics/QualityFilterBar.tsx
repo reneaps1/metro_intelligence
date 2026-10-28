@@ -50,9 +50,15 @@ function Group({ title, enabled, children }: { title: string; enabled: boolean; 
 export function QualityFilterBar({ dataset, showVariables = true }: { dataset: QualityDataset; showVariables?: boolean }) {
   const { qualityFilters: f, setQualityFilters } = useDemoSession();
   const set = (patch: Partial<QualityFilters>) => setQualityFilters((prev) => ({ ...prev, ...patch }));
-  const days = daysBetween(dataset.period_start, dataset.period_end);
+  const offset = dataset.utc_offset_minutes ?? 0;
+  const days = daysBetween(dataset.period_start, dataset.period_end, offset);
   const available = dataset.available_filters;
   const active = activeFilterCount(f);
+  const reported = dataset.nok_basis === "reported";
+  const stations = dataset.stations ?? [];
+  const moldCavities = dataset.mold_cavities ?? [];
+  const presets = dataset.presets ?? [];
+  const sameStations = (keys: string[]) => keys.length === f.stations.length && keys.every((k) => f.stations.includes(k));
 
   return (
     <Card className="space-y-3">
@@ -112,21 +118,79 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
         </Group>
         <button
           type="button"
-          onClick={() => setQualityFilters((prev) => ({ ...DEFAULT_QUALITY_FILTERS, detailVariable: prev.detailVariable, groupBy: prev.groupBy }))}
+          onClick={() =>
+            // Clears the filters only: the dataset, granularity and step-3 selection stay.
+            setQualityFilters((prev) => ({
+              ...DEFAULT_QUALITY_FILTERS,
+              datasetId: prev.datasetId,
+              datasetChosen: prev.datasetChosen,
+              granularity: prev.granularity,
+              detailVariable: prev.detailVariable,
+              groupBy: prev.groupBy,
+            }))
+          }
           disabled={active === 0}
           className={clsx(chip, "ml-auto inline-flex items-center gap-1 border-border text-text-secondary")}
         >
           <FilterX size={14} aria-hidden="true" /> Limpiar filtros{active ? ` (${active})` : ""}
         </button>
       </div>
-      <Group title="Nido / cavidad" enabled={available.cavity}>
+      {presets.length > 0 && (
+        <Group title="Vistas rápidas" enabled>
+          {presets.map((p) => (
+            <Chip
+              key={p.key}
+              active={sameStations(p.stations)}
+              onClick={() =>
+                set({
+                  stations: sameStations(p.stations) ? [] : p.stations,
+                  groupBy: p.group_by === "mold_cavity" ? "mold_cavity" : "cavity",
+                })
+              }
+            >
+              {p.label}
+            </Chip>
+          ))}
+        </Group>
+      )}
+      <Group title={moldCavities.length ? "Nido" : "Nido / cavidad"} enabled={available.cavity}>
         {dataset.cavities.map((c) => (
           <Chip key={c} active={f.cavities.includes(c)} onClick={() => set({ cavities: toggle(f.cavities, c) })} label={`Nido ${c}`}>
             {c}
           </Chip>
         ))}
       </Group>
-      {showVariables && (
+      {available.mold_cavity && (
+        <Group title="Cavidad de molde" enabled>
+          {moldCavities.map((c) => (
+            <Chip
+              key={c}
+              active={f.moldCavities.includes(c)}
+              onClick={() => set({ moldCavities: toggle(f.moldCavities, c) })}
+              label={`Cavidad de molde ${c}`}
+            >
+              {c}
+            </Chip>
+          ))}
+        </Group>
+      )}
+      {showVariables && reported && (
+        <Group title="Estaciones que cuentan para NOK (vacío = resultado total de la máquina)" enabled={stations.length > 0}>
+          {stations.map((s) => (
+            <Chip key={s.key} active={f.stations.includes(s.key)} onClick={() => set({ stations: toggle(f.stations, s.key) })}>
+              {s.name}
+            </Chip>
+          ))}
+        </Group>
+      )}
+      {available.quality_flags && (
+        <Group title="Calidad del dato" enabled>
+          <Chip active={f.excludeSuspect} onClick={() => set({ excludeSuspect: !f.excludeSuspect })}>
+            Excluir piezas con valores repetidos (sospecha de dato congelado)
+          </Chip>
+        </Group>
+      )}
+      {showVariables && !reported && (
         <Group title="Cotas que cuentan para NOK (vacío = todas)" enabled>
           {dataset.variables.map((v) => (
             <Chip key={v.key} active={f.variables.includes(v.key)} onClick={() => set({ variables: toggle(f.variables, v.key) })}>

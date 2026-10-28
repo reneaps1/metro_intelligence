@@ -7,7 +7,7 @@ export const DATA_ORIGINS: DataOrigin[] = ["REAL", "HISTORICAL", "SIMULATED", "P
 export const ORIGIN_INFO: Record<DataOrigin, { label: string; description: string }> = {
   REAL: {
     label: "Real",
-    description: "Calculado en la plataforma sobre un archivo importado y autorizado.",
+    description: "Calculado en la plataforma sobre datos reales del cliente (período cerrado, cargado localmente).",
   },
   HISTORICAL: {
     label: "Histórico",

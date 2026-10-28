@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import type { GroupBox, VariableDetailResponse } from "../../lib/quality-analytics/types";
+import { plantDay, plantMinute } from "../../lib/time/plantTime";
 
 // IQ-F5: charts for the dimensional exploration step. Specification limits
 // (LSL/USL, red dashed) and control limits (UCL/LCL, blue dotted) are drawn
@@ -71,7 +72,8 @@ export function BoxplotChart({ groups, spec, label }: { groups: GroupBox[]; spec
   const pad = (max - min) * 0.08 || 1;
   const lo = min - pad;
   const hi = max + pad;
-  const W = 640;
+  // Wider than the card when there are many groups (e.g. 32 mold cavities): scroll instead of squeezing labels.
+  const W = Math.max(640, groups.length * 26);
   const H = 240;
   const left = 56;
   const bottom = 28;
@@ -82,7 +84,8 @@ export function BoxplotChart({ groups, spec, label }: { groups: GroupBox[]; spec
   const ticks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Diagrama de caja por grupo">
+    <div className="overflow-x-auto">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: W > 640 ? W : undefined }} role="img" aria-label="Diagrama de caja por grupo">
       {ticks.map((t) => (
         <g key={t}>
           <line x1={left} x2={W - 8} y1={y(t)} y2={y(t)} stroke="var(--border-default)" strokeOpacity={0.5} />
@@ -132,10 +135,11 @@ export function BoxplotChart({ groups, spec, label }: { groups: GroupBox[]; spec
         );
       })}
     </svg>
+    </div>
   );
 }
 
-export function IndividualsChart({ detail }: { detail: VariableDetailResponse }) {
+export function IndividualsChart({ detail, offsetMinutes = 0 }: { detail: VariableDetailResponse; offsetMinutes?: number }) {
   const ok = detail.series.filter((p) => !p[2]).map(([t, v]) => ({ t, v }));
   const nok = detail.series.filter((p) => p[2]).map(([t, v]) => ({ t, v }));
   const cl = detail.control_limits;
@@ -148,12 +152,12 @@ export function IndividualsChart({ detail }: { detail: VariableDetailResponse })
           type="number"
           domain={["dataMin", "dataMax"]}
           tick={axisTick}
-          tickFormatter={(t: number) => new Date(t).toISOString().slice(5, 10)}
+          tickFormatter={(t: number) => plantDay(t, offsetMinutes)}
         />
         <YAxis dataKey="v" type="number" domain={["auto", "auto"]} tick={axisTick} width={56} tickFormatter={fmt} />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(v: number, name: string) => (name === "t" ? [new Date(v).toISOString().replace("T", " ").slice(0, 16), "Hora"] : [fmt(v), detail.spec.unit])}
+          formatter={(v: number, name: string) => (name === "t" ? [plantMinute(v, offsetMinutes), "Hora"] : [fmt(v), detail.spec.unit])}
         />
         <Scatter data={ok} fill="var(--chart-1)" fillOpacity={0.35} isAnimationActive={false} shape="circle" />
         <Scatter data={nok} fill="var(--status-nok)" isAnimationActive={false} shape="triangle" />

@@ -857,6 +857,105 @@ function importedOverviewFixture() {
   };
 }
 
+// IQ-F10: a fictitious REAL dataset (reported NOK basis, stations, mold cavities).
+// Tests opt in with server.use(...realQualityHandlers): by default only the
+// synthetic dataset is listed.
+export const REAL_DATASET_FIXTURE = {
+  id: "real-dimensional",
+  name: "Datos reales · Cliente demo",
+  description: "Período cerrado del cliente (Cliente demo), convertido fuera de línea y cargado localmente.",
+  source_type: "REAL",
+  period_start: "2026-01-05T13:00:00Z",
+  period_end: "2026-01-07T16:00:00Z",
+  pieces: 900,
+  groups: 900,
+  variables: [
+    { key: "x1", name: "Valor 1", unit: "", nominal: null, lsl: null, usl: null },
+    { key: "x2", name: "Valor 2", unit: "", nominal: null, lsl: null, usl: null },
+  ],
+  machines: [],
+  cavities: [1, 2, 3],
+  shifts: [],
+  batches: [],
+  available_filters: {
+    machine: false, cavity: true, shift: false, batch: false, mold_cavity: true, station: true, quality_flags: true,
+  },
+  mechanisms: [],
+  has_reported_verdict: true,
+  mold_cavities: [1, 2, 3, 4],
+  stations: [
+    { key: "st_a", name: "Estación A" },
+    { key: "st_b", name: "Estación B" },
+  ],
+  nok_basis: "reported",
+  utc_offset_minutes: -300,
+  has_groups: false,
+  presets: [{ key: "b_by_nest", label: "Estación B por nido", stations: ["st_b"], group_by: "nest" }],
+  data_quality: {
+    ids_total: 950, empty_cycles_excluded: 50, repeated_signature_pieces: 12, sentinel_values: 3,
+    grouping_out_of_range: 1, rows_malformed: 7,
+  },
+};
+
+export function realOverviewFixture(params: URLSearchParams) {
+  const onlyB = params.get("stations") === "st_b";
+  const pieces = params.get("exclude_flags") ? 888 : 900;
+  const nok = onlyB ? 9 : 45;
+  const rate = (k: number, n: number) => k / n;
+  return {
+    dataset_id: REAL_DATASET_FIXTURE.id,
+    source_type: "REAL",
+    granularity: "day",
+    summary: {
+      groups: pieces, pieces, measurements: pieces * 2, ok_pieces: pieces - nok, nok_pieces: nok,
+      nok_rate: rate(nok, pieces), nok_rate_ci: [0.03, 0.07], measurement_nok: 0, top_variables: [],
+      worst_cavity: { cavity: 2, pieces: 300, nok: 30, rate: 0.1, ci_low: 0.07, ci_high: 0.14, relative_risk: 4 },
+      period_start: "2026-01-05T13:00:00Z", period_end: "2026-01-07T16:00:00Z",
+      nok_definition: "Pieza NOK = veredicto total reportado por la máquina.",
+      variables_counted: ["x1", "x2"], variables_with_tolerance: 0, source_reported: null,
+      nok_basis: "reported", stations_counted: onlyB ? ["st_b"] : ["st_a", "st_b"], pieces_without_verdict: 0,
+      worst_mold_cavity: { cavity: 3, pieces: 225, nok: 27, rate: 0.12, ci_low: 0.08, ci_high: 0.17, relative_risk: 5.2 },
+    },
+    trend: [{ bucket: "2026-01-05", start: "2026-01-05T05:00:00Z", pieces, nok, rate: rate(nok, pieces) }],
+    pareto: [],
+    by_cavity: [
+      { cavity: 1, pieces: 300, nok: 5, rate: 5 / 300, ci_low: 0.007, ci_high: 0.04, relative_risk: 0.3 },
+      { cavity: 2, pieces: 300, nok: 30, rate: 0.1, ci_low: 0.07, ci_high: 0.14, relative_risk: 4 },
+    ],
+    by_mold_cavity: [
+      { cavity: 1, pieces: 225, nok: 3, rate: 3 / 225, ci_low: 0.004, ci_high: 0.04, relative_risk: 0.2 },
+      { cavity: 3, pieces: 225, nok: 27, rate: 0.12, ci_low: 0.08, ci_high: 0.17, relative_risk: 5.2 },
+    ],
+    station_pareto: [
+      { station: "st_a", name: "Estación A", nok: onlyB ? 0 : 36, fails_any: 36, share: onlyB ? 0 : 0.8, cumulative_pct: 0.8 },
+      { station: "st_b", name: "Estación B", nok: 9, fails_any: 120, share: onlyB ? 1 : 0.2, cumulative_pct: 1 },
+    ],
+    heatmap: [
+      { cavity: 2, variable: "st_a", pieces: 300, nok: 25, rate: 25 / 300 },
+      { cavity: 2, variable: "st_b", pieces: 300, nok: 5, rate: 5 / 300 },
+    ],
+    heatmap_axis: "station",
+  };
+}
+
+/** Lists the REAL dataset before the synthetic one and records overview queries. */
+export function realQualityHandlers(seen: URLSearchParams[] = []) {
+  return [
+    http.get(`${API_BASE_URL}/quality-analytics/datasets`, () =>
+      HttpResponse.json({ items: [REAL_DATASET_FIXTURE, QUALITY_DATASET_FIXTURE] }),
+    ),
+    http.get(`${API_BASE_URL}/quality-analytics/overview`, ({ request }) => {
+      const params = new URL(request.url).searchParams;
+      if (params.get("dataset") !== REAL_DATASET_FIXTURE.id) {
+        const raw = params.get("cavities");
+        return HttpResponse.json(overviewFixture(raw ? raw.split(",").map(Number) : null));
+      }
+      seen.push(params);
+      return HttpResponse.json(realOverviewFixture(params));
+    }),
+  ];
+}
+
 export const qualityHandlers = [
   http.get(`${API_BASE_URL}/quality-analytics/datasets`, () => HttpResponse.json({ items: [QUALITY_DATASET_FIXTURE] })),
   http.post(`${API_BASE_URL}/quality-analytics/imports/preview`, () => HttpResponse.json(IMPORT_PREVIEW_FIXTURE)),

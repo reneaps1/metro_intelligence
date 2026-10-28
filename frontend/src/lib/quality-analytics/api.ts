@@ -8,15 +8,16 @@ export function fetchDatasets(): Promise<{ items: QualityDataset[] }> {
   return apiFetch<{ items: QualityDataset[] }>("/quality-analytics/datasets");
 }
 
-export function fetchOverview(f: QualityFilters): Promise<OverviewResponse> {
-  const params = filterParams(f);
+export function fetchOverview(f: QualityFilters, offsetMinutes = 0): Promise<OverviewResponse> {
+  const params = filterParams(f, offsetMinutes);
   params.set("granularity", f.granularity);
   if (f.variables.length) params.set("variables", f.variables.join(","));
+  if (f.stations.length) params.set("stations", f.stations.join(","));
   return apiFetch<OverviewResponse>(`/quality-analytics/overview?${params.toString()}`);
 }
 
-export function fetchVariableDetail(f: QualityFilters): Promise<VariableDetailResponse> {
-  const params = filterParams(f);
+export function fetchVariableDetail(f: QualityFilters, offsetMinutes = 0): Promise<VariableDetailResponse> {
+  const params = filterParams(f, offsetMinutes);
   params.set("variable", f.detailVariable);
   params.set("group_by", f.groupBy);
   return apiFetch<VariableDetailResponse>(`/quality-analytics/variable?${params.toString()}`);

@@ -118,6 +118,7 @@ servidor público sin autorización del cliente.
 |---|---|
 | Paso 2–3 con el dataset demo | SIMULADO (mecanismos de defecto listados en «Verdad conocida») + resumen PRECALCULADO del informe |
 | Paso 2–3 con un CSV importado | HISTÓRICO (archivo de un período cerrado, no verificado por la plataforma) |
+| Paso 2–3 con el dataset real del cliente (solo local, `DEMO_REAL_DATASET_PATH`) | REAL (calculado sobre el período completo; veredicto OK/NOK de la máquina, atribuido a la primera estación que falla; hora local de planta) + resumen PRECALCULADO en el paso 2 |
 | Paso 4 y 5 | SIMULADO; Vista B con causalidad impuesta |
 | Paso 6 · Modelos ML/DL | PRECALCULADO (estudio histórico cerrado) |
 | Paso 6 · Oleadas, CUSUM, What-if, Fallas | SIMULADO + EXPERIMENTAL; What-if además HIPOTÉTICO |

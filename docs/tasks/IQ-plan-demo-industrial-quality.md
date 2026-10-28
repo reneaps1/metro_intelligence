@@ -33,7 +33,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F8 | Oportunidad de integración, pulido, guía y handoff | ✅ Hecho | PR #43 a `main` (sin merge) | Paso 7, guía, carga diferida, lint privado; regresión 20/20 |
 | F9 | Despliegue de dos ediciones (metrology + industrial) | 🟨 Preparado en el repo | `feat/industrial-quality-demo` | Falta ejecución en VPS/secretos/DNS (autorización del usuario) |
 | F10 | Convertidor offline y dataset REAL (backend) | ✅ Hecho | `feat/industrial-quality-demo` | Solo local (D8); verificado contra el export real en `demo-private/` |
-| F11 | Pasos 2–3 sobre datos reales (frontend) | ⬜ Pendiente | — | Cavidad de molde, Pareto por estación, procedencia REAL |
+| F11 | Pasos 2–3 sobre datos reales (frontend) | ✅ Hecho | `feat/industrial-quality-demo` | Verificado en navegador contra el dataset REAL local |
 | F12 | Laboratorio IA sobre datos reales | ⬜ Pendiente | — | Oleadas/CUSUM con `dataset`, alarmas por cavidad, riesgo por pieza, model-lab multiestudio |
 | F13 | Proceso sintético en calendario real + Vista A | ⬜ Pendiente | — | Escenario `real_calendar` (D7), unión ilustrativa por tiempo |
 
@@ -395,9 +395,11 @@ Entregables (hechos):
 
 Pruebas: `tests/test_long_signal_batch.py` (8), `tests/test_real_dataset_service.py` (6), ajustes en los tests de analítica; `tests/deploy` con la guarda D8. Todo con datos ficticios.
 
-### F11 — Pasos 2–3 sobre datos reales (frontend) ⬜
+### F11 — Pasos 2–3 sobre datos reales (frontend) ✅
 
 Tipos y filtros nuevos (`moldCavities`, `stations`, `excludeSuspect`), selector con prefijo «Real ·», banner REAL, procedencia `REAL`+`PRECOMPUTED` para `real-*`, chips de cavidad de molde y de estaciones, Pareto por estación, gráfica de 32 cavidades, mapa nido × estación, tarjeta «Calidad del dato», presets, hora de planta, agrupar por cavidad de molde en el paso 3, arreglo de «Limpiar filtros» (no debe volver al dataset sintético), MSW con fixture REAL ficticio.
+
+Hecho además: la tendencia por hora corta la línea en los huecos sin producción (no se dibuja un puente sobre un paro); prefijos «Real · / Demo · / Importado ·» en el selector; el dataset REAL se preselecciona hasta que el presentador elige otro (`datasetChosen`).
 
 ### F12 — Laboratorio IA sobre datos reales ⬜
 
@@ -461,6 +463,7 @@ Tipos y filtros nuevos (`moldCavities`, `stations`, `excludeSuspect`), selector 
 | 2026-10-28 | UI (fuera de fase) | Tras revisar 12 propuestas (lienzo de diseño fuera del repo, skills `apple-design` e `hmi-design-full` ISA-101) el usuario eligió **E2 «Estación de ingeniería refinada»**: barra de menús + barra de herramientas (ruta, escenario en dos pasos con Deshacer, alarmas simuladas con reconocer, `‹ n / 7 ›`, Re Pág/Av Pág) + árbol de 2 niveles + inspector técnico + barra de estado. Se quitaron la cinta, propiedades, salida y las redundancias (escenario en 4 sitios, paso en 3, selector de escenario dentro de los pasos 4/5). Grises ISA-101 con alcance `.wb-root`; `OriginBadge` neutro. Se commitea junto con el workbench del 26-oct (que ya no existe por separado). Pruebas: frontend 180 passed, `tsc -b` limpio. Pendiente: líneas de tolerancia de las gráficas aún en color NOK; detalles técnicos por panel en el inspector. |
 
 | 2026-10-28 | F10 | Hecho. Convertidor offline (`long_signal_batch`), lector `pieces_file`, servicio REAL solo local (D8), motor con base reportada por estación (D10), cavidad de molde y hora de planta (D9). Verificado en local contra el export real del cliente: los conteos del manifest y las tasas del overview coinciden con el análisis previo (cifras solo en `demo-private/`, no versionadas). Rendimiento en local: carga de unos segundos y decenas de MB; overview ~2 s sin caché, por eso se añadió un LRU. Pruebas: backend 1191 passed / 4 skipped; `tests/deploy` 7 passed; lint de confidencialidad con la lista privada ampliada con tokens de direcciones del export. Decisiones D7–D10 registradas. Siguiente: **F11**. |
+| 2026-10-28 | F11 | Hecho. Pasos 2–3 sobre el dataset REAL: selector con prefijo de procedencia y preselección de REAL, banner con hora local de planta, insignias REAL (+ PRECALCULADO en el paso 2), KPIs con base reportada y «Cavidad de molde de mayor riesgo», Pareto por estación (primera que falla), tasa por cavidad de molde con IC 95 % y CSV, mapa nido × estación, tarjeta «Calidad del dato», vistas rápidas (presets privados), filtros de cavidad de molde, estaciones y exclusión de piezas con valores repetidos, hora de planta en filtros de día, carta I-MR y Cpk diario, agrupación por cavidad de molde en el paso 3 con boxplot desplazable, corte de la tendencia en huecos sin producción. Arreglado: «Limpiar filtros» ya no regresa al dataset sintético. Pruebas: frontend 187 passed (7 nuevos con un fixture REAL ficticio), `tsc -b` limpio, build OK; navegador 11/11 contra el dataset REAL local (Edge headless, `playwright-core` fuera del repo, capturas solo en el scratchpad), 0 errores de consola. Nota: con la suite completa en paralelo algunos tests de UI (`LiveMonitorDetailPage`, `DimensionalImport`) fallan a veces por timeout y pasan aislados; deuda previa de rendimiento del runner, no regresión. Siguiente: **F12**. |
 
 ---
 

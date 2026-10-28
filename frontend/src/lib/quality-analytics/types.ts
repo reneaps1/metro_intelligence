@@ -2,7 +2,9 @@
 // IMPORTED = user-uploaded CSV (IQ-F6), analysed as-is, not verified by the platform.
 export type DatasetSourceType = "SIMULATED" | "REAL" | "IMPORTED";
 export type Granularity = "day" | "hour" | "shift";
-export type GroupBy = "cavity" | "machine" | "shift" | "batch";
+export type GroupBy = "cavity" | "machine" | "shift" | "batch" | "mold_cavity";
+/** IQ-F10: "spec" = out of tolerance; "reported" = the machine's own verdicts (no limits in the source). */
+export type NokBasis = "spec" | "reported";
 
 export interface QualityVariable {
   key: string;
@@ -19,6 +21,22 @@ export interface AvailableFilters {
   cavity: boolean;
   shift: boolean;
   batch: boolean;
+  /** IQ-F10 (REAL datasets) */
+  mold_cavity?: boolean;
+  station?: boolean;
+  quality_flags?: boolean;
+}
+
+export interface QualityStation {
+  key: string;
+  name: string;
+}
+
+export interface QualityPreset {
+  key: string;
+  label: string;
+  stations: string[];
+  group_by: "nest" | "mold_cavity";
 }
 
 export interface QualityDataset {
@@ -38,6 +56,16 @@ export interface QualityDataset {
   available_filters: AvailableFilters;
   mechanisms: string[];
   has_reported_verdict: boolean;
+  // --- IQ-F10: present on REAL datasets (optional so older payloads still parse) ---
+  mold_cavities?: number[];
+  stations?: QualityStation[];
+  nok_basis?: NokBasis;
+  /** Plant local time = UTC + offset; buckets of this dataset already use it. */
+  utc_offset_minutes?: number;
+  has_groups?: boolean;
+  presets?: QualityPreset[];
+  /** Counts from the offline conversion report (no identifiers). */
+  data_quality?: Record<string, number>;
 }
 
 export interface CavityRate {
@@ -67,6 +95,20 @@ export interface QualitySummary {
   variables_counted: string[];
   variables_with_tolerance: number;
   source_reported: SourceReported | null;
+  nok_basis?: NokBasis;
+  stations_counted?: string[];
+  pieces_without_verdict?: number;
+  worst_mold_cavity?: CavityRate | null;
+}
+
+/** IQ-F10: NOK pieces attributed to their first failing station (process order). */
+export interface StationParetoRow {
+  station: string;
+  name: string;
+  nok: number;
+  fails_any: number;
+  share: number | null;
+  cumulative_pct: number | null;
 }
 
 /** IQ-F6: piece verdict carried by the file vs. the one recalculated from spec. */
@@ -116,6 +158,10 @@ export interface OverviewResponse {
   pareto: ParetoRow[];
   by_cavity: CavityRate[];
   heatmap: HeatmapCell[];
+  by_mold_cavity?: CavityRate[];
+  station_pareto?: StationParetoRow[];
+  /** "station": heatmap rows are stations (first failing), not variables. */
+  heatmap_axis?: "variable" | "station";
 }
 
 export interface GroupBox {
@@ -156,6 +202,9 @@ export interface VariableDetailResponse {
   group_by: GroupBy;
   groups: GroupBox[];
   cpk_by_day: { day: string; n: number; cpk: number | null }[];
+  nok_basis?: NokBasis;
+  /** What the NOK markers mean, e.g. "fuera de tolerancia". */
+  nok_label?: string;
 }
 
 export interface ReportSummary {

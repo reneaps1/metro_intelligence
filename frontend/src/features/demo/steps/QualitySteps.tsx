@@ -10,10 +10,17 @@ import { deleteImportedDataset } from "../../../lib/quality-analytics/imports";
 import type { QualityDataset } from "../../../lib/quality-analytics/types";
 import { DimensionalExplorer } from "../../quality-analytics/DimensionalExplorer";
 import { DimensionalImport } from "../../quality-analytics/DimensionalImport";
+import { offsetLabel } from "../../../lib/time/plantTime";
 import { QualityOverview } from "../../quality-analytics/QualityOverview";
 
 // IQ-F5/F6: demo steps 2 and 3 share the dataset lookup, the dataset picker
 // (demo dataset or a CSV imported in this session) and its origin banner.
+
+const SOURCE_PREFIX: Record<QualityDataset["source_type"], string> = {
+  REAL: "Real · ",
+  SIMULATED: "Demo · ",
+  IMPORTED: "Importado · ",
+};
 
 function DatasetBanner({ dataset }: { dataset: QualityDataset }) {
   const tone =
@@ -31,16 +38,17 @@ function DatasetBanner({ dataset }: { dataset: QualityDataset }) {
           ? "Los mecanismos de defecto se inyectaron a propósito; se listan en «Verdad conocida del dataset sintético» (paso 2)."
           : dataset.source_type === "IMPORTED"
             ? "Se analiza tal como viene; las conclusiones dependen de la calidad y representatividad del archivo."
-            : "Calculado sobre datos reales."}
+            : `Horas en hora local de planta (${offsetLabel(dataset.utc_offset_minutes ?? 0)}).`}
       </span>
     </p>
   );
 }
 
-function filtersFor(ds: QualityDataset) {
+function filtersFor(ds: QualityDataset, chosen: boolean) {
   return {
     ...DEFAULT_QUALITY_FILTERS,
     datasetId: ds.id,
+    datasetChosen: chosen,
     detailVariable: ds.id === DEMO_DATASET_ID ? DEFAULT_QUALITY_FILTERS.detailVariable : (ds.variables[0]?.key ?? ""),
   };
 }
@@ -87,7 +95,7 @@ function DatasetPicker({
           >
             {items.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.source_type === "IMPORTED" ? "Importado · " : "Demo · "}
+                {SOURCE_PREFIX[d.source_type]}
                 {d.name}
               </option>
             ))}
@@ -137,7 +145,16 @@ function DatasetStep({ children }: { children: (dataset: QualityDataset) => Reac
   const fetched = datasets.data?.items ?? [];
   const items = [...fetched, ...added.filter((a) => !fetched.some((d) => d.id === a.id))];
   const dataset = items.find((d) => d.id === qualityFilters.datasetId) ?? null;
-  const select = (ds: QualityDataset) => setQualityFilters(() => filtersFor(ds));
+  const select = (ds: QualityDataset) => setQualityFilters(() => filtersFor(ds, true));
+  const real = fetched.find((d) => d.source_type === "REAL") ?? null;
+
+  // IQ-F10: when the customer's REAL dataset is configured it is the default,
+  // until the presenter explicitly picks another dataset.
+  useEffect(() => {
+    if (real && !qualityFilters.datasetChosen && qualityFilters.datasetId !== real.id && !requested) {
+      setQualityFilters(() => filtersFor(real, false));
+    }
+  }, [real, qualityFilters.datasetChosen, qualityFilters.datasetId, requested, setQualityFilters]);
 
   // Deep link from the import page: /demo/industrial-quality/quality?dataset=<id>
   useEffect(() => {

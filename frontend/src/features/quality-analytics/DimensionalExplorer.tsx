@@ -9,7 +9,13 @@ import { QualityFilterBar } from "./QualityFilterBar";
 
 // IQ-F5: demo step 3 -- one dimensional variable in depth.
 
-const GROUP_LABEL: Record<GroupBy, string> = { cavity: "Nido", machine: "Máquina", shift: "Turno", batch: "Lote" };
+const GROUP_LABEL: Record<GroupBy, string> = {
+  cavity: "Nido",
+  machine: "Máquina",
+  shift: "Turno",
+  batch: "Lote",
+  mold_cavity: "Cavidad de molde",
+};
 const fmt = (v: number | null | undefined, digits = 4) =>
   v === null || v === undefined ? "—" : v.toLocaleString("es-MX", { maximumFractionDigits: digits });
 const index = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toFixed(2));
@@ -26,11 +32,18 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 
 export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
   const { qualityFilters: f, setQualityFilters } = useDemoSession();
-  const detail = useAsync(() => fetchVariableDetail(f), [JSON.stringify({ ...f, variables: [], granularity: "" })]);
+  const offset = dataset.utc_offset_minutes ?? 0;
+  const detail = useAsync(
+    () => fetchVariableDetail(f, offset),
+    [JSON.stringify({ ...f, variables: [], stations: [], granularity: "" })],
+  );
   const d = detail.data;
   const available = dataset.available_filters;
-  const groupOptions = (Object.keys(GROUP_LABEL) as GroupBy[]).filter((g) => available[g === "cavity" ? "cavity" : g]);
-  const groupLabel = (g: string) => (f.groupBy === "cavity" ? `N${g}` : f.groupBy === "shift" ? `T. ${g}` : g);
+  const groupOptions = (Object.keys(GROUP_LABEL) as GroupBy[]).filter((g) => Boolean(available[g]));
+  const groupLabel = (g: string) =>
+    f.groupBy === "cavity" ? `N${g}` : f.groupBy === "mold_cavity" ? `C${g}` : f.groupBy === "shift" ? `T. ${g}` : g;
+  const reported = (d?.nok_basis ?? dataset.nok_basis) === "reported";
+  const noSpec = d ? d.spec.lsl === null && d.spec.usl === null : false;
 
   return (
     <div className="space-y-4">
@@ -68,7 +81,9 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
         </label>
         {d && (
           <p className="text-xs text-text-secondary">
-            Especificación: nominal {fmt(d.spec.nominal)} {d.spec.unit} · LSL {fmt(d.spec.lsl)} · USL {fmt(d.spec.usl)}
+            {reported && noSpec
+              ? "Sin tolerancias en la fuente: los NOK marcados son piezas rechazadas por la estación que mide esta cota."
+              : `Especificación: nominal ${fmt(d.spec.nominal)} ${d.spec.unit} · LSL ${fmt(d.spec.lsl)} · USL ${fmt(d.spec.usl)}`}
           </p>
         )}
       </Card>
@@ -86,7 +101,7 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
             <Tile label="Mediciones" value={d.n.toLocaleString("es-MX")} />
             <Tile label="Media" value={fmt(d.mean)} hint={`desv. est. ${fmt(d.std)}`} />
             <Tile label="Rango" value={`${fmt(d.min)} – ${fmt(d.max)}`} />
-            <Tile label="NOK" value={formatPct(d.nok_rate)} hint={`${d.nok.toLocaleString("es-MX")} fuera de tolerancia`} />
+            <Tile label="NOK" value={formatPct(d.nok_rate)} hint={`${d.nok.toLocaleString("es-MX")} ${d.nok_label ?? "fuera de tolerancia"}`} />
             <Tile label="Cp" value={index(d.capability?.cp)} hint={d.capability?.cp === null ? d.capability?.reason ?? undefined : "global (desv. total)"} />
             <Tile label="Cpk" value={index(d.capability?.cpk)} hint={d.capability?.cpk === null ? d.capability?.reason ?? undefined : "global (desv. total)"} />
           </div>
@@ -103,10 +118,12 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
             </Card>
             <Card>
               <CardHeader title="Carta de individuales (I-MR)" />
-              <IndividualsChart detail={d} />
+              <IndividualsChart detail={d} offsetMinutes={offset} />
               <p className="text-xs text-text-secondary">
-                Rojo discontinuo = límites de especificación (cliente). Azul punteado = límites de control calculados del proceso
-                ({d.control_limits?.engine ?? "—"}). Triángulos = piezas fuera de tolerancia.
+                {noSpec ? "Sin límites de especificación en la fuente." : "Rojo discontinuo = límites de especificación (cliente)."} Azul
+                punteado = límites de control calculados del proceso ({d.control_limits?.engine ?? "—"}). Triángulos = piezas{" "}
+                {reported ? "rechazadas por su estación" : "fuera de tolerancia"}.
+                {offset ? " Horas en hora local de planta." : ""}
                 {d.series_thinned ? " Se muestra una muestra uniforme de la serie; los límites usan todos los datos." : ""}
               </p>
             </Card>
