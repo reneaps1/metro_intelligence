@@ -122,6 +122,10 @@ class DimensionalDataset:
     # --- IQ-F10, all optional (None/empty = the dataset does not carry them) ---
     # Second grouping: the mold cavity, while `cavities` stays the nest.
     mold_cavities: list[int | None] | None = None
+    # IQ-F17: the groupings exactly as the source reported them, kept next to
+    # the normalized `cavities` / `mold_cavities` when a remap rule applied.
+    nests_raw: list[int | None] | None = None
+    mold_cavities_raw: list[int | None] | None = None
     # Stations in process order + their verdict per piece (True = NOK).
     stations: tuple[Station, ...] = ()
     station_nok: dict[str, list[bool | None]] = field(default_factory=dict)
@@ -150,6 +154,8 @@ class DimensionalDataset:
             *self.values.values(),
             *([self.reported_nok] if self.reported_nok is not None else []),
             *([self.mold_cavities] if self.mold_cavities is not None else []),
+            *([self.nests_raw] if self.nests_raw is not None else []),
+            *([self.mold_cavities_raw] if self.mold_cavities_raw is not None else []),
             *([self.flags] if self.flags is not None else []),
             *self.station_nok.values(),
         ]

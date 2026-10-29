@@ -185,6 +185,11 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
           <Chip active={f.excludeSuspect} onClick={() => set({ excludeSuspect: !f.excludeSuspect })}>
             Excluir piezas con valores repetidos (sospecha de dato congelado)
           </Chip>
+          {(dataset.data_quality?.grouping_remapped ?? 0) > 0 && (
+            <Chip active={f.excludeRemapped} onClick={() => set({ excludeRemapped: !f.excludeRemapped })}>
+              Excluir piezas con nido remapeado
+            </Chip>
+          )}
         </Group>
       )}
       {showVariables && !reported && (

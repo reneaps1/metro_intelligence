@@ -1,4 +1,4 @@
-"""IQ-F10: offline long-signal converter + per-piece reader (fictitious data only)."""
+"""IQ-F10/F17: offline long-signal converter + per-piece reader (fictitious data only)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from app.connectors.long_signal_batch import (
     FLAG_GROUPING_OUT_OF_RANGE,
+    FLAG_GROUPING_REMAPPED,
     FLAG_REPEATED_SIGNATURE,
     FLAG_SENTINEL,
     Mapping,
@@ -127,7 +128,15 @@ def test_convert_report_and_rules(export: list[Path], tmp_path: Path) -> None:
     assert "SECRET" not in raw and "C00" not in raw and "PLC.Demo" not in raw  # no ids, no addresses
     rows = [line.split(",") for line in raw.strip().splitlines()]
     header, body = rows[0], rows[1:]
-    assert header[:5] == ["ts_ms", "id_kind", "nest", "mold_cavity", "total_nok"]
+    assert header[:7] == [
+        "ts_ms",
+        "id_kind",
+        "nest",
+        "mold_cavity",
+        "nest_raw",
+        "mold_cavity_raw",
+        "total_nok",
+    ]
     ts = [int(r[0]) for r in body]
     assert ts == sorted(ts)
     c002 = body[1]
@@ -135,6 +144,7 @@ def test_convert_report_and_rules(export: list[Path], tmp_path: Path) -> None:
     assert int(c002[0]) == 1767618120000  # first-seen time kept
     c004 = body[3]
     assert c004[header.index("nest")] == "" and c004[header.index("v_x0")] == ""
+    assert c004[header.index("nest_raw")] == "9"  # the raw value survives the range check
     assert int(c004[header.index("flags")]) == FLAG_SENTINEL | FLAG_GROUPING_OUT_OF_RANGE
     assert all(int(r[header.index("flags")]) & FLAG_REPEATED_SIGNATURE for r in body[4:])
 
@@ -230,3 +240,86 @@ def test_reader_refuses_tampered_files(export: list[Path], tmp_path: Path) -> No
         read_pieces(
             out / "manifest.json", dataset_id="x", name="x", description="x", max_bytes=10**7, max_pieces=2
         )
+
+
+# --------------------------------------------------------------------------- IQ-F17: grouping remap
+
+
+def _remap_export(tmp_path: Path) -> list[Path]:
+    """Nest counter that sometimes reports nest + 4 (fictitious analogue of a +12 offset)."""
+    rows = [
+        *_piece("C101", 1, 1, 1, "true", "true", (1.0, 2.0, 3.0)),
+        *_piece("C102", 2, 5, 2, "true", "true", (1.1, 2.1, 3.1)),  # 5 -> 1
+        *_piece("C103", 3, 2, 3, "true", "true", (1.2, 2.2, 3.2)),
+        *_piece("C104", 4, 8, 4, "true", "true", (1.3, 2.3, 3.3)),  # 8 -> 4
+        *_piece("C105", 5, 5, 5, "false", "true", (1.4, 2.4, 3.4)),  # 5 -> 1
+        *_piece("C106", 6, 9, 6, "true", "true", (1.5, 2.5, 3.5)),  # no rule -> out of range
+    ]
+    f = tmp_path / "remap.csv"
+    f.write_text(HEADER + "\n".join(rows) + "\n", encoding="utf-8")
+    return [f]
+
+
+def _remap_mapping() -> Mapping:
+    return _mapping(
+        nest={"address": "Fixture.nNest", "valid": [1, 4], "remap": [{"from": [5, 8], "offset": -4}]},
+        repeated_signature={"min_repeats": 50},
+    )
+
+
+def test_remap_normalizes_the_nest_and_keeps_the_raw_value(tmp_path: Path) -> None:
+    out = tmp_path / "dataset"
+    manifest = convert(_remap_export(tmp_path), _remap_mapping(), out, partitions=3)
+    report = manifest["report"]
+    assert report["grouping_remapped"] == {"nest": {"5\u21921": 2, "8\u21924": 1}}  # type: ignore[index]
+    assert report["grouping_out_of_range"] == {"nest": 1}  # type: ignore[index]
+    assert manifest["format"] == "pieces-v2"
+    assert manifest["grouping_remaps"] == {"nest": [{"from": [5, 8], "offset": -4}], "mold_cavity": []}
+    assert manifest["flags"]["grouping_remapped"] == FLAG_GROUPING_REMAPPED  # type: ignore[index]
+
+    ds = _read(out)
+    assert ds.cavities == [1, 1, 2, 4, 1, None]
+    assert ds.nests_raw == [1, 5, 2, 8, 5, 9]
+    assert ds.mold_cavities_raw == [1, 2, 3, 4, 5, 6]
+    assert ds.flags is not None
+    assert [bool(f & FLAG_GROUPING_REMAPPED) for f in ds.flags] == [False, True, False, True, True, False]
+    assert ds.data_quality["grouping_remapped"] == 3
+    assert ds.distinct(ds.cavities) == [1, 2, 4]  # no phantom nest 5 or 8
+
+    by_nest = {r["cavity"]: r for r in overview(ds, QualityFilter())["by_cavity"]}
+    assert by_nest[1]["pieces"] == 3 and by_nest[1]["nok"] == 1
+    # Remapped pieces can be excluded to compare with and without the rule.
+    clean = overview(ds, QualityFilter(exclude_flags=FLAG_GROUPING_REMAPPED))
+    assert clean["summary"]["pieces"] == 3
+
+
+@pytest.mark.parametrize(
+    "remap",
+    [
+        [{"from": [3, 6], "offset": -2}],  # source overlaps the valid range
+        [{"from": [5, 8], "offset": -1}],  # lands outside the valid range (7 -> 6 > 4)
+        [{"from": [5, 6], "offset": -4}, {"from": [6, 8], "offset": -4}],  # overlapping sources
+        [{"from": [6, 5], "offset": -4}],  # reversed range
+        [{"from": [5, 5], "offset": 0}],  # no-op rule
+    ],
+)
+def test_mapping_rejects_unsafe_remaps(remap: list[dict[str, object]]) -> None:
+    with pytest.raises(ValueError):
+        _mapping(nest={"address": "Fixture.nNest", "valid": [1, 4], "remap": remap})
+
+
+def test_reader_still_accepts_pieces_v1(export: list[Path], tmp_path: Path) -> None:
+    """Datasets converted before IQ-F17 (no raw columns) keep loading."""
+    import hashlib
+
+    out = tmp_path / "dataset"
+    convert(export, _mapping(), out, partitions=1)
+    lines = gzip.decompress((out / "pieces.csv.gz").read_bytes()).decode().splitlines()
+    v1 = "\n".join(",".join(r[:4] + r[6:]) for r in (line.split(",") for line in lines)) + "\n"
+    data = gzip.compress(v1.encode(), mtime=0)
+    (out / "pieces.csv.gz").write_bytes(data)
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    manifest.update(format="pieces-v1", pieces_sha256=hashlib.sha256(data).hexdigest())
+    (out / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    ds = _read(out)
+    assert len(ds) == 7 and ds.nests_raw is None and ds.primary_fail[2] == "st_b"

@@ -56,6 +56,14 @@ describe("quality filters", () => {
     expect(activeFilterCount({ ...DEFAULT_QUALITY_FILTERS, stations: ["a"], moldCavities: [1], excludeSuspect: true })).toBe(3);
   });
 
+  it("combines the suspect and remapped-nest exclusions into one flag mask (IQ-F17)", () => {
+    const both = filterParams({ ...DEFAULT_QUALITY_FILTERS, excludeSuspect: true, excludeRemapped: true });
+    expect(both.get("exclude_flags")).toBe("10");
+    expect(filterParams({ ...DEFAULT_QUALITY_FILTERS, excludeRemapped: true }).get("exclude_flags")).toBe("8");
+    expect(filterParams(DEFAULT_QUALITY_FILTERS).has("exclude_flags")).toBe(false);
+    expect(activeFilterCount({ ...DEFAULT_QUALITY_FILTERS, excludeRemapped: true })).toBe(1);
+  });
+
   it("labels the REAL dataset as real in steps 2 and 3", () => {
     const quality = DEMO_STEPS.find((s) => s.id === "quality")!;
     const dimensional = DEMO_STEPS.find((s) => s.id === "dimensional")!;

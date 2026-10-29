@@ -78,6 +78,14 @@ describe("QualityStep with the REAL dataset", () => {
       within(quality).getByText("Piezas con valores repetidos"),
     ).toBeInTheDocument();
     expect(within(quality).getByText("12")).toBeInTheDocument();
+    // IQ-F17: the nest normalization is shown, not hidden.
+    expect(
+      within(quality).getByText("Nido remapeado (crudo → normalizado)"),
+    ).toBeInTheDocument();
+    expect(within(quality).getByText("40")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Excluir piezas con nido remapeado" }),
+    ).toBeInTheDocument();
   });
 
   it("sends station, mold cavity and suspect-data filters; clearing keeps the dataset", async () => {

@@ -894,7 +894,7 @@ export const REAL_DATASET_FIXTURE = {
   presets: [{ key: "b_by_nest", label: "Estación B por nido", stations: ["st_b"], group_by: "nest" }],
   data_quality: {
     ids_total: 950, empty_cycles_excluded: 50, repeated_signature_pieces: 12, sentinel_values: 3,
-    grouping_out_of_range: 1, rows_malformed: 7,
+    grouping_out_of_range: 1, grouping_remapped: 40, rows_malformed: 7,
   },
 };
 

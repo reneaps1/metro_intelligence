@@ -7,6 +7,8 @@ export const DEMO_DATASET_ID = "demo-synthetic-dimensional";
 export const isRealDatasetId = (id: string) => id.startsWith("real-");
 /** Data-quality flag bit for "repeated value signature" (suspected frozen data). */
 export const SUSPECT_FLAGS = 2;
+/** IQ-F17: data-quality flag bit for "nest / mold cavity normalized by a remap rule". */
+export const REMAPPED_FLAGS = 8;
 
 export interface QualityFilters {
   datasetId: string;
@@ -27,6 +29,8 @@ export interface QualityFilters {
   moldCavities: number[];
   stations: string[];
   excludeSuspect: boolean;
+  /** IQ-F17: drop pieces whose nest was normalized (compare with and without the rule). */
+  excludeRemapped: boolean;
   /** True once the presenter picked a dataset; until then a REAL dataset is preferred. */
   datasetChosen: boolean;
 }
@@ -46,6 +50,7 @@ export const DEFAULT_QUALITY_FILTERS: QualityFilters = {
   moldCavities: [],
   stations: [],
   excludeSuspect: false,
+  excludeRemapped: false,
   datasetChosen: false,
 };
 
@@ -70,7 +75,8 @@ export function filterParams(f: QualityFilters, offsetMinutes = 0): URLSearchPar
   if (f.startDay) params.set("start", `${f.startDay}T00:00:00${tz}`);
   if (f.endDay) params.set("end", `${nextDay(f.endDay)}T00:00:00${tz}`);
   if (f.moldCavities.length) params.set("mold_cavities", f.moldCavities.join(","));
-  if (f.excludeSuspect) params.set("exclude_flags", String(SUSPECT_FLAGS));
+  const excluded = (f.excludeSuspect ? SUSPECT_FLAGS : 0) | (f.excludeRemapped ? REMAPPED_FLAGS : 0);
+  if (excluded) params.set("exclude_flags", String(excluded));
   if (f.machines.length) params.set("machines", f.machines.join(","));
   if (f.cavities.length) params.set("cavities", f.cavities.join(","));
   if (f.shifts.length) params.set("shifts", f.shifts.join(","));
@@ -107,7 +113,8 @@ export function activeFilterCount(f: QualityFilters): number {
     (f.variables.length ? 1 : 0) +
     (f.moldCavities.length ? 1 : 0) +
     (f.stations.length ? 1 : 0) +
-    (f.excludeSuspect ? 1 : 0)
+    (f.excludeSuspect ? 1 : 0) +
+    (f.excludeRemapped ? 1 : 0)
   );
 }
 

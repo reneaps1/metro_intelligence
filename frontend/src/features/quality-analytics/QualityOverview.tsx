@@ -202,6 +202,7 @@ const DATA_QUALITY_ROWS: [string, string, string][] = [
   ["repeated_signature_pieces", "Piezas con valores repetidos", "misma combinación exacta de cotas repetida muchas veces: sospecha de dato congelado"],
   ["sentinel_values", "Valores centinela descartados", "lecturas fuera de rango físico, tratadas como faltantes"],
   ["grouping_out_of_range", "Nido / cavidad fuera de rango", "se tratan como sin nido / cavidad"],
+  ["grouping_remapped", "Nido remapeado (crudo → normalizado)", "el número reportado traía un desfase conocido (p. ej. 13 → 1); se conserva el valor crudo"],
   ["rows_malformed", "Filas con formato inconsistente", "no se pudieron leer y se contaron, no se ocultaron"],
 ];
 

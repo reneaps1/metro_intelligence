@@ -7,6 +7,9 @@ identical value strings share one float object, which keeps a few hundred
 thousand pieces x a few dozen variables within a modest memory budget.
 
 Pure: the caller decides the dataset id, name and size caps.
+
+Formats: ``pieces-v1`` (IQ-F10) and ``pieces-v2`` (IQ-F17), which adds the raw
+nest / mold cavity next to the normalized ones.
 """
 
 from __future__ import annotations
@@ -46,7 +49,7 @@ class _PresetIn(BaseModel):
 
 
 class Manifest(BaseModel):
-    format: Literal["pieces-v1"]
+    format: Literal["pieces-v1", "pieces-v2"]
     converter_version: str = Field(max_length=64)
     pieces_file: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     pieces_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -73,6 +76,13 @@ def _sum(value: object) -> int:
     return int(value) if isinstance(value, int) else 0
 
 
+def _sum_nested(value: object) -> int:
+    """Sum a {grouping: {"13->1": n}} report (or a flat count dict)."""
+    if isinstance(value, dict):
+        return sum(_sum(v) for v in value.values())
+    return _sum(value)
+
+
 def data_quality_counts(report: dict[str, object]) -> dict[str, int]:
     """Counts only -- never identifiers, paths or address names."""
     malformed = report.get("malformed", {})
@@ -85,6 +95,7 @@ def data_quality_counts(report: dict[str, object]) -> dict[str, int]:
         "pieces_without_verdict": _sum(report.get("pieces_without_verdict")),
         "sentinel_values": _sum(report.get("sentinels")),
         "grouping_out_of_range": _sum(report.get("grouping_out_of_range")),
+        "grouping_remapped": _sum_nested(report.get("grouping_remapped")),
         "repeated_signature_pieces": _sum(report.get("repeated_signature_pieces")),
         "reinspected_after_10_min": _sum(report.get("reinspected_after_10_min")),
     }
@@ -118,13 +129,20 @@ def read_pieces(
 
     station_keys = [s.key for s in manifest.stations]
     var_keys = [v.key for v in manifest.variables]
-    expected = ["ts_ms", "id_kind", "nest", "mold_cavity", "total_nok"]
+    v2 = manifest.format == "pieces-v2"
+    expected = ["ts_ms", "id_kind", "nest", "mold_cavity"]
+    expected += ["nest_raw", "mold_cavity_raw"] if v2 else []
+    expected += ["total_nok"]
     expected += [f"st_{k}" for k in station_keys] + ["flags"] + [f"v_{k}" for k in var_keys]
+    # Column of the total verdict: 4 in v1, 6 in v2 (after the two raw groupings).
+    c_total = 6 if v2 else 4
 
     memo: dict[str, float] = {}
     timestamps: list[float] = []
     nests: list[int | None] = []
     molds: list[int | None] = []
+    nests_raw: list[int | None] = []
+    molds_raw: list[int | None] = []
     total: list[bool | None] = []
     flags: list[int] = []
     st_cols: list[list[bool | None]] = [[] for _ in station_keys]
@@ -142,11 +160,14 @@ def read_pieces(
             timestamps.append(int(row[0]) / 1000)
             nests.append(int(row[2]) if row[2] else None)
             molds.append(int(row[3]) if row[3] else None)
-            total.append(verdict[row[4]])
+            if v2:
+                nests_raw.append(int(row[4]) if row[4] else None)
+                molds_raw.append(int(row[5]) if row[5] else None)
+            total.append(verdict[row[c_total]])
             for j in range(n_st):
-                st_cols[j].append(verdict[row[5 + j]])
-            flags.append(int(row[5 + n_st]))
-            base = 6 + n_st
+                st_cols[j].append(verdict[row[c_total + 1 + j]])
+            flags.append(int(row[c_total + 1 + n_st]))
+            base = c_total + 2 + n_st
             for j, col in enumerate(var_cols):
                 raw = row[base + j]
                 if not raw:
@@ -194,6 +215,8 @@ def read_pieces(
         values=dict(zip(var_keys, var_cols, strict=True)),
         reported_nok=reported,
         mold_cavities=molds,
+        nests_raw=nests_raw if v2 else None,
+        mold_cavities_raw=molds_raw if v2 else None,
         stations=stations,
         station_nok=station_nok,
         flags=flags,
