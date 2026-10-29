@@ -6,6 +6,7 @@ import { fetchVariableDetail } from "../../lib/quality-analytics/api";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import type { GroupBy, QualityDataset } from "../../lib/quality-analytics/types";
 import { BoxplotChart, DailyCpkChart, HistogramChart, IndividualsChart } from "./DimensionalCharts";
+import { PinPositionPanel } from "./PinPositionPanel";
 import { QualityFilterBar } from "./QualityFilterBar";
 
 // IQ-F5: demo step 3 -- one dimensional variable in depth. IQ-F16: workbench
@@ -138,6 +139,7 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
         </>
       )}
       {d && d.n === 0 && <p className="text-sm text-text-secondary">No hay mediciones para la selección actual.</p>}
+      {(dataset.pin_pairs?.length ?? 0) > 0 && <PinPositionPanel dataset={dataset} />}
     </div>
   );
 }

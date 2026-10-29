@@ -44,6 +44,45 @@ function Group({ title, enabled, children }: { title: string; enabled: boolean; 
 
 const select = "ml-2 rounded-md border border-border bg-surface px-2 py-1 text-sm font-medium normal-case tracking-normal text-text-primary";
 
+// IQ-F18: optional hour bounds (plant time) to compare e.g. before and after a stop.
+const START_HOURS = Array.from({ length: 24 }, (_, h) => h);
+const END_HOURS = Array.from({ length: 24 }, (_, h) => h + 1);
+const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
+
+function HourSelect({
+  label,
+  value,
+  hours,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  hours: number[];
+  placeholder: string;
+  disabled: boolean;
+  onChange: (hour: number | null) => void;
+}) {
+  return (
+    <select
+      className={select}
+      value={value ?? ""}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      aria-label={label}
+      title={disabled ? "Elige primero el día" : "Hora de planta"}
+    >
+      <option value="">{placeholder}</option>
+      {hours.map((h) => (
+        <option key={h} value={h}>
+          {hourLabel(h)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function QualityFilterBar({ dataset, showVariables = true }: { dataset: QualityDataset; showVariables?: boolean }) {
   const { qualityFilters: f, setQualityFilters } = useDemoSession();
   const set = (patch: Partial<QualityFilters>) => setQualityFilters((prev) => ({ ...prev, ...patch }));
@@ -65,7 +104,7 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
           <select
             className={select}
             value={f.startDay ?? ""}
-            onChange={(e) => set({ startDay: e.target.value || null })}
+            onChange={(e) => set({ startDay: e.target.value || null, ...(e.target.value ? {} : { startHour: null }) })}
             aria-label="Desde el día"
           >
             <option value="">Inicio</option>
@@ -75,13 +114,21 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
               </option>
             ))}
           </select>
+          <HourSelect
+            label="Desde la hora"
+            value={f.startHour}
+            hours={START_HOURS}
+            placeholder="00:00"
+            disabled={!f.startDay}
+            onChange={(h) => set({ startHour: h })}
+          />
         </label>
         <label className="wb-label">
           Hasta
           <select
             className={select}
             value={f.endDay ?? ""}
-            onChange={(e) => set({ endDay: e.target.value || null })}
+            onChange={(e) => set({ endDay: e.target.value || null, ...(e.target.value ? {} : { endHour: null }) })}
             aria-label="Hasta el día"
           >
             <option value="">Fin</option>
@@ -91,6 +138,14 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
               </option>
             ))}
           </select>
+          <HourSelect
+            label="Hasta la hora"
+            value={f.endHour}
+            hours={END_HOURS}
+            placeholder="24:00"
+            disabled={!f.endDay}
+            onChange={(h) => set({ endHour: h })}
+          />
         </label>
         <Group title="Máquina" enabled={available.machine}>
           {dataset.machines.map((m) => (
@@ -185,6 +240,11 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
           <Chip active={f.excludeSuspect} onClick={() => set({ excludeSuspect: !f.excludeSuspect })}>
             Excluir piezas con valores repetidos (sospecha de dato congelado)
           </Chip>
+          {(dataset.data_quality?.grouping_remapped ?? 0) > 0 && (
+            <Chip active={f.excludeRemapped} onClick={() => set({ excludeRemapped: !f.excludeRemapped })}>
+              Excluir piezas con nido remapeado
+            </Chip>
+          )}
         </Group>
       )}
       {showVariables && !reported && (

@@ -57,8 +57,8 @@ from typing import Literal, TextIO
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-FORMAT = "pieces-v1"
-CONVERTER_VERSION = "long-signal-batch-1.0.0"
+FORMAT = "pieces-v2"
+CONVERTER_VERSION = "long-signal-batch-1.1.0"
 DEFAULT_PARTITIONS = 32
 MAX_MANIFEST_BYTES = 256 * 1024
 MIN_SIGNATURE_VALUES = 3
@@ -67,6 +67,7 @@ MIN_SIGNATURE_VALUES = 3
 FLAG_SENTINEL = 1  # at least one value was a logger sentinel and became missing
 FLAG_REPEATED_SIGNATURE = 2  # a station's full value set repeats suspiciously often
 FLAG_GROUPING_OUT_OF_RANGE = 4  # nest / mold cavity outside the valid range
+FLAG_GROUPING_REMAPPED = 8  # nest / mold cavity normalized by a mapping `remap` rule (IQ-F17)
 
 csv.field_size_limit(10 * 1024 * 1024)
 
@@ -92,9 +93,51 @@ class _Verdict(BaseModel):
     nok: list[str] = Field(default_factory=lambda: ["false"], min_length=1)
 
 
+class _Remap(BaseModel):
+    """Raw values in ``from`` (inclusive) are shifted by ``offset`` (IQ-F17).
+
+    For loggers that sometimes report a grouping with a fixed offset, e.g. a
+    nest counter that emits 13 instead of 1. The raw value is kept next to the
+    normalized one in the output, so the rule never hides the source data.
+    """
+
+    from_: tuple[int, int] = Field(alias="from")
+    offset: int
+
+    model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def _ordered(self) -> _Remap:
+        if self.from_[0] > self.from_[1] or self.offset == 0:
+            raise ValueError("remap needs from = [low, high] and a non-zero offset")
+        return self
+
+
 class _Grouping(BaseModel):
     address: str = Field(min_length=1, max_length=256)
     valid: tuple[int, int]
+    remap: list[_Remap] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def _remap_consistent(self) -> _Grouping:
+        lo, hi = self.valid
+        spans = sorted(r.from_ for r in self.remap)
+        if any(a[1] >= b[0] for a, b in zip(spans, spans[1:], strict=False)):
+            raise ValueError("remap source ranges must not overlap")
+        for r in self.remap:
+            a, b = r.from_
+            if not (b < lo or a > hi):
+                raise ValueError("remap source range must lie outside the valid range")
+            if not (lo <= a + r.offset and b + r.offset <= hi):
+                raise ValueError("remap must land inside the valid range")
+        return self
+
+    def normalize(self, raw: int) -> int:
+        """Apply the first matching remap rule; values without a rule pass unchanged."""
+        for r in self.remap:
+            if r.from_[0] <= raw <= r.from_[1]:
+                return raw + r.offset
+        return raw
 
 
 class StationMap(_Verdict):
@@ -377,6 +420,7 @@ class _ConvertStats:
     sentinels: Counter[str] = field(default_factory=Counter)
     grouping_out_of_range: Counter[str] = field(default_factory=Counter)
     grouping_missing: Counter[str] = field(default_factory=Counter)
+    grouping_remapped: dict[str, Counter[str]] = field(default_factory=dict)
     repeated_signature: Counter[str] = field(default_factory=Counter)
     reinspected: int = 0
 
@@ -414,6 +458,8 @@ class _Piece:
     id_kind: str
     nest: int | None
     mold_cavity: int | None
+    nest_raw: int | None
+    mold_cavity_raw: int | None
     total_nok: bool | None
     stations: list[bool | None]
     flags: int
@@ -469,20 +515,25 @@ def _build_pieces(part: Path, mapping: Mapping, stats: _ConvertStats) -> list[_P
 
         flags = 0
 
-        def grouping(i: int | None, spec: _Grouping | None, name: str) -> int | None:
+        def grouping(i: int | None, spec: _Grouping | None, name: str) -> tuple[int | None, int | None]:
+            """Return (normalized value, raw value); normalized is None when missing or out of range."""
             nonlocal flags
             if i is None or spec is None:
-                return None
+                return None, None
             x = _number(cell(i) or "")
             if x is None:
                 stats.grouping_missing[name] += 1
-                return None
-            v = int(x)
+                return None, None
+            raw = int(x)
+            v = spec.normalize(raw)
+            if v != raw:
+                stats.grouping_remapped.setdefault(name, Counter())[f"{raw}\u2192{v}"] += 1
+                flags |= FLAG_GROUPING_REMAPPED
             if not (spec.valid[0] <= v <= spec.valid[1]):
                 stats.grouping_out_of_range[name] += 1
                 flags |= FLAG_GROUPING_OUT_OF_RANGE
-                return None
-            return v
+                return None, raw
+            return v, raw
 
         total = None
         if i_total is not None and mapping.total_verdict is not None:
@@ -509,8 +560,8 @@ def _build_pieces(part: Path, mapping: Mapping, stats: _ConvertStats) -> list[_P
                 continue
 
         # Groupings are counted only for written pieces (empty cycles carry 0s).
-        nest = grouping(i_nest, mapping.nest, "nest")
-        cav = grouping(i_cav, mapping.mold_cavity, "mold_cavity")
+        nest, nest_raw = grouping(i_nest, mapping.nest, "nest")
+        cav, cav_raw = grouping(i_cav, mapping.mold_cavity, "mold_cavity")
         if total is None and all(s is None for s in station_v):
             stats.without_verdict += 1
 
@@ -523,7 +574,9 @@ def _build_pieces(part: Path, mapping: Mapping, stats: _ConvertStats) -> list[_P
             else:
                 sigs.append(hashlib.blake2b(repr(own).encode(), digest_size=8).hexdigest())
 
-        pieces.append(_Piece(first_ts[pid], kind, nest, cav, total, station_v, flags, values, sigs))
+        pieces.append(
+            _Piece(first_ts[pid], kind, nest, cav, nest_raw, cav_raw, total, station_v, flags, values, sigs)
+        )
     pieces.sort(key=lambda p: p.ts_ms)
     return pieces
 
@@ -590,6 +643,8 @@ def convert(
                             p.id_kind,
                             p.nest,
                             p.mold_cavity,
+                            p.nest_raw,
+                            p.mold_cavity_raw,
                             p.total_nok,
                             p.stations,
                             p.flags,
@@ -611,7 +666,7 @@ def convert(
 
         threshold = mapping.repeated_signature.min_repeats
         pieces_path = out_dir / "pieces.csv.gz"
-        header = ["ts_ms", "id_kind", "nest", "mold_cavity", "total_nok"]
+        header = ["ts_ms", "id_kind", "nest", "mold_cavity", "nest_raw", "mold_cavity_raw", "total_nok"]
         header += (
             [f"st_{s.key}" for s in mapping.stations] + ["flags"] + [f"v_{v.key}" for v in mapping.variables]
         )
@@ -622,7 +677,9 @@ def convert(
             w.writerow(header)
             streams = [_iter_sorted(p) for p in sorted_parts]
             for _key, line in heapq.merge(*streams):
-                ts, kind, nest, cav, total, stations, flags, values, sigs = json.loads(line)
+                ts, kind, nest, cav, nest_raw, cav_raw, total, stations, flags, values, sigs = json.loads(
+                    line
+                )
                 for j, sig in enumerate(sigs):
                     if sig and sig_counts[j][sig] >= threshold:
                         flags |= FLAG_REPEATED_SIGNATURE
@@ -635,6 +692,8 @@ def convert(
                     kind,
                     "" if nest is None else str(nest),
                     "" if cav is None else str(cav),
+                    "" if nest_raw is None else str(nest_raw),
+                    "" if cav_raw is None else str(cav_raw),
                     _fmt_bool(total),
                 ]
                 row += [_fmt_bool(s) for s in stations] + [str(flags)] + [_fmt_num(v) for v in values]
@@ -660,6 +719,13 @@ def convert(
             "nest": list(mapping.nest.valid),
             "mold_cavity": list(mapping.mold_cavity.valid) if mapping.mold_cavity else None,
         },
+        # The normalization rules applied (IQ-F17): explainable, not hidden.
+        "grouping_remaps": {
+            "nest": [r.model_dump(mode="json", by_alias=True) for r in mapping.nest.remap],
+            "mold_cavity": [r.model_dump(mode="json", by_alias=True) for r in mapping.mold_cavity.remap]
+            if mapping.mold_cavity
+            else [],
+        },
         "has_total_verdict": mapping.total_verdict is not None,
         "stations": [{"key": s.key, "name": s.name} for s in mapping.stations],
         "variables": [
@@ -670,6 +736,7 @@ def convert(
             "sentinel": FLAG_SENTINEL,
             "repeated_signature": FLAG_REPEATED_SIGNATURE,
             "grouping_out_of_range": FLAG_GROUPING_OUT_OF_RANGE,
+            "grouping_remapped": FLAG_GROUPING_REMAPPED,
         },
         "report": {
             "files": rstats.files,
@@ -685,6 +752,7 @@ def convert(
             "sentinels": dict(cstats.sentinels),
             "grouping_out_of_range": dict(cstats.grouping_out_of_range),
             "grouping_missing": dict(cstats.grouping_missing),
+            "grouping_remapped": {k: dict(sorted(c.items())) for k, c in cstats.grouping_remapped.items()},
             "repeated_signature_pieces": dict(cstats.repeated_signature),
             "repeated_signature_min_repeats": threshold,
             "reinspected_after_10_min": cstats.reinspected,

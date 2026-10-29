@@ -7,12 +7,17 @@ export const DEMO_DATASET_ID = "demo-synthetic-dimensional";
 export const isRealDatasetId = (id: string) => id.startsWith("real-");
 /** Data-quality flag bit for "repeated value signature" (suspected frozen data). */
 export const SUSPECT_FLAGS = 2;
+/** IQ-F17: data-quality flag bit for "nest / mold cavity normalized by a remap rule". */
+export const REMAPPED_FLAGS = 8;
 
 export interface QualityFilters {
   datasetId: string;
   /** Inclusive day range, "YYYY-MM-DD"; null = open */
   startDay: string | null;
   endDay: string | null;
+  /** IQ-F18: optional hour bounds (plant time) on those days: start hour 0-23, exclusive end hour 1-24. */
+  startHour: number | null;
+  endHour: number | null;
   machines: string[];
   cavities: number[];
   shifts: string[];
@@ -27,6 +32,8 @@ export interface QualityFilters {
   moldCavities: number[];
   stations: string[];
   excludeSuspect: boolean;
+  /** IQ-F17: drop pieces whose nest was normalized (compare with and without the rule). */
+  excludeRemapped: boolean;
   /** True once the presenter picked a dataset; until then a REAL dataset is preferred. */
   datasetChosen: boolean;
 }
@@ -35,6 +42,8 @@ export const DEFAULT_QUALITY_FILTERS: QualityFilters = {
   datasetId: DEMO_DATASET_ID,
   startDay: null,
   endDay: null,
+  startHour: null,
+  endHour: null,
   machines: [],
   cavities: [],
   shifts: [],
@@ -46,6 +55,7 @@ export const DEFAULT_QUALITY_FILTERS: QualityFilters = {
   moldCavities: [],
   stations: [],
   excludeSuspect: false,
+  excludeRemapped: false,
   datasetChosen: false,
 };
 
@@ -67,10 +77,15 @@ function nextDay(day: string): string {
 export function filterParams(f: QualityFilters, offsetMinutes = 0): URLSearchParams {
   const params = new URLSearchParams({ dataset: f.datasetId });
   const tz = offsetSuffix(offsetMinutes);
-  if (f.startDay) params.set("start", `${f.startDay}T00:00:00${tz}`);
-  if (f.endDay) params.set("end", `${nextDay(f.endDay)}T00:00:00${tz}`);
+  const hh = (h: number) => String(h).padStart(2, "0");
+  if (f.startDay) params.set("start", `${f.startDay}T${hh(f.startHour ?? 0)}:00:00${tz}`);
+  if (f.endDay) {
+    const end = f.endHour === null || f.endHour >= 24 ? `${nextDay(f.endDay)}T00:00:00` : `${f.endDay}T${hh(f.endHour)}:00:00`;
+    params.set("end", `${end}${tz}`);
+  }
   if (f.moldCavities.length) params.set("mold_cavities", f.moldCavities.join(","));
-  if (f.excludeSuspect) params.set("exclude_flags", String(SUSPECT_FLAGS));
+  const excluded = (f.excludeSuspect ? SUSPECT_FLAGS : 0) | (f.excludeRemapped ? REMAPPED_FLAGS : 0);
+  if (excluded) params.set("exclude_flags", String(excluded));
   if (f.machines.length) params.set("machines", f.machines.join(","));
   if (f.cavities.length) params.set("cavities", f.cavities.join(","));
   if (f.shifts.length) params.set("shifts", f.shifts.join(","));
@@ -107,7 +122,8 @@ export function activeFilterCount(f: QualityFilters): number {
     (f.variables.length ? 1 : 0) +
     (f.moldCavities.length ? 1 : 0) +
     (f.stations.length ? 1 : 0) +
-    (f.excludeSuspect ? 1 : 0)
+    (f.excludeSuspect ? 1 : 0) +
+    (f.excludeRemapped ? 1 : 0)
   );
 }
 

@@ -62,6 +62,15 @@ python -m app.connectors.long_signal_batch convert --mapping <private>/mapping.j
   ordered merge writes `pieces.csv.gz` (deterministic for any K) and a
   `manifest.json` with a counts-only report (malformed rows by reason,
   sentinels, out-of-range groupings, empty cycles, repeated value signatures).
+- Grouping normalization (IQ-F17): a nest or mold-cavity grouping may carry
+  `remap` rules for loggers that report a known offset, e.g.
+  `"nest": {"address": "...", "valid": [1, 12], "remap": [{"from": [13, 13], "offset": -12}]}`.
+  Source ranges must lie outside `valid` and land inside it, so a rule can
+  never move a legitimate value. Remapped pieces get flag `8`, the manifest
+  lists the rules (`grouping_remaps`) and counts (`report.grouping_remapped`,
+  e.g. `{"nest": {"13→1": n}}`), and the raw value is kept in the
+  `nest_raw` / `mold_cavity_raw` columns (`pieces-v2`; `pieces-v1` files
+  still load). After editing the mapping, re-run `convert`.
 - Output is gzip CSV, not Parquet: the backend stays stdlib-only.
   `pieces_file.read_pieces` validates the manifest and checksum and builds a
   `DimensionalDataset` with `source_type="REAL"` and the machine's reported

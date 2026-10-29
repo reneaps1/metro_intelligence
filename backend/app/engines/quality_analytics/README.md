@@ -19,6 +19,17 @@ Pure engines, no database access.
   per-nest rate with Wilson 95 % CI and relative risk, nest × variable
   heatmap) and `variable_detail()` (histogram, boxplots by group, Cp/Cpk and
   I-MR limits via `app/engines/spc`, daily Cpk).
+- `analytics.py` also returns `nest_mold` (IQ-F18): NOK rate per observed
+  (nest, mold cavity) combination; combinations that never met are absent,
+  not 0 %.
+- `position.py` (IQ-F19) — `xy_detail()`: X/Y deviation cloud of a `PinPair`
+  (two variables that are one feature's coordinates) against its position
+  tolerance. True position TP = 2·√(dx² + dy²) is compared with each
+  `ToleranceCircle` diameter (a point on the boundary is inside), plus the
+  ±`tol_xy` box, overall / NOK / per-group mean shifts and a deterministic
+  point sample (NOK pieces sampled apart so they stay visible; statistics use
+  every piece). Synthetic pairs are defined in `synthetic.py`; REAL ones come
+  from a private spec file (`app/connectors/pin_spec.py`, `DEMO_REAL_SPEC_PATH`).
 - `process_join.py` (IQ-F13, "Vista A") — illustrative join BY TIME of piece
   verdicts with per-cycle process values on plant-time buckets: `x` = mean of
   the cycles that start in `[b − lag, b − lag + bucket)`, `y` = NOK rate of the

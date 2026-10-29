@@ -39,6 +39,9 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F14 | Panel de calidad en línea: motor R1–R4 + API de repetición (backend) | ✅ Hecho | `feat/industrial-quality-demo` | Fuera del orden: pedido por el usuario el 28/oct (D11) |
 | F15 | Panel de calidad en línea: vistas Andon, Mapa de proceso y Respuesta guiada (frontend) | ✅ Hecho | `feat/industrial-quality-demo` | Pantalla completa, botones Normal/Atención/Paro sobre momentos reales |
 | F16 | Interfaz unificada: el lenguaje del panel en todo el banco de trabajo | ✅ Hecho | `feat/industrial-quality-demo` | Pedido por el usuario el 28/oct (D12); modo oscuro grafito |
+| F17 | Normalización del número de nido (desfase del PLC) conservando el crudo | ✅ Hecho | `claude/gifted-cannon-5rrp1j` → PR a `feat/industrial-quality-demo` | Pedido por el usuario el 29/oct tras la presentación (D13) |
+| F18 | Matriz nido × cavidad de molde + filtro por hora | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct |
+| F19 | Dispersión X/Y de posición de pines contra tolerancia | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct; especificación privada (D13) |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
 
@@ -114,6 +117,8 @@ D1–D4: el usuario no objetó → se aplican los defaults propuestos. Reabrir s
 **D10 — Base de NOK explícita (F10).** `nok_basis="spec"` (cotas fuera de tolerancia) para sintético e importados, sin cambios; `nok_basis="reported"` para REAL, cuya fuente no trae LSL/USL ni unidades: veredicto total de la máquina, y cada pieza NOK se atribuye a la **primera estación que falla en el orden del proceso** (así una pieza rechazada en una estación temprana no cuenta también como fallo de las posteriores que no llegó a pasar).
 
 **D12 — Interfaz unificada (F16): decidido por el usuario (28/oct/2026).** Tras revisar una maqueta Hoy/Propuesta (fuera del repo) el usuario pidió llevar el lenguaje visual del panel de calidad en línea a todo el banco de trabajo: tarjetas con banda de encabezado en mayúsculas, KPIs con cifra monoespaciada grande, gráficas neutras con referencias rotuladas, avisos neutros, chips y controles segmentados con el estado seleccionado del panel. Modo oscuro **grafito** (fondo `#1B1E22`), más cercano al negro sin llegar a negro puro. Color: «no saturar; un leve acento donde hay que resaltar» → un único acento NOK atenuado (`--wb-nok`) para piezas NOK, el peor grupo y outliers; rojo y ámbar solo para alarmas. Alcance: solo `.wb-root` (la edición de metrología no cambia).
+
+**D13 — Reglas y especificaciones del dataset REAL fuera del código (F17–F19): decidido por el usuario (29/oct/2026).** Tras la presentación con el dataset REAL apareció un «nido 13» que no existe: el registro del número de nido trae a veces un desfase fijo (nido real + 12; p. ej. 13 en lugar de 1). La corrección es una regla `remap` en el mapping privado, no código específico del cliente: se valida (origen fuera del rango válido, destino dentro), se cuenta en el reporte, marca la pieza con la bandera 8 y **conserva el valor crudo** (`nest_raw`, formato `pieces-v2`). Igualmente, los nominales y tolerancias de posición de pines (F19) viven en un archivo privado (`DEMO_REAL_SPEC_PATH`), nunca en el repo. Cambiar la regla exige volver a convertir; el panel «Calidad del dato» muestra cuántas piezas se remapearon.
 
 **D11 — Panel de calidad en línea (F14–F15): decidido por el usuario (28/oct/2026).** Tras un prototipo con tres propuestas (fuera del repo) el usuario pidió las tres como vistas de un mismo panel, con datos de **repetición real** (el backend repite el dataset activo y un motor de reglas decide las alarmas) y en una **pantalla aparte** a pantalla completa. Los botones Normal/Atención/Paro saltan a momentos reales del dataset; no se inyectan paros simulados sobre datos medidos. Reconocimientos y acciones son estado de la sesión, no se guardan.
 
@@ -434,6 +439,61 @@ Ruta `/demo/industrial-quality/panel-linea` a pantalla completa fuera del banco 
 Decisión D12. Tokens en `tokens.css` (`.wb-root`): modo oscuro grafito, marcas de datos generales (`--wb-bar`, `--wb-mark`, `--wb-mark-soft`, `--wb-ramp`, con `--lp-*` como alias para que el panel no cambie) y el acento NOK atenuado (`--wb-nok`, `--wb-nok-soft`). Hoja `features/demo/workbench/workbench.css` con estilos acotados a `.wb-root`: `Card`, `CardHeader` y `Button` solo llevan clases marcadoras (`ui-card`, `ui-card-h`, `ui-btn`), así que la edición de metrología conserva su aspecto. Piezas nuevas: `components/workbench/` (`Kpi`, `Notice`, `Key`) y `lib/demo/chartTheme.ts` (marcas neutras, referencia y límite rotulados, rampa neutra). Barrido de los pasos 1–7, árbol, inspector y barra de herramientas. Las plumas de señales del paso 4 conservan la paleta categórica (cada pluma es una señal distinta). Spec: design-system.md §4.3.
 ---
 
+### F17 — Normalización del número de nido conservando el crudo ✅
+
+**Objetivo:** que un desfase conocido del número de nido en el registro del PLC no aparezca como un nido fantasma, sin ocultar el dato de origen.
+
+Entregables (hechos):
+- `long_signal_batch.py`: `_Grouping.remap` (`[{from: [a, b], offset}]`, validado: origen fuera de `valid`, destino dentro, sin traslapes ni reglas nulas); se aplica antes del chequeo de rango; bandera `FLAG_GROUPING_REMAPPED = 8`; reporte `grouping_remapped` (`{"nest": {"13→1": n}}`, solo conteos) y reglas en `manifest.grouping_remaps`. Formato `pieces-v2` con columnas `nest_raw` / `mold_cavity_raw` (el crudo también se conserva cuando queda fuera de rango).
+- `pieces_file.py`: lee `pieces-v1` y `pieces-v2`; `DimensionalDataset.nests_raw` / `mold_cavities_raw` opcionales; `data_quality.grouping_remapped`.
+- Frontend: fila «Nido remapeado (crudo → normalizado)» en «Calidad del dato» y chip «Excluir piezas con nido remapeado» (máscara de banderas combinada con la de valores repetidos).
+- Paso manual local (no versionado): añadir la regla al `mapping.json` privado y volver a convertir.
+
+Pruebas: `tests/test_long_signal_batch.py` (+3 casos, 5 variantes de reglas inseguras, compatibilidad v1), `filters.test.ts` y `RealDataset.test.tsx`. Todo con datos ficticios (desfase +4 en un rango 1–4).
+
+### F18 — Matriz nido × cavidad de molde y filtro por hora ✅
+
+**Objetivo:** mostrar que el riesgo depende de la combinación nido × cavidad de molde y no de cada eje por separado. Cada cavidad pasa solo por algunos nidos a la vez (los ciclos de inyección y de nidos comparten un factor), y el reparto cambia después de los paros.
+
+Entregables (hechos):
+- Motor: `analytics._nest_mold_matrix` → `overview()["nest_mold"]` con celdas `{nest, mold_cavity, pieces, nok, rate}`, **solo combinaciones observadas**. Respeta todos los filtros y la base de NOK. Esquema `NestMoldCell` / `OverviewResponse.nest_mold`.
+- Frontend:
+  - `NestMoldMatrix` en `QualityCharts.tsx`: filas = nidos, columnas = cavidades. Las celdas que no coincidieron se dibujan aparte («·», borde punteado), distintas de un 0 % medido. La peor celda con ≥ 30 piezas se recuadra con el acento NOK. La leyenda dice «asociación, no causa».
+  - Tarjeta «NOK por nido × cavidad de molde» con CSV agregado (`nestMoldCsv`).
+- Filtro: horas de planta opcionales junto a «Desde/Hasta» (`startHour` 0–23, `endHour` 1–24 exclusiva). Sin cambios en el backend. Sirve para comparar antes y después de un paro.
+
+Pruebas:
+- `tests/test_quality_analytics.py`: matriz calculada a mano, incluidas las combinaciones ausentes y el efecto de un filtro.
+- `filters.test.ts`: límites horarios.
+- `RealDataset.test.tsx`: matriz y horas.
+- Se corrigió una carrera en una prueba previa: retenía el bloque KPI antes de que el dataset REAL reemplazara al sintético.
+
+### F19 — Dispersión X/Y de posición de pines contra tolerancia ✅
+
+**Objetivo:** ver hacia dónde se desvía la posición de cada pin, dentro de la tolerancia del plano y de la de fin de línea, y qué nidos o cavidades empujan esa desviación.
+
+Entregables (hechos):
+- Motor:
+  - `PinPair` / `ToleranceCircle` en `dataset.py` (validados con `check_pin_pairs`).
+  - `position.xy_detail`: desviación respecto al nominal con factor de escala; TP = 2·√(dx² + dy²); % fuera de cada círculo y del cuadro ±tol; TP mediana/p95/máx.; desplazamiento promedio general, de las NOK y por nido o cavidad; muestra determinista de ≤ 4 000 puntos, con las NOK muestreadas aparte.
+- Datos:
+  - Sintético: par ficticio `PinPositionX/Y` (Ø0.080, ±0.040), donde se ve el desvío del nido crítico.
+  - REAL: especificación privada `DEMO_REAL_SPEC_PATH` (`connectors/pin_spec.py`, formato `pin-spec-v1`, D13). Una especificación inválida solo oculta la vista.
+- API:
+  - `GET /quality-analytics/xy?pair=…&group_by=nok|nest|mold_cavity` con los mismos filtros y la misma base de NOK que el overview.
+  - `DatasetOut.pin_pairs`.
+- Frontend (paso 3): tarjeta «Posición de pines X/Y vs. tolerancia» en el lenguaje del banco de trabajo (D12).
+  - Gráfica SVG con ejes iguales; piezas en marca neutra; NOK como triángulos con el acento atenuado.
+  - Primera zona discontinua y las demás punteadas, rotuladas en mayúsculas; flecha nominal → promedio.
+  - Al marcar por nido o cavidad, panel ampliado de promedios por grupo, con el peor (≥ 30 piezas) resaltado.
+  - KPIs y tabla alternativa accesible.
+
+Pruebas:
+- `tests/test_position_xy.py`: valores calculados a mano, borde de zona, agrupación, muestreo que no oculta NOK, validaciones, mecanismo sintético y especificación privada.
+- `test_real_dataset_service.py`: especificación REAL, especificación inválida y API.
+- `QualityAnalytics.test.tsx`.
+- Verificación en navegador (Chromium headless, claro y oscuro, sin errores de consola) contra un export largo **ficticio** generado fuera del repo con los patrones del caso: desfase +12, rotación de cavidades y X/Y en centésimas.
+
 ## 4. Definition of Done (checklist de aceptación)
 
 - [x] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
@@ -494,6 +554,9 @@ Decisión D12. Tokens en `tokens.css` (`.wb-root`): modo oscuro grafito, marcas 
 | 2026-10-28 | F15 | Hecho. Ruta `/demo/industrial-quality/panel-linea` a pantalla completa (lienzo 1920×1080 escalado) con las vistas A Andon, B Mapa de proceso y C Respuesta guiada sobre una misma repetición; comandos R/A/F, diálogo de acción 1–4 y botones de un toque en C; barra del presentador con vistas 1/2/3, Normal/Atención/Paro (saltan a momentos reales, 15 s antes del evento), pausa, velocidad ×1/×5/×20 y tema; alarmas previas al punto de arranque cuentan como reconocidas; R1 enclavada hasta que el operador la cierra; «Línea detenida» pausa la repetición. Tokens `--lp-*` en `.wb-root`, spec en design-system §4.2 y nota en decisions.md; accesos en el árbol, menú Ver e inicio de la demo. Pruebas: frontend 28/28 archivos (13 nuevas), `tsc -b` limpio; navegador (Edge headless contra el backend local con el dataset REAL): A/B/C en claro y oscuro, paro → reconocer → línea detenida, atención y normal, 0 errores de consola. Nota: SignalExplorer falló una vez con la suite completa en paralelo y pasó aislado y en la corrida siguiente (inestabilidad previa del runner). |
 | 2026-10-28 | F13 | Hecho. Backend: calendario opcional en `Scenario` (salida idéntica byte a byte de los escenarios existentes, verificada con hashes antes y después), `build_calendar_scenario` y servicio `process_join_service` con cachés por señal, intervalo y objetivo, motor `process_join` y endpoint `/quality-analytics/process-join` (404 sin REAL, 422 por señal/objetivo/intervalo/desfase). Frontend: `QualityJoinPanel` (Vista A) en el paso 5 con insignias REAL + Simulado + Experimental y notas de unión ilustrativa y de relación impuesta por construcción; procedencia del paso 5 con REAL. Pruebas: backend 1254 passed / 4 skipped (32 nuevas); frontend 29/29 archivos (3 nuevas), `tsc -b` limpio; ruff limpio; lint de confidencialidad sin coincidencias. Navegador (Edge headless, backend local con el dataset REAL): temperatura de molde con asociación fuerte por construcción y presiones de control con asociación débil, como se espera; series cortadas en los paros; claro y oscuro; 0 errores de consola. Primera llamada local < 1 s, luego milisegundos. Con esto el tablero queda completo salvo la ejecución de F9 en el VPS. |
 | 2026-10-28 | F16 | Hecho. Maqueta Hoy/Propuesta revisada por el usuario fuera del repo; aprobó el lenguaje del panel para todo el banco de trabajo, cifras grandes, oscuro grafito y «un leve color donde hay que resaltar» (D12). Tokens grafito y de marcas de datos con alias `--lp-*` (el panel solo cambia de tono), acento NOK atenuado `--wb-nok`, `workbench.css` acotado a `.wb-root` con clases marcadoras en `Card`/`CardHeader`/`Button` (metrología sin cambios, verificado en el dashboard), `components/workbench/` (`Kpi` con valor completo para lectores de pantalla y unidad pequeña, `Notice`, `Key`) y `lib/demo/chartTheme.ts`. Barrido de pasos 1–7, árbol, inspector y barra de herramientas (teclas Re Pág/Av Pág visibles en pantallas anchas). El acento se limita a piezas NOK, tasa NOK, peor grupo, outliers y lo que una alarma no detectó; las plumas de señales IIoT conservan su paleta. Pruebas: frontend 208 passed con `--maxWorkers=4`, `tsc -b` limpio, build OK; lint de confidencialidad y deploy 21 passed / 16 skipped; navegador en claro y oscuro de inicio, pasos 1–7, panel y dashboard de metrología contra el dataset REAL local, sin errores de consola salvo 404 previos al reinicio del backend. |
+| 2026-10-29 | F17 | Hecho. En la presentación con el dataset REAL apareció un «nido 13»; el análisis fuera del repo mostró que es el nido 1 con un desfase de +12 en el registro (misma posición en la rotación, mismas cavidades y misma tasa NOK; también 19–24 = 7–12 en una vuelta). Regla `remap` en el mapping privado con valor crudo conservado (D13). Pruebas: backend 52 passed en los módulos de convertidor, dataset REAL y analítica; frontend 38 passed en quality-analytics; `tsc -b` y ruff limpios. Pendiente local: actualizar el mapping privado y re-convertir. |
+| 2026-10-29 | F18 | Hecho. En el análisis del export real (fuera del repo), en un periodo dado cada cavidad de molde pasó solo por 3 de los 12 nidos, y ese trío cambió después de los paros. El salto de rechazo tras el paro del primer día coincide con el cambio de cavidades que recibe el nido crítico. La matriz nido × cavidad y el filtro por hora permiten mostrarlo en la demo. Pruebas: backend 53 passed (convertidor, dataset REAL, analítica y API); frontend 36 passed en quality-analytics; `tsc -b` limpio. |
+| 2026-10-29 | F19 | Hecho. Gráfica X/Y de posición de pines pedida por el cliente tras la presentación, para ver hacia dónde se desvía la posición dentro del rango de tolerancia. Nominales y tolerancias del plano y de fin de línea solo en la especificación privada (D13). Durante el trabajo el usuario pidió respetar el diseño industrial: marcas neutras, un solo acento NOK y límites rotulados (D12). Pruebas: backend 1271 passed / 4 skipped (suite completa); frontend 213 passed (29 archivos), `tsc -b` y build limpios; confidencialidad y deploy 21 passed / 16 skipped. Pendiente local: crear `pin-spec.json` en `demo-private/` con los nominales del plano y re-convertir con la regla de F17. |
 
 ## 7. Pendientes / ideas fuera de fase
 

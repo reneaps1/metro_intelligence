@@ -43,6 +43,13 @@ class PresetOut(BaseModel):
     group_by: Literal["nest", "mold_cavity"]
 
 
+class PinPairOut(BaseModel):
+    """IQ-F19: an X/Y pair offered by the position view."""
+
+    key: str
+    label: str
+
+
 class DatasetOut(BaseModel):
     id: str
     name: str
@@ -71,6 +78,8 @@ class DatasetOut(BaseModel):
     presets: list[PresetOut] = Field(default_factory=list)
     # Counts only, from the offline conversion report (no identifiers).
     data_quality: dict[str, int] = Field(default_factory=dict)
+    # IQ-F19: X/Y pairs with a position tolerance (empty = no position view).
+    pin_pairs: list[PinPairOut] = Field(default_factory=list)
 
 
 class DatasetListResponse(BaseModel):
@@ -160,6 +169,16 @@ class HeatmapCell(BaseModel):
     rate: float | None
 
 
+class NestMoldCell(BaseModel):
+    """IQ-F18: one observed (nest, mold cavity) combination."""
+
+    nest: int
+    mold_cavity: int
+    pieces: int
+    nok: int
+    rate: float | None
+
+
 class OverviewResponse(BaseModel):
     dataset_id: str
     source_type: SourceType
@@ -173,6 +192,8 @@ class OverviewResponse(BaseModel):
     station_pareto: list[StationParetoRow] = Field(default_factory=list)
     # "variable": cells are nest x variable; "station": nest x first failing station.
     heatmap_axis: Literal["variable", "station"] = "variable"
+    # IQ-F18: nest x mold cavity (only combinations with pieces; empty without mold cavities).
+    nest_mold: list[NestMoldCell] = Field(default_factory=list)
 
 
 class Spec(BaseModel):
@@ -312,3 +333,62 @@ class ProcessJoinResponse(BaseModel):
     causal_imposed: bool
     provenance: list[Literal["REAL", "SIMULATED", "EXPERIMENTAL"]]
     notes: list[str]
+
+
+# --- IQ-F19: X/Y position against the position tolerance ---
+
+
+class XYPair(BaseModel):
+    key: str
+    label: str
+    unit: str
+    nominal_x: float
+    nominal_y: float
+    tol_xy: float | None
+
+
+class XYCircle(BaseModel):
+    label: str
+    diameter: float
+    outside: int
+    outside_rate: float | None
+
+
+class XYTp(BaseModel):
+    median: float | None
+    p95: float | None
+    max: float | None
+
+
+class XYCentroid(BaseModel):
+    dx: float
+    dy: float
+
+
+class XYGroup(BaseModel):
+    # "OK" / "NOK" when grouping by verdict; the nest or mold cavity otherwise.
+    group: int | str
+    pieces: int
+    nok: int
+    centroid: XYCentroid | None
+
+
+class XYDetailResponse(BaseModel):
+    dataset_id: str
+    source_type: SourceType
+    pair: XYPair
+    group_by: Literal["nok", "nest", "mold_cavity"]
+    pieces: int
+    nok_pieces: int
+    nok_label: str
+    circles: list[XYCircle]
+    box_outside: int | None
+    box_outside_rate: float | None
+    tp: XYTp
+    centroid: XYCentroid | None
+    nok_centroid: XYCentroid | None
+    groups: list[XYGroup]
+    # [dx, dy, group (nest / mold cavity or null), nok]; a deterministic sample
+    # of at most 4000 pieces (NOK pieces sampled apart so they stay visible).
+    points: list[tuple[float, float, int | None, bool]]
+    points_total: int

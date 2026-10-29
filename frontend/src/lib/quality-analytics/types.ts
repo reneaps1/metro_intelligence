@@ -66,6 +66,8 @@ export interface QualityDataset {
   presets?: QualityPreset[];
   /** Counts from the offline conversion report (no identifiers). */
   data_quality?: Record<string, number>;
+  /** IQ-F19: X/Y pairs with a position tolerance (empty = no position view). */
+  pin_pairs?: { key: string; label: string }[];
 }
 
 export interface CavityRate {
@@ -149,6 +151,15 @@ export interface HeatmapCell {
   rate: number | null;
 }
 
+/** IQ-F18: one observed (nest, mold cavity) combination; absent = never met. */
+export interface NestMoldCell {
+  nest: number;
+  mold_cavity: number;
+  pieces: number;
+  nok: number;
+  rate: number | null;
+}
+
 export interface OverviewResponse {
   dataset_id: string;
   source_type: DatasetSourceType;
@@ -162,6 +173,7 @@ export interface OverviewResponse {
   station_pareto?: StationParetoRow[];
   /** "station": heatmap rows are stations (first failing), not variables. */
   heatmap_axis?: "variable" | "station";
+  nest_mold?: NestMoldCell[];
 }
 
 export interface GroupBox {
@@ -220,4 +232,34 @@ export interface ReportSummary {
   critical_nest_relative_risk: number | null;
   relative_risk_basis: string | null;
   notes: string[];
+}
+
+// --- IQ-F19: X/Y position against the position tolerance ---
+
+export type XYGroupBy = "nok" | "nest" | "mold_cavity";
+
+export interface XYCentroid {
+  dx: number;
+  dy: number;
+}
+
+export interface XYDetailResponse {
+  dataset_id: string;
+  source_type: DatasetSourceType;
+  pair: { key: string; label: string; unit: string; nominal_x: number; nominal_y: number; tol_xy: number | null };
+  group_by: XYGroupBy;
+  pieces: number;
+  nok_pieces: number;
+  nok_label: string;
+  /** Position zones (e.g. drawing and end-of-line), true position TP = 2·√(dx²+dy²) compared with the diameter. */
+  circles: { label: string; diameter: number; outside: number; outside_rate: number | null }[];
+  box_outside: number | null;
+  box_outside_rate: number | null;
+  tp: { median: number | null; p95: number | null; max: number | null };
+  centroid: XYCentroid | null;
+  nok_centroid: XYCentroid | null;
+  groups: { group: number | string; pieces: number; nok: number; centroid: XYCentroid | null }[];
+  /** [dx, dy, group (nest / mold cavity or null), nok]: a sample, NOK pieces kept apart. */
+  points: [number, number, number | null, boolean][];
+  points_total: number;
 }

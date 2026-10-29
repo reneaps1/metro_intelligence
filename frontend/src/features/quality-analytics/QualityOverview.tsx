@@ -7,10 +7,10 @@ import { Notice } from "../../components/workbench/Notice";
 import { useAsync } from "../../lib/catalog/hooks";
 import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import { fetchOverview, fetchReportSummary } from "../../lib/quality-analytics/api";
-import { cavityCsv, downloadText } from "../../lib/quality-analytics/export";
+import { cavityCsv, downloadText, nestMoldCsv } from "../../lib/quality-analytics/export";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import type { Granularity, QualityDataset, ReportSummary, SourceReported } from "../../lib/quality-analytics/types";
-import { CavityHeatmap, CavityRateChart, NokTrendChart, ParetoChart, StationParetoChart } from "./QualityCharts";
+import { CavityHeatmap, CavityRateChart, NestMoldMatrix, NokTrendChart, ParetoChart, StationParetoChart } from "./QualityCharts";
 import { QualityFilterBar } from "./QualityFilterBar";
 
 // IQ-F5: demo step 2 -- quality diagnosis over the selected dimensional dataset.
@@ -38,6 +38,7 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
   const stationName = (key: string) => dataset.stations?.find((st) => st.key === key)?.name ?? key;
   const reported = (s?.nok_basis ?? dataset.nok_basis) === "reported";
   const moldRows = data?.by_mold_cavity ?? [];
+  const nestMold = data?.nest_mold ?? [];
 
   return (
     <div className="space-y-4">
@@ -185,6 +186,24 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
                 <CavityHeatmap cells={data.heatmap} rowName={varName} />
               )}
             </Card>
+            {nestMold.length > 0 && (
+              <Card className="lg:col-span-2 xl:col-span-3">
+                <CardHeader
+                  title="NOK por nido × cavidad de molde"
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => downloadText("tasa_nok_nido_x_cavidad.csv", nestMoldCsv(nestMold))}
+                      title="Descargar la matriz agregada nido × cavidad de molde (CSV)"
+                      className={csvButton}
+                    >
+                      <Download size={14} aria-hidden="true" /> CSV
+                    </button>
+                  }
+                />
+                <NestMoldMatrix cells={nestMold} />
+              </Card>
+            )}
           </div>
         </>
       )}
@@ -202,6 +221,7 @@ const DATA_QUALITY_ROWS: [string, string, string][] = [
   ["repeated_signature_pieces", "Piezas con valores repetidos", "misma combinación exacta de cotas repetida muchas veces: sospecha de dato congelado"],
   ["sentinel_values", "Valores centinela descartados", "lecturas fuera de rango físico, tratadas como faltantes"],
   ["grouping_out_of_range", "Nido / cavidad fuera de rango", "se tratan como sin nido / cavidad"],
+  ["grouping_remapped", "Nido remapeado (crudo → normalizado)", "el número reportado traía un desfase conocido (p. ej. 13 → 1); se conserva el valor crudo"],
   ["rows_malformed", "Filas con formato inconsistente", "no se pudieron leer y se contaron, no se ocultaron"],
 ];
 

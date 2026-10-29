@@ -64,6 +64,7 @@ def configure(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., None]]:
         app_env="development",
         demo_client_label="Cliente demo",
         demo_real_dataset_path=None,
+        demo_real_spec_path=None,
     )
     yield _set
     real_dataset_service.reset_cache()
@@ -151,3 +152,81 @@ def test_api_validation_and_absence(
         f"{BASE}/variable", params={"variable": "PinsLength", "group_by": "mold_cavity"}, headers=headers
     )
     assert synthetic_mold.status_code == 422
+
+
+# --------------------------------------------------------------------------- IQ-F19: X/Y position
+
+
+def _write_spec(tmp_path: Path, **pair: object) -> Path:
+    import json
+
+    entry = {
+        "key": "pin_a",
+        "label": "Pin A",
+        "x": "x0",
+        "y": "x1",
+        "nominal_x": 1.0,
+        "nominal_y": 2.0,
+        "tol_xy": 0.5,
+        "circles": [{"label": "Plano", "diameter": 1.0}],
+        **pair,
+    }
+    path = tmp_path / "pin-spec.json"
+    path.write_text(json.dumps({"format": "pin-spec-v1", "pin_pairs": [entry]}), encoding="utf-8")
+    return path
+
+
+def test_real_xy_view_needs_the_private_spec(
+    client: TestClient, headers: dict[str, str], configure, real_path: Path, tmp_path: Path
+) -> None:
+    configure(demo_real_dataset_path=str(real_path), demo_real_spec_path=None)
+    assert load_real_dataset().pin_pairs == ()  # type: ignore[union-attr]
+    assert client.get(f"{BASE}/datasets", headers=headers).json()["items"][0]["pin_pairs"] == []
+    assert (
+        client.get(
+            f"{BASE}/xy", params={"dataset": REAL_DATASET_ID, "pair": "pin_a"}, headers=headers
+        ).status_code
+        == 404
+    )
+
+    configure(demo_real_spec_path=str(_write_spec(tmp_path)))
+    real = client.get(f"{BASE}/datasets", headers=headers).json()["items"][0]
+    assert real["pin_pairs"] == [{"key": "pin_a", "label": "Pin A"}]
+    body = client.get(
+        f"{BASE}/xy",
+        params={"dataset": REAL_DATASET_ID, "pair": "pin_a", "group_by": "mold_cavity"},
+        headers=headers,
+    ).json()
+    assert body["source_type"] == "REAL" and body["group_by"] == "mold_cavity"
+    assert body["pieces"] == 6 and body["nok_label"].endswith("máquina")
+    assert {g["group"] for g in body["groups"]} == {1, 2, 3}
+
+
+def test_an_unusable_spec_only_hides_the_xy_view(configure, real_path: Path, tmp_path: Path) -> None:
+    configure(demo_real_dataset_path=str(real_path))
+    configure(demo_real_spec_path=str(_write_spec(tmp_path, x="not_a_variable")))
+    ds = load_real_dataset()
+    assert ds is not None and ds.pin_pairs == ()
+    configure(demo_real_spec_path=str(tmp_path / "missing.json"))
+    assert load_real_dataset() is not None
+
+
+def test_xy_api_on_the_synthetic_dataset(client: TestClient, headers: dict[str, str], configure) -> None:
+    ok = client.get(
+        f"{BASE}/xy", params={"pair": "pin", "group_by": "nest", "cavities": "1,2"}, headers=headers
+    )
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["pair"]["tol_xy"] == 0.04 and body["circles"][0]["diameter"] == 0.08
+    assert {g["group"] for g in body["groups"]} == {1, 2}
+    assert client.get(f"{BASE}/xy", params={"pair": "nope"}, headers=headers).status_code == 404
+    assert (
+        client.get(
+            f"{BASE}/xy", params={"pair": "pin", "group_by": "mold_cavity"}, headers=headers
+        ).status_code
+        == 422
+    )
+    assert (
+        client.get(f"{BASE}/xy", params={"pair": "pin", "group_by": "zz"}, headers=headers).status_code == 422
+    )
+    assert client.get(f"{BASE}/xy", params={"pair": "pin"}).status_code == 401

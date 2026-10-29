@@ -22,9 +22,10 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.connectors.pieces_file import read_pieces
+from app.connectors.pin_spec import read_pin_spec
 from app.core.config import get_settings
 from app.engines.quality_analytics.analytics import Granularity, QualityFilter, overview
-from app.engines.quality_analytics.dataset import DimensionalDataset
+from app.engines.quality_analytics.dataset import DimensionalDataset, check_pin_pairs
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ REAL_DATASET_ID = "real-dimensional"
 _MB = 1024 * 1024
 
 _lock = threading.Lock()
-_cache: tuple[tuple[str, int, int], DimensionalDataset] | None = None
+_cache: tuple[tuple[object, ...], DimensionalDataset] | None = None
 # Overview over 10^5 pieces costs seconds in pure Python; the UI re-asks the
 # same few filter combinations, so keep the last results (keyed by dataset object).
 _OVERVIEW_CACHE_SIZE = 32
@@ -58,7 +59,7 @@ def load_real_dataset() -> DimensionalDataset | None:
     path = Path(path_value)
     try:
         stat = path.stat()
-        key = (str(path), stat.st_mtime_ns, stat.st_size)
+        key = (str(path), stat.st_mtime_ns, stat.st_size, _spec_key(settings.demo_real_spec_path))
         with _lock:
             if _cache is not None and _cache[0] == key:
                 return _cache[1]
@@ -74,11 +75,36 @@ def load_real_dataset() -> DimensionalDataset | None:
                 max_bytes=settings.demo_real_dataset_max_mb * _MB,
                 max_pieces=settings.demo_real_dataset_max_pieces,
             )
+            _attach_pin_spec(dataset, settings.demo_real_spec_path)
             _cache = (key, dataset)
             return dataset
     except (OSError, ValueError, ValidationError):
         logger.warning("The real dataset could not be loaded; it will not be offered.")
         return None
+
+
+def _spec_key(path_value: str | None) -> tuple[str, int, int] | None:
+    """Part of the cache key, so editing the private spec reloads the dataset."""
+    if not path_value:
+        return None
+    try:
+        stat = Path(path_value).stat()
+    except OSError:
+        return None
+    return (path_value, stat.st_mtime_ns, stat.st_size)
+
+
+def _attach_pin_spec(dataset: DimensionalDataset, path_value: str | None) -> None:
+    """IQ-F19: X/Y pairs from the private spec; an unusable spec only hides the X/Y view."""
+    if not path_value:
+        return
+    try:
+        pairs = read_pin_spec(Path(path_value))
+        check_pin_pairs(pairs, dataset.values)
+    except (OSError, ValueError, ValidationError):
+        logger.warning("The position spec could not be loaded; the X/Y view will not be offered.")
+        return
+    dataset.pin_pairs = pairs
 
 
 def cached_overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity) -> dict[str, Any]:

@@ -41,6 +41,35 @@ class Preset:
 
 
 @dataclass(frozen=True)
+class ToleranceCircle:
+    """A true-position tolerance zone: a circle of this diameter around the nominal (IQ-F19)."""
+
+    label: str
+    diameter: float
+
+
+@dataclass(frozen=True)
+class PinPair:
+    """Two variables that are the X and Y coordinates of one feature (IQ-F19).
+
+    ``scale`` converts the stored value to ``unit`` (e.g. 0.01 when a logger
+    reports hundredths of a millimetre). Nominals and tolerances are in
+    ``unit``. ``tol_xy`` is the symmetric +/- tolerance per axis, when given.
+    """
+
+    key: str
+    label: str
+    x: str
+    y: str
+    nominal_x: float
+    nominal_y: float
+    tol_xy: float | None
+    circles: tuple[ToleranceCircle, ...]
+    scale: float = 1.0
+    unit: str = "mm"
+
+
+@dataclass(frozen=True)
 class Variable:
     key: str
     name: str
@@ -122,6 +151,10 @@ class DimensionalDataset:
     # --- IQ-F10, all optional (None/empty = the dataset does not carry them) ---
     # Second grouping: the mold cavity, while `cavities` stays the nest.
     mold_cavities: list[int | None] | None = None
+    # IQ-F17: the groupings exactly as the source reported them, kept next to
+    # the normalized `cavities` / `mold_cavities` when a remap rule applied.
+    nests_raw: list[int | None] | None = None
+    mold_cavities_raw: list[int | None] | None = None
     # Stations in process order + their verdict per piece (True = NOK).
     stations: tuple[Station, ...] = ()
     station_nok: dict[str, list[bool | None]] = field(default_factory=dict)
@@ -135,6 +168,9 @@ class DimensionalDataset:
     presets: tuple[Preset, ...] = ()
     # Counts only (no identifiers): what the offline conversion found.
     data_quality: dict[str, int] = field(default_factory=dict)
+    # IQ-F19: X/Y variable pairs with a position tolerance (synthetic: in code;
+    # REAL: from a private spec file, see `connectors/pin_spec.py`).
+    pin_pairs: tuple[PinPair, ...] = ()
     nok: dict[str, list[bool]] = field(init=False)
     # First failing station in process order (None = no station failed).
     primary_fail: list[str | None] = field(init=False)
@@ -150,6 +186,8 @@ class DimensionalDataset:
             *self.values.values(),
             *([self.reported_nok] if self.reported_nok is not None else []),
             *([self.mold_cavities] if self.mold_cavities is not None else []),
+            *([self.nests_raw] if self.nests_raw is not None else []),
+            *([self.mold_cavities_raw] if self.mold_cavities_raw is not None else []),
             *([self.flags] if self.flags is not None else []),
             *self.station_nok.values(),
         ]
@@ -157,6 +195,7 @@ class DimensionalDataset:
             raise ValueError("all dataset columns must have the same length")
         if {s.key for s in self.stations} != set(self.station_nok):
             raise ValueError("station_nok must carry exactly one column per station")
+        check_pin_pairs(self.pin_pairs, self.values)
         by_key = {v.key: v for v in self.variables}
         # Variables without tolerance are never NOK by spec: share one read-only
         # column instead of evaluating every value (large real datasets).
@@ -194,8 +233,29 @@ class DimensionalDataset:
             "quality_flags": self.flags is not None and any(self.flags),
         }
 
+    def pin_pair(self, key: str) -> PinPair:
+        for p in self.pin_pairs:
+            if p.key == key:
+                return p
+        raise KeyError(key)
+
     def station(self, key: str) -> Station:
         for s in self.stations:
             if s.key == key:
                 return s
         raise KeyError(key)
+
+
+def check_pin_pairs(pairs: tuple[PinPair, ...], values: dict[str, list[float | None]]) -> None:
+    """Pair keys unique, both coordinates are dataset variables, tolerances positive."""
+    if len({p.key for p in pairs}) != len(pairs):
+        raise ValueError("pin pair keys must be unique")
+    for p in pairs:
+        if p.x not in values or p.y not in values or p.x == p.y:
+            raise ValueError(f"pin pair {p.key!r} must reference two distinct dataset variables")
+        if (
+            p.scale <= 0
+            or (p.tol_xy is not None and p.tol_xy <= 0)
+            or any(c.diameter <= 0 for c in p.circles)
+        ):
+            raise ValueError(f"pin pair {p.key!r} has a non-positive scale or tolerance")

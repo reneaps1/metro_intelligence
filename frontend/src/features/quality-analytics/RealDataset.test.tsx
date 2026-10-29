@@ -78,12 +78,51 @@ describe("QualityStep with the REAL dataset", () => {
       within(quality).getByText("Piezas con valores repetidos"),
     ).toBeInTheDocument();
     expect(within(quality).getByText("12")).toBeInTheDocument();
+    // IQ-F17: the nest normalization is shown, not hidden.
+    expect(
+      within(quality).getByText("Nido remapeado (crudo → normalizado)"),
+    ).toBeInTheDocument();
+    expect(within(quality).getByText("40")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Excluir piezas con nido remapeado" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the nest x mold cavity matrix with never-met combinations apart (IQ-F18)", async () => {
+    render(<QualityStep />);
+    await screen.findByLabelText("Indicadores de calidad");
+    const matrix = screen.getByRole("table", {
+      name: "Matriz NOK nido por cavidad de molde",
+    });
+    const worst = within(matrix).getByTitle(
+      "Nido 2 · cavidad 3: 27 NOK / 150 piezas (18.00 %)",
+    );
+    expect(worst.style.boxShadow).toContain("inset");
+    expect(within(matrix).getAllByLabelText("sin piezas")).toHaveLength(1);
+    expect(screen.getByText(/nido 2 × C3, recuadrada/)).toBeInTheDocument();
+  });
+
+  it("sends hour bounds in plant time once a day is chosen (IQ-F18)", async () => {
+    const user = userEvent.setup();
+    const seen: URLSearchParams[] = [];
+    render(<QualityStep />, seen);
+    await screen.findByLabelText("Indicadores de calidad");
+    const startHour = screen.getByRole("combobox", { name: "Desde la hora" });
+    expect(startHour).toBeDisabled();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Desde el día" }), "2026-01-05");
+    await user.selectOptions(startHour, "15");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Hasta el día" }), "2026-01-05");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Hasta la hora" }), "23");
+    await vi.waitFor(() => expect(seen.at(-1)?.get("end")).toBe("2026-01-05T23:00:00-05:00"));
+    expect(seen.at(-1)?.get("start")).toBe("2026-01-05T15:00:00-05:00");
   });
 
   it("sends station, mold cavity and suspect-data filters; clearing keeps the dataset", async () => {
     const user = userEvent.setup();
     const seen: URLSearchParams[] = [];
     render(<QualityStep />, seen);
+    // Wait for the REAL dataset to replace the default one before holding the KPI block.
+    await screen.findByText(/Período cerrado del cliente/);
     const kpis = await screen.findByLabelText("Indicadores de calidad");
 
     await user.click(

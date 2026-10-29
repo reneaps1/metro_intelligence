@@ -15,7 +15,7 @@ import random
 from datetime import UTC, datetime
 from functools import lru_cache
 
-from app.engines.quality_analytics.dataset import DimensionalDataset, Variable
+from app.engines.quality_analytics.dataset import DimensionalDataset, PinPair, ToleranceCircle, Variable
 
 SYNTHETIC_DATASET_ID = "demo-synthetic-dimensional"
 GENERATOR_VERSION = "dim-sim-1.0.0"
@@ -42,6 +42,21 @@ VARIABLES: tuple[Variable, ...] = (
     Variable("Thickness", "Espesor de pared", "mm", 1.500, -0.050, 0.050),
     Variable("Flatness", "Planitud", "mm", 0.000, None, 0.060),
 )
+# IQ-F19: the pin X/Y variables are one feature. Fictitious position
+# tolerance: the +/-0.040 mm per-axis box inscribes a 0.080 mm circle.
+PIN_PAIRS = (
+    PinPair(
+        "pin",
+        "Posición de pin (X/Y)",
+        "PinPositionX",
+        "PinPositionY",
+        3.200,
+        5.600,
+        0.040,
+        (ToleranceCircle("Posición Ø0.080", 0.080),),
+    ),
+)
+
 
 # Unilateral (form) characteristics are positive by nature: |N(mean, sd)|.
 _FORM = {"Coplanarity": (0.025, 0.012), "Flatness": (0.018, 0.009)}
@@ -162,6 +177,7 @@ def _build(crit: int) -> DimensionalDataset:
         shifts=shifts,
         batches=batches,
         values=values,
+        pin_pairs=PIN_PAIRS,
         mechanisms=[
             f"Nido {crit}: longitud de pines desplazada +0.028 mm y 30 % más dispersa; posición X +0.010 mm.",
             f"Oleadas NOK (posición Y +0.030 mm temporal): {wave_text}.",
