@@ -1,0 +1,261 @@
+import type { ReactNode } from "react";
+import { FilterX } from "lucide-react";
+import clsx from "clsx";
+import { Card } from "../../components/ui/Card";
+import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
+import {
+  DEFAULT_QUALITY_FILTERS,
+  activeFilterCount,
+  daysBetween,
+  toggle,
+  type QualityFilters,
+} from "../../lib/quality-analytics/filters";
+import type { QualityDataset } from "../../lib/quality-analytics/types";
+
+// IQ-F5: coordinated filters for steps 2 and 3. Filters the dataset cannot
+// support (missing metadata) are disabled with an explanation -- never faked.
+
+// IQ-F16: chips and labels in the workbench style (features/demo/workbench/workbench.css).
+function Chip({ active, onClick, children, label }: { active: boolean; onClick: () => void; children: ReactNode; label?: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={label}
+      onClick={onClick}
+      className={clsx("wb-chip", typeof children === "number" && "num")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Group({ title, enabled, children }: { title: string; enabled: boolean; children: ReactNode }) {
+  return (
+    <fieldset className="min-w-0" disabled={!enabled}>
+      <legend className="wb-label mb-1.5">
+        {title}
+        {!enabled && <span className="wb-label-inline ml-1 italic">(no disponible en este dataset)</span>}
+      </legend>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
+    </fieldset>
+  );
+}
+
+const select = "ml-2 rounded-md border border-border bg-surface px-2 py-1 text-sm font-medium normal-case tracking-normal text-text-primary";
+
+// IQ-F18: optional hour bounds (plant time) to compare e.g. before and after a stop.
+const START_HOURS = Array.from({ length: 24 }, (_, h) => h);
+const END_HOURS = Array.from({ length: 24 }, (_, h) => h + 1);
+const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
+
+function HourSelect({
+  label,
+  value,
+  hours,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  hours: number[];
+  placeholder: string;
+  disabled: boolean;
+  onChange: (hour: number | null) => void;
+}) {
+  return (
+    <select
+      className={select}
+      value={value ?? ""}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      aria-label={label}
+      title={disabled ? "Elige primero el día" : "Hora de planta"}
+    >
+      <option value="">{placeholder}</option>
+      {hours.map((h) => (
+        <option key={h} value={h}>
+          {hourLabel(h)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+export function QualityFilterBar({ dataset, showVariables = true }: { dataset: QualityDataset; showVariables?: boolean }) {
+  const { qualityFilters: f, setQualityFilters } = useDemoSession();
+  const set = (patch: Partial<QualityFilters>) => setQualityFilters((prev) => ({ ...prev, ...patch }));
+  const offset = dataset.utc_offset_minutes ?? 0;
+  const days = daysBetween(dataset.period_start, dataset.period_end, offset);
+  const available = dataset.available_filters;
+  const active = activeFilterCount(f);
+  const reported = dataset.nok_basis === "reported";
+  const stations = dataset.stations ?? [];
+  const moldCavities = dataset.mold_cavities ?? [];
+  const presets = dataset.presets ?? [];
+  const sameStations = (keys: string[]) => keys.length === f.stations.length && keys.every((k) => f.stations.includes(k));
+
+  return (
+    <Card className="space-y-3">
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="wb-label">
+          Desde
+          <select
+            className={select}
+            value={f.startDay ?? ""}
+            onChange={(e) => set({ startDay: e.target.value || null, ...(e.target.value ? {} : { startHour: null }) })}
+            aria-label="Desde el día"
+          >
+            <option value="">Inicio</option>
+            {days.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <HourSelect
+            label="Desde la hora"
+            value={f.startHour}
+            hours={START_HOURS}
+            placeholder="00:00"
+            disabled={!f.startDay}
+            onChange={(h) => set({ startHour: h })}
+          />
+        </label>
+        <label className="wb-label">
+          Hasta
+          <select
+            className={select}
+            value={f.endDay ?? ""}
+            onChange={(e) => set({ endDay: e.target.value || null, ...(e.target.value ? {} : { endHour: null }) })}
+            aria-label="Hasta el día"
+          >
+            <option value="">Fin</option>
+            {days.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <HourSelect
+            label="Hasta la hora"
+            value={f.endHour}
+            hours={END_HOURS}
+            placeholder="24:00"
+            disabled={!f.endDay}
+            onChange={(h) => set({ endHour: h })}
+          />
+        </label>
+        <Group title="Máquina" enabled={available.machine}>
+          {dataset.machines.map((m) => (
+            <Chip key={m} active={f.machines.includes(m)} onClick={() => set({ machines: toggle(f.machines, m) })}>
+              {m}
+            </Chip>
+          ))}
+        </Group>
+        <Group title="Turno" enabled={available.shift}>
+          {dataset.shifts.map((s) => (
+            <Chip key={s} active={f.shifts.includes(s)} onClick={() => set({ shifts: toggle(f.shifts, s) })} label={`Turno ${s}`}>
+              {s}
+            </Chip>
+          ))}
+        </Group>
+        <Group title="Lote" enabled={available.batch}>
+          {dataset.batches.map((b) => (
+            <Chip key={b} active={f.batches.includes(b)} onClick={() => set({ batches: toggle(f.batches, b) })}>
+              {b}
+            </Chip>
+          ))}
+        </Group>
+        <button
+          type="button"
+          onClick={() =>
+            // Clears the filters only: the dataset, granularity and step-3 selection stay.
+            setQualityFilters((prev) => ({
+              ...DEFAULT_QUALITY_FILTERS,
+              datasetId: prev.datasetId,
+              datasetChosen: prev.datasetChosen,
+              granularity: prev.granularity,
+              detailVariable: prev.detailVariable,
+              groupBy: prev.groupBy,
+            }))
+          }
+          disabled={active === 0}
+          className="wb-chip ml-auto"
+        >
+          <FilterX size={14} aria-hidden="true" /> Limpiar filtros{active ? ` (${active})` : ""}
+        </button>
+      </div>
+      {presets.length > 0 && (
+        <Group title="Vistas rápidas" enabled>
+          {presets.map((p) => (
+            <Chip
+              key={p.key}
+              active={sameStations(p.stations)}
+              onClick={() =>
+                set({
+                  stations: sameStations(p.stations) ? [] : p.stations,
+                  groupBy: p.group_by === "mold_cavity" ? "mold_cavity" : "cavity",
+                })
+              }
+            >
+              {p.label}
+            </Chip>
+          ))}
+        </Group>
+      )}
+      <Group title={moldCavities.length ? "Nido" : "Nido / cavidad"} enabled={available.cavity}>
+        {dataset.cavities.map((c) => (
+          <Chip key={c} active={f.cavities.includes(c)} onClick={() => set({ cavities: toggle(f.cavities, c) })} label={`Nido ${c}`}>
+            {c}
+          </Chip>
+        ))}
+      </Group>
+      {available.mold_cavity && (
+        <Group title="Cavidad de molde" enabled>
+          {moldCavities.map((c) => (
+            <Chip
+              key={c}
+              active={f.moldCavities.includes(c)}
+              onClick={() => set({ moldCavities: toggle(f.moldCavities, c) })}
+              label={`Cavidad de molde ${c}`}
+            >
+              {c}
+            </Chip>
+          ))}
+        </Group>
+      )}
+      {showVariables && reported && (
+        <Group title="Estaciones que cuentan para NOK (vacío = resultado total de la máquina)" enabled={stations.length > 0}>
+          {stations.map((s) => (
+            <Chip key={s.key} active={f.stations.includes(s.key)} onClick={() => set({ stations: toggle(f.stations, s.key) })}>
+              {s.name}
+            </Chip>
+          ))}
+        </Group>
+      )}
+      {available.quality_flags && (
+        <Group title="Calidad del dato" enabled>
+          <Chip active={f.excludeSuspect} onClick={() => set({ excludeSuspect: !f.excludeSuspect })}>
+            Excluir piezas con valores repetidos (sospecha de dato congelado)
+          </Chip>
+          {(dataset.data_quality?.grouping_remapped ?? 0) > 0 && (
+            <Chip active={f.excludeRemapped} onClick={() => set({ excludeRemapped: !f.excludeRemapped })}>
+              Excluir piezas con nido remapeado
+            </Chip>
+          )}
+        </Group>
+      )}
+      {showVariables && !reported && (
+        <Group title="Cotas que cuentan para NOK (vacío = todas)" enabled>
+          {dataset.variables.map((v) => (
+            <Chip key={v.key} active={f.variables.includes(v.key)} onClick={() => set({ variables: toggle(f.variables, v.key) })}>
+              {v.name}
+            </Chip>
+          ))}
+        </Group>
+      )}
+    </Card>
+  );
+}

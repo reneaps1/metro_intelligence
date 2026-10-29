@@ -25,7 +25,14 @@ from openpyxl import load_workbook  # noqa: E402
 
 from seed.generators.catalog import FAMILIES, LINE_CODES, MACHINES  # noqa: E402
 from seed.generators.users import ROLE_DEFINITIONS  # noqa: E402
-from seed.validation.confidentiality import check_email, check_identifier  # noqa: E402
+from seed.validation.confidentiality import (  # noqa: E402
+    DEFAULT_PRIVATE_TERMS_FILE,
+    PRIVATE_TERMS_ENV,
+    check_email,
+    check_identifier,
+    load_private_terms,
+    scan_files,
+)
 
 SAMPLE_FILES_DIR = REPO_ROOT / "seed" / "sample_files"
 
@@ -141,3 +148,93 @@ def test_lint_does_not_flag_fictitious_mi_demo_prefix_even_if_digit_heavy() -> N
     # must stay exempt from the part-number shape checks that would
     # otherwise flag its digit suffix.
     assert check_identifier("MI-DEMO-1001") == []
+
+
+# --------------------------------------------------------------------------- #
+# IQ-F8: industrial-demo fixtures and the private deny-list scan
+# --------------------------------------------------------------------------- #
+
+DIMENSIONAL_IDENTIFIER_COLUMNS = {"ID_Pieza", "Nido", "Maquina", "serial", "cavity", "press", "material_lot"}
+
+
+def test_lint_accepts_dimensional_sample_identifiers() -> None:
+    files = sorted(SAMPLE_FILES_DIR.glob("mi_demo_dimensional_*.csv"))
+    assert len(files) == 2, "expected the IQ-F6 long and wide dimensional samples"
+    for csv_path in files:
+        text = csv_path.read_text(encoding="utf-8")
+        dialect = csv.Sniffer().sniff(text.splitlines()[0], delimiters=",;")
+        reader = csv.DictReader(text.splitlines(), dialect=dialect)
+        columns = DIMENSIONAL_IDENTIFIER_COLUMNS & set(reader.fieldnames or [])
+        assert columns, f"no identifier columns recognised in {csv_path.name}"
+        for row in reader:
+            for column in columns:
+                assert check_identifier(row[column]) == [], f"{csv_path.name}, {column!r}: {row[column]!r}"
+
+
+def _tracked_files() -> list[str]:
+    import subprocess
+
+    out = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=REPO_ROOT, capture_output=True, check=True
+    ).stdout.decode("utf-8")
+    return [str(REPO_ROOT / name) for name in out.split("\0") if name]
+
+
+def test_no_private_term_in_any_tracked_file() -> None:
+    import os
+
+    import pytest
+
+    path = os.getenv(PRIVATE_TERMS_ENV) or str(REPO_ROOT / DEFAULT_PRIVATE_TERMS_FILE)
+    terms = load_private_terms(path)
+    if not terms:
+        pytest.skip("no private deny-list available (expected in CI); see seed/validation/confidentiality.py")
+    hits = scan_files(_tracked_files(), terms)
+    # Report paths only: echoing the matched term would print the secret itself.
+    assert not hits, f"private terms found in tracked files: {sorted({p for p, _ in hits})}"
+
+
+def test_private_scan_catches_a_planted_term(tmp_path: Path) -> None:
+    terms_file = tmp_path / "terms.txt"
+    terms_file.write_text("# comment\nAcmeTestCo\nab\n", encoding="utf-8")
+    terms = load_private_terms(str(terms_file))
+    assert terms == ["AcmeTestCo"], "comments and too-short terms must be ignored"
+    leaky = tmp_path / "notes.md"
+    leaky.write_text("Demo para ACMETESTCO, planta norte", encoding="utf-8")
+    clean = tmp_path / "clean.md"
+    clean.write_text("Cliente demo", encoding="utf-8")
+    binary = tmp_path / "blob.bin"
+    binary.write_bytes(b"\x00AcmeTestCo")
+    assert scan_files([str(leaky), str(clean), str(binary)], terms) == [(str(leaky), "AcmeTestCo")]
+    assert load_private_terms(str(tmp_path / "missing.txt")) == []
+
+
+# Brand names that must never appear in the product (owner's decision,
+# 2026-10-29). Stored as SHA-256 of the lower-case word so this guard does not
+# itself spell the name out.
+_BANNED_WORD_SHA256 = frozenset({"dd1ec9fa335b4956dacaa9c462db191a098dbd5f6f5b14243a76bbb58e4a3686"})
+
+
+def _banned_words_in(text: str) -> bool:
+    import hashlib
+    import re
+
+    words = {w.lower() for w in re.findall(r"[A-Za-z]{4,}", text)}
+    return any(hashlib.sha256(w.encode()).hexdigest() in _BANNED_WORD_SHA256 for w in words)
+
+
+def test_no_banned_brand_name_in_any_tracked_file() -> None:
+    hits = []
+    for path in _tracked_files():
+        if _banned_words_in(path):
+            hits.append(path)
+            continue
+        try:
+            content = Path(path).read_bytes()
+        except OSError:
+            continue
+        if b"\x00" in content[:8192]:
+            continue
+        if _banned_words_in(content.decode("utf-8", "ignore")):
+            hits.append(path)
+    assert not hits, f"banned brand name found in tracked files: {hits}"

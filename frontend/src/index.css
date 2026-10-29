@@ -31,6 +31,17 @@ body {
   outline-offset: 2px;
 }
 
+/* ISA-101: only an unacknowledged alarm symbol blinks; reduced motion stops it (rule below). */
+@keyframes wb-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+.wb-blink {
+  animation: wb-blink 1s steps(1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

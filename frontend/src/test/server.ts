@@ -1,5 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import { predictiveHandlers } from "./predictiveFixtures";
+import { linePanelHandlers } from "./linePanelFixtures";
 
 // F5.4 (MI-33): mocks the real F4.2 /auth contract (backend/app/api/v1/auth.py)
 // so AuthProvider/LoginPage tests exercise the actual request/response shapes
@@ -449,9 +451,612 @@ export const liveMonitorHandlers = [
   ),
 ];
 
+// IQ-F1: /meta defaults to the metrology edition so every pre-existing test
+// sees the original navigation; industrial tests override with server.use(...).
+export const META_METROLOGY_FIXTURE = { edition: "metrology", client_label: null, modules: [] };
+export const META_INDUSTRIAL_FIXTURE = {
+  edition: "industrial",
+  client_label: "Cliente demo",
+  modules: ["industrial_demo", "industrial_signals"],
+};
+
+export const metaHandlers = [http.get(`${API_BASE_URL}/meta`, () => HttpResponse.json(META_METROLOGY_FIXTURE))];
+
+export function industrialMetaHandler() {
+  return http.get(`${API_BASE_URL}/meta`, () => HttpResponse.json(META_INDUSTRIAL_FIXTURE));
+}
+
+// IQ-F2: fixtures mirroring backend/app/schemas/industrial_signals.py.
+const SIGNAL_LEAF = (
+  machine: string,
+  key: string,
+  name: string,
+  unit: string,
+  valueType: string,
+  causalImposed = false,
+) => ({
+  id: `L1.${machine}.${key}`,
+  name,
+  node_type: "signal",
+  children: [],
+  signal: {
+    signal_id: `L1.${machine}.${key}`,
+    key,
+    machine_code: machine,
+    name,
+    unit,
+    value_type: valueType,
+    sampling: "continuous",
+    rate_hz: 1,
+    informative: true,
+    description: name,
+    source_type: "SIMULATED",
+    causal_imposed: causalImposed,
+  },
+});
+
+export const SIGNAL_TREE_FIXTURE = {
+  source_type: "SIMULATED",
+  generator_version: "process-sim-1.0.0",
+  root: {
+    id: "PLANTA-DEMO",
+    name: "Planta demo (ficticia)",
+    node_type: "plant",
+    signal: null,
+    children: [
+      {
+        id: "L1.INY-01",
+        name: "Inyectora 01",
+        node_type: "machine",
+        signal: null,
+        children: [
+          {
+            id: "L1.INY-01.temperatures",
+            name: "Temperaturas",
+            node_type: "group",
+            signal: null,
+            children: [SIGNAL_LEAF("INY-01", "mold_temp", "Temperatura de molde", "°C", "analog")],
+          },
+          {
+            id: "L1.INY-01.pressures",
+            name: "Presiones",
+            node_type: "group",
+            signal: null,
+            children: [
+              SIGNAL_LEAF("INY-01", "injection_pressure", "Presión de inyección", "bar", "analog"),
+              SIGNAL_LEAF("INY-01", "holding_pressure", "Presión de mantenimiento (media por ciclo)", "bar", "analog"),
+            ],
+          },
+          {
+            id: "L1.INY-01.state",
+            name: "Estado de máquina",
+            node_type: "group",
+            signal: null,
+            children: [SIGNAL_LEAF("INY-01", "alarm", "Alarma activa", "0/1", "digital")],
+          },
+          {
+            id: "L1.INY-01.quality_sim",
+            name: "Calidad sintética (Vista B · causalidad impuesta)",
+            node_type: "group",
+            signal: null,
+            children: [SIGNAL_LEAF("INY-01", "dim_pins_length", "Longitud de pin (sintética)", "mm", "analog", true)],
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const SCENARIO_WINDOW = { start: "2026-10-20T06:00:00Z", end: "2026-10-20T14:00:00Z" };
+
+export const SCENARIOS_FIXTURE = {
+  source_type: "SIMULATED",
+  generator_version: "process-sim-1.0.0",
+  items: [
+    { id: "normal", name: "Operación normal estable", description: "Referencia.", event_count: 1, ...SCENARIO_WINDOW },
+    { id: "thermal_drift", name: "Deriva térmica del molde", description: "Molde +8 °C.", event_count: 2, ...SCENARIO_WINDOW },
+  ],
+};
+
+const EVENTS_BY_SCENARIO: Record<string, { label: string; start: string; severity: string; event_type: string }[]> = {
+  normal: [
+    { label: "Cambio de lote de material", start: "2026-10-20T08:00:00Z", severity: "info", event_type: "batch_change" },
+  ],
+  thermal_drift: [
+    { label: "Cambio de lote de material", start: "2026-10-20T08:00:00Z", severity: "info", event_type: "batch_change" },
+    { label: "Alarma: temperatura de molde > 60 °C", start: "2026-10-20T10:52:30Z", severity: "critical", event_type: "alarm" },
+  ],
+};
+
+export const industrialSignalsHandlers = [
+  http.get(`${API_BASE_URL}/industrial-signals/tree`, () => HttpResponse.json(SIGNAL_TREE_FIXTURE)),
+  http.get(`${API_BASE_URL}/industrial-signals/scenarios`, () => HttpResponse.json(SCENARIOS_FIXTURE)),
+  http.get(`${API_BASE_URL}/industrial-signals/events`, ({ request }) => {
+    const scenario = new URL(request.url).searchParams.get("scenario") ?? "";
+    const items = (EVENTS_BY_SCENARIO[scenario] ?? []).map((event, index) => ({
+      id: `${scenario}-${index}`,
+      scenario_id: scenario,
+      machine_code: "INY-01",
+      end: null,
+      signal_ids: [],
+      ...event,
+    }));
+    return HttpResponse.json({ scenario_id: scenario, source_type: "SIMULATED", items });
+  }),
+  // IQ-F3: three points per requested signal across the requested window
+  // (value = 100 + index), enough to exercise cursors, stats and tracks.
+  http.get(`${API_BASE_URL}/industrial-signals/series`, ({ request }) => {
+    const url = new URL(request.url);
+    const ids = (url.searchParams.get("signals") ?? "").split(",").filter(Boolean);
+    const start = Date.parse(url.searchParams.get("start") ?? SCENARIO_WINDOW.start);
+    const end = Date.parse(url.searchParams.get("end") ?? SCENARIO_WINDOW.end);
+    const mid = (start + end) / 2;
+    return HttpResponse.json({
+      scenario_id: url.searchParams.get("scenario"),
+      source_type: "SIMULATED",
+      generator_version: "process-sim-1.1.0",
+      start: new Date(start).toISOString(),
+      end: new Date(end).toISOString(),
+      series: ids.map((id, i) => ({
+        signal_id: id,
+        name: id,
+        unit: "u",
+        value_type: "analog",
+        sampling: "continuous",
+        native_points: 3,
+        returned_points: 3,
+        downsampled: false,
+        mode: "raw",
+        points: [
+          [start, 100 + i],
+          [mid, 110 + i],
+          [end, 120 + i],
+        ],
+      })),
+    });
+  }),
+  http.get(`${API_BASE_URL}/industrial-signals/correlation`, ({ request }) => {
+    const url = new URL(request.url);
+    const mode = url.searchParams.get("mode") ?? "cycle";
+    const x = url.searchParams.get("x") ?? "";
+    const y = url.searchParams.get("y") ?? "";
+    const causal = y.endsWith("dim_pins_length") || x.endsWith("dim_pins_length");
+    return HttpResponse.json({
+      scenario_id: url.searchParams.get("scenario"),
+      source_type: "SIMULATED",
+      generator_version: "process-sim-1.1.0",
+      x: { signal_id: x, name: "X", unit: "bar", causal_imposed: false },
+      y: { signal_id: y, name: "Y", unit: "mm", causal_imposed: causal },
+      mode,
+      lag: Number(url.searchParams.get("lag") ?? 0),
+      lag_unit: mode === "cycle" ? "cycles" : "s",
+      start: SCENARIO_WINDOW.start,
+      end: SCENARIO_WINDOW.end,
+      n: 983,
+      pearson_r: -0.914,
+      slope: -0.000592,
+      intercept: 12.37,
+      r_squared: 0.835,
+      points: [
+        [560, 12.03],
+        [620, 12.0],
+      ],
+      lag_scan:
+        mode === "cycle"
+          ? [
+              { lag: -1, n: 982, pearson_r: -0.1 },
+              { lag: 0, n: 983, pearson_r: -0.914 },
+              { lag: 1, n: 982, pearson_r: -0.1 },
+            ]
+          : [
+              { lag: 0, n: 600, pearson_r: -0.01 },
+              { lag: 300, n: 590, pearson_r: -0.31 },
+            ],
+      best_lag: mode === "cycle" ? 0 : 300,
+      causal_imposed: causal,
+    });
+  }),
+];
+
+// IQ-F5: fixtures mirroring backend/app/schemas/quality_analytics.py. The
+// overview echoes the cavities filter so tests can prove filters drive data.
+export const QUALITY_DATASET_FIXTURE = {
+  id: "demo-synthetic-dimensional",
+  name: "Dataset dimensional sintético (estilo cliente)",
+  description: "7 días, 2 máquinas, 12 nidos, 2 cotas.",
+  source_type: "SIMULATED",
+  period_start: "2026-10-13T00:00:00Z",
+  period_end: "2026-10-19T23:58:00Z",
+  pieces: 1200,
+  groups: 100,
+  variables: [
+    { key: "PinsLength", name: "Longitud de pines", unit: "mm", nominal: 12, lsl: 11.95, usl: 12.05 },
+    { key: "Coplanarity", name: "Coplanaridad", unit: "mm", nominal: 0, lsl: null, usl: 0.08 },
+  ],
+  machines: ["INY-01", "INY-02"],
+  cavities: [1, 2, 3, 4],
+  shifts: ["A", "B", "C"],
+  batches: [],
+  available_filters: { machine: true, cavity: true, shift: true, batch: false },
+  mechanisms: ["Nido 4: longitud de pines desplazada."],
+  has_reported_verdict: false,
+  pin_pairs: [{ key: "pin", label: "Posición de pin (X/Y)" }],
+};
+
+/** IQ-F19: fictitious X/Y detail; nest 4 drifts in +X and has the most NOK. */
+export function xyFixture(groupBy: string) {
+  const nest = groupBy === "nest";
+  return {
+    dataset_id: QUALITY_DATASET_FIXTURE.id,
+    source_type: "SIMULATED",
+    pair: { key: "pin", label: "Posición de pin (X/Y)", unit: "mm", nominal_x: 3.2, nominal_y: 5.6, tol_xy: 0.04 },
+    group_by: groupBy,
+    pieces: 1200,
+    nok_pieces: 30,
+    nok_label: "pieza NOK (alguna cota fuera de tolerancia)",
+    circles: [{ label: "Posición", diameter: 0.08, outside: 12, outside_rate: 0.01 }],
+    box_outside: 9,
+    box_outside_rate: 0.0075,
+    tp: { median: 0.026, p95: 0.057, max: 0.131 },
+    centroid: { dx: 0.002, dy: 0.001 },
+    nok_centroid: { dx: 0.012, dy: 0.004 },
+    groups: nest
+      ? [1, 2, 3, 4].map((g) => ({
+          group: g,
+          pieces: 300,
+          nok: g === 4 ? 24 : 2,
+          centroid: { dx: g === 4 ? 0.01 : -0.001, dy: 0.001 },
+        }))
+      : [
+          { group: "OK", pieces: 1170, nok: 0, centroid: { dx: 0.002, dy: 0.001 } },
+          { group: "NOK", pieces: 30, nok: 30, centroid: { dx: 0.012, dy: 0.004 } },
+        ],
+    points: [
+      [0.01, 0.0, nest ? 1 : null, false],
+      [-0.02, 0.01, nest ? 2 : null, false],
+      [0.05, 0.02, nest ? 4 : null, true],
+    ],
+    points_total: 1200,
+  };
+}
+
+function overviewFixture(cavities: number[] | null) {
+  const pieces = cavities ? 300 * cavities.length : 1200;
+  const nok = cavities?.includes(4) ? 28 : cavities ? 3 : 37;
+  return {
+    dataset_id: QUALITY_DATASET_FIXTURE.id,
+    source_type: "SIMULATED",
+    granularity: "day",
+    summary: {
+      groups: pieces / 12,
+      pieces,
+      measurements: pieces * 2,
+      ok_pieces: pieces - nok,
+      nok_pieces: nok,
+      nok_rate: nok / pieces,
+      nok_rate_ci: [0.02, 0.04],
+      measurement_nok: nok,
+      top_variables: ["PinsLength"],
+      worst_cavity: { cavity: 4, pieces: 300, nok: 28, rate: 28 / 300, ci_low: 0.06, ci_high: 0.13, relative_risk: 9.3 },
+      period_start: "2026-10-13T00:00:00Z",
+      period_end: "2026-10-19T23:58:00Z",
+      nok_definition: "Pieza NOK = al menos una de las cotas seleccionadas fuera de tolerancia.",
+      variables_counted: ["PinsLength", "Coplanarity"],
+      variables_with_tolerance: 2,
+      source_reported: null,
+    },
+    trend: [{ bucket: "2026-10-13", start: "2026-10-13T00:00:00Z", pieces, nok, rate: nok / pieces }],
+    pareto: [
+      { variable: "PinsLength", name: "Longitud de pines", nok, above: nok, below: 0, measurements: pieces, cumulative_pct: 1 },
+    ],
+    by_cavity: [
+      { cavity: 1, pieces: 300, nok: 3, rate: 0.01, ci_low: 0.003, ci_high: 0.029, relative_risk: 0.3 },
+      { cavity: 4, pieces: 300, nok: 28, rate: 28 / 300, ci_low: 0.06, ci_high: 0.13, relative_risk: 9.3 },
+    ],
+    heatmap: [{ cavity: 4, variable: "PinsLength", pieces: 300, nok: 28, rate: 28 / 300 }],
+  };
+}
+
+export const VARIABLE_DETAIL_FIXTURE = {
+  dataset_id: QUALITY_DATASET_FIXTURE.id,
+  source_type: "SIMULATED",
+  variable: "PinsLength",
+  name: "Longitud de pines",
+  spec: { nominal: 12, lsl: 11.95, usl: 12.05, unit: "mm" },
+  n: 1200,
+  nok: 30,
+  nok_rate: 0.025,
+  mean: 12.002,
+  std: 0.014,
+  min: 11.96,
+  max: 12.08,
+  capability: { cp: 1.19, cpk: 1.14, reason: null },
+  control_limits: { center_line: 12.002, ucl: 12.044, lcl: 11.96, engine: "spc_engine v1" },
+  histogram: [
+    { x0: 11.95, x1: 12.0, count: 600 },
+    { x0: 12.0, x1: 12.05, count: 570 },
+    { x0: 12.05, x1: 12.1, count: 30 },
+  ],
+  series: [
+    [1760313600000, 12.0, false],
+    [1760317200000, 12.06, true],
+  ],
+  series_thinned: false,
+  group_by: "cavity",
+  groups: [
+    { group: "1", n: 300, min: 11.96, q1: 11.99, median: 12.0, q3: 12.01, max: 12.04, whisker_low: 11.96, whisker_high: 12.04, outliers: 0, mean: 12.0, nok: 0, nok_rate: 0 },
+    { group: "4", n: 300, min: 11.99, q1: 12.02, median: 12.03, q3: 12.04, max: 12.08, whisker_low: 11.99, whisker_high: 12.07, outliers: 1, mean: 12.03, nok: 28, nok_rate: 0.093 },
+  ],
+  cpk_by_day: [{ day: "2026-10-13", n: 170, cpk: 1.1 }],
+};
+
+// IQ-F6: imported-CSV fixtures (preview -> mapping -> dataset).
+export const IMPORT_PREVIEW_FIXTURE = {
+  encoding: "utf-8",
+  delimiter: ";",
+  decimal: ",",
+  date_order: "dmy",
+  header: ["Fecha", "Hora", "ID_Pieza", "Nido", "Caracteristica", "Valor", "LIE", "LSE", "Resultado"],
+  rows: [["01/09/2026", "06:00:00", "P00001", "Nido 1", "Diametro_Pin", "0,6452", "0,625", "0,655", "OK"]],
+  profiles: [
+    { name: "Fecha", kind: "datetime", non_empty: 1, examples: ["01/09/2026"] },
+    { name: "Hora", kind: "datetime", non_empty: 1, examples: ["06:00:00"] },
+    { name: "ID_Pieza", kind: "text", non_empty: 1, examples: ["P00001"] },
+    { name: "Nido", kind: "text", non_empty: 1, examples: ["Nido 1"] },
+    { name: "Caracteristica", kind: "text", non_empty: 1, examples: ["Diametro_Pin"] },
+    { name: "Valor", kind: "number", non_empty: 1, examples: ["0,6452"] },
+    { name: "LIE", kind: "number", non_empty: 1, examples: ["0,625"] },
+    { name: "LSE", kind: "number", non_empty: 1, examples: ["0,655"] },
+    { name: "Resultado", kind: "text", non_empty: 1, examples: ["OK"] },
+  ],
+  suggestion: {
+    layout: "long",
+    roles: {
+      timestamp: "Fecha",
+      time: "Hora",
+      piece_id: "ID_Pieza",
+      cavity: "Nido",
+      ok_nok: "Resultado",
+      variable: "Caracteristica",
+      value: "Valor",
+      lsl: "LIE",
+      usl: "LSE",
+    },
+    value_columns: [],
+  },
+  sampled_rows: 1,
+  limits: { max_bytes: 20 * 1024 * 1024, max_rows: 200000 },
+};
+
+export const IMPORTED_DATASET_FIXTURE = {
+  ...QUALITY_DATASET_FIXTURE,
+  id: "import-0f0f",
+  name: "ensayo.csv",
+  description: "Archivo importado (formato largo): 960 piezas × 1 variable. No verificado por la plataforma.",
+  source_type: "IMPORTED",
+  pieces: 960,
+  variables: [{ key: "Diametro_Pin", name: "Diametro_Pin", unit: "mm", nominal: null, lsl: 0.625, usl: 0.655 }],
+  machines: [],
+  cavities: Array.from({ length: 16 }, (_, i) => i + 1),
+  shifts: [],
+  available_filters: { machine: false, cavity: true, shift: false, batch: false },
+  mechanisms: [],
+  has_reported_verdict: true,
+};
+
+export const IMPORT_REPORT_FIXTURE = {
+  filename: "ensayo.csv",
+  layout: "long",
+  rows_read: 5761,
+  rows_accepted: 5756,
+  rows_quarantined: 5,
+  pieces: 960,
+  variables: 1,
+  empty_values: 1,
+  quarantine_by_reason: [
+    { reason: "Valor no numérico", rows: 1 },
+    { reason: "Duplicado (misma pieza y variable)", rows: 4 },
+  ],
+  quarantine_examples: [
+    { row_number: 6, reason: "Valor no numérico" },
+    { row_number: 61, reason: "Duplicado (misma pieza y variable)" },
+  ],
+  warnings: ["Fechas sin zona horaria: se interpretaron como UTC."],
+  sample: { limited: true, rows_read: 5761, approx_file_pct: 12.5, file_bytes: 4000000, bytes_analysed: 500000 },
+};
+
+function importedOverviewFixture() {
+  const base = overviewFixture(null);
+  return {
+    ...base,
+    dataset_id: IMPORTED_DATASET_FIXTURE.id,
+    source_type: "IMPORTED",
+    summary: {
+      ...base.summary,
+      pieces: 960,
+      nok_pieces: 21,
+      ok_pieces: 939,
+      nok_rate: 21 / 960,
+      worst_cavity: { cavity: 11, pieces: 60, nok: 15, rate: 0.25, ci_low: 0.15, ci_high: 0.37, relative_risk: 37.5 },
+      variables_counted: ["Diametro_Pin"],
+      variables_with_tolerance: 1,
+      source_reported: {
+        pieces_with_verdict: 960,
+        nok_pieces: 48,
+        nok_rate: 0.05,
+        both_nok: 21,
+        source_only_nok: 27,
+        spec_only_nok: 0,
+        both_ok: 912,
+        definition: "OK/NOK reportado por la fuente: veredicto que trae el archivo, sin recalcular.",
+      },
+    },
+    by_cavity: [{ cavity: 11, pieces: 60, nok: 15, rate: 0.25, ci_low: 0.15, ci_high: 0.37, relative_risk: 37.5 }],
+    heatmap: [],
+  };
+}
+
+// IQ-F10: a fictitious REAL dataset (reported NOK basis, stations, mold cavities).
+// Tests opt in with server.use(...realQualityHandlers): by default only the
+// synthetic dataset is listed.
+export const REAL_DATASET_FIXTURE = {
+  id: "real-dimensional",
+  name: "Datos reales · Cliente demo",
+  description: "Período cerrado del cliente (Cliente demo), convertido fuera de línea y cargado localmente.",
+  source_type: "REAL",
+  period_start: "2026-01-05T13:00:00Z",
+  period_end: "2026-01-07T16:00:00Z",
+  pieces: 900,
+  groups: 900,
+  variables: [
+    { key: "x1", name: "Valor 1", unit: "", nominal: null, lsl: null, usl: null },
+    { key: "x2", name: "Valor 2", unit: "", nominal: null, lsl: null, usl: null },
+  ],
+  machines: [],
+  cavities: [1, 2, 3],
+  shifts: [],
+  batches: [],
+  available_filters: {
+    machine: false, cavity: true, shift: false, batch: false, mold_cavity: true, station: true, quality_flags: true,
+  },
+  mechanisms: [],
+  has_reported_verdict: true,
+  mold_cavities: [1, 2, 3, 4],
+  stations: [
+    { key: "st_a", name: "Estación A" },
+    { key: "st_b", name: "Estación B" },
+  ],
+  nok_basis: "reported",
+  utc_offset_minutes: -300,
+  has_groups: false,
+  presets: [{ key: "b_by_nest", label: "Estación B por nido", stations: ["st_b"], group_by: "nest" }],
+  data_quality: {
+    ids_total: 950, empty_cycles_excluded: 50, repeated_signature_pieces: 12, sentinel_values: 3,
+    grouping_out_of_range: 1, grouping_remapped: 40, rows_malformed: 7,
+  },
+};
+
+export function realOverviewFixture(params: URLSearchParams) {
+  const onlyB = params.get("stations") === "st_b";
+  const pieces = params.get("exclude_flags") ? 888 : 900;
+  const nok = onlyB ? 9 : 45;
+  const rate = (k: number, n: number) => k / n;
+  return {
+    dataset_id: REAL_DATASET_FIXTURE.id,
+    source_type: "REAL",
+    granularity: "day",
+    summary: {
+      groups: pieces, pieces, measurements: pieces * 2, ok_pieces: pieces - nok, nok_pieces: nok,
+      nok_rate: rate(nok, pieces), nok_rate_ci: [0.03, 0.07], measurement_nok: 0, top_variables: [],
+      worst_cavity: { cavity: 2, pieces: 300, nok: 30, rate: 0.1, ci_low: 0.07, ci_high: 0.14, relative_risk: 4 },
+      period_start: "2026-01-05T13:00:00Z", period_end: "2026-01-07T16:00:00Z",
+      nok_definition: "Pieza NOK = veredicto total reportado por la máquina.",
+      variables_counted: ["x1", "x2"], variables_with_tolerance: 0, source_reported: null,
+      nok_basis: "reported", stations_counted: onlyB ? ["st_b"] : ["st_a", "st_b"], pieces_without_verdict: 0,
+      worst_mold_cavity: { cavity: 3, pieces: 225, nok: 27, rate: 0.12, ci_low: 0.08, ci_high: 0.17, relative_risk: 5.2 },
+    },
+    trend: [{ bucket: "2026-01-05", start: "2026-01-05T05:00:00Z", pieces, nok, rate: rate(nok, pieces) }],
+    pareto: [],
+    by_cavity: [
+      { cavity: 1, pieces: 300, nok: 5, rate: 5 / 300, ci_low: 0.007, ci_high: 0.04, relative_risk: 0.3 },
+      { cavity: 2, pieces: 300, nok: 30, rate: 0.1, ci_low: 0.07, ci_high: 0.14, relative_risk: 4 },
+    ],
+    by_mold_cavity: [
+      { cavity: 1, pieces: 225, nok: 3, rate: 3 / 225, ci_low: 0.004, ci_high: 0.04, relative_risk: 0.2 },
+      { cavity: 3, pieces: 225, nok: 27, rate: 0.12, ci_low: 0.08, ci_high: 0.17, relative_risk: 5.2 },
+    ],
+    station_pareto: [
+      { station: "st_a", name: "Estación A", nok: onlyB ? 0 : 36, fails_any: 36, share: onlyB ? 0 : 0.8, cumulative_pct: 0.8 },
+      { station: "st_b", name: "Estación B", nok: 9, fails_any: 120, share: onlyB ? 1 : 0.2, cumulative_pct: 1 },
+    ],
+    heatmap: [
+      { cavity: 2, variable: "st_a", pieces: 300, nok: 25, rate: 25 / 300 },
+      { cavity: 2, variable: "st_b", pieces: 300, nok: 5, rate: 5 / 300 },
+    ],
+    heatmap_axis: "station",
+    // IQ-F18: nest 1 never met mold cavity 3 in this fixture.
+    nest_mold: [
+      { nest: 1, mold_cavity: 1, pieces: 150, nok: 1, rate: 1 / 150 },
+      { nest: 2, mold_cavity: 1, pieces: 75, nok: 2, rate: 2 / 75 },
+      { nest: 2, mold_cavity: 3, pieces: 150, nok: 27, rate: 27 / 150 },
+    ],
+  };
+}
+
+/** Lists the REAL dataset before the synthetic one and records overview queries. */
+export function realQualityHandlers(seen: URLSearchParams[] = []) {
+  return [
+    http.get(`${API_BASE_URL}/quality-analytics/datasets`, () =>
+      HttpResponse.json({ items: [REAL_DATASET_FIXTURE, QUALITY_DATASET_FIXTURE] }),
+    ),
+    http.get(`${API_BASE_URL}/quality-analytics/overview`, ({ request }) => {
+      const params = new URL(request.url).searchParams;
+      if (params.get("dataset") !== REAL_DATASET_FIXTURE.id) {
+        const raw = params.get("cavities");
+        return HttpResponse.json(overviewFixture(raw ? raw.split(",").map(Number) : null));
+      }
+      seen.push(params);
+      return HttpResponse.json(realOverviewFixture(params));
+    }),
+  ];
+}
+
+export const qualityHandlers = [
+  http.get(`${API_BASE_URL}/quality-analytics/datasets`, () => HttpResponse.json({ items: [QUALITY_DATASET_FIXTURE] })),
+  http.post(`${API_BASE_URL}/quality-analytics/imports/preview`, () => HttpResponse.json(IMPORT_PREVIEW_FIXTURE)),
+  http.post(`${API_BASE_URL}/quality-analytics/datasets`, () =>
+    HttpResponse.json({ report: IMPORT_REPORT_FIXTURE, dataset: IMPORTED_DATASET_FIXTURE }, { status: 201 }),
+  ),
+  http.delete(`${API_BASE_URL}/quality-analytics/datasets/:id`, () => new HttpResponse(null, { status: 204 })),
+  http.get(`${API_BASE_URL}/quality-analytics/overview`, ({ request }) => {
+    if (new URL(request.url).searchParams.get("dataset") === IMPORTED_DATASET_FIXTURE.id) {
+      return HttpResponse.json(importedOverviewFixture());
+    }
+    const raw = new URL(request.url).searchParams.get("cavities");
+    return HttpResponse.json(overviewFixture(raw ? raw.split(",").map(Number) : null));
+  }),
+  http.get(`${API_BASE_URL}/quality-analytics/variable`, ({ request }) => {
+    const variable = new URL(request.url).searchParams.get("variable");
+    if (variable === "Coplanarity") {
+      return HttpResponse.json({
+        ...VARIABLE_DETAIL_FIXTURE,
+        variable,
+        name: "Coplanaridad",
+        spec: { nominal: 0, lsl: null, usl: 0.08, unit: "mm" },
+        capability: { cp: null, cpk: 1.3, reason: "Cp no aplica a tolerancia unilateral; se reporta solo Cpk." },
+      });
+    }
+    return HttpResponse.json(VARIABLE_DETAIL_FIXTURE);
+  }),
+  http.get(`${API_BASE_URL}/quality-analytics/xy`, ({ request }) =>
+    HttpResponse.json(xyFixture(new URL(request.url).searchParams.get("group_by") ?? "nok")),
+  ),
+  http.get(`${API_BASE_URL}/quality-analytics/report-summary`, () =>
+    HttpResponse.json({
+      source: "placeholder",
+      illustrative: true,
+      title: "Ejemplo ilustrativo de informe histórico",
+      period: "Período de ejemplo",
+      records: 1000000,
+      piece_ids: 50000,
+      variables: 20,
+      nok_definition: "Pieza NOK = al menos una cota fuera de tolerancia.",
+      critical_nest: 4,
+      critical_nest_relative_risk: 10,
+      relative_risk_basis: null,
+      notes: [],
+    }),
+  ),
+];
+
 export const server = setupServer(
   ...handlers,
   ...catalogHandlers,
   ...recommendationsHandlers,
   ...liveMonitorHandlers,
+  ...metaHandlers,
+  ...industrialSignalsHandlers,
+  ...qualityHandlers,
+  ...predictiveHandlers,
+  ...linePanelHandlers,
 );

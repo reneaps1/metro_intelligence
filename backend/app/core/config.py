@@ -7,10 +7,13 @@ loudly at startup instead of surfacing later as a confusing runtime error.
 `env_file=".env"` is a local-dev convenience only (pydantic-settings only
 reads it if the file exists) -- Docker Compose and CI inject real
 environment variables directly, never through this file."""
+
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +26,36 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     cors_origins: str
+
+    # --- Edition (IQ-F1, docs/tasks/IQ-plan-demo-industrial-quality.md D5) ---
+    # "metrology" = measurement monitoring only (the original product);
+    # "industrial" = adds the industrial-quality demo, IIoT signals and AI lab.
+    # Defaults to metrology so a missing variable never exposes new modules.
+    app_edition: Literal["metrology", "industrial"] = "metrology"
+    # Customer-facing label shown by the industrial demo. The real customer
+    # name is only ever set in the deployment environment, never in the repo.
+    demo_client_label: str = "Cliente demo"
+    # IQ-F5: optional path to a PRIVATE JSON with the customer's historical
+    # report summary (kept outside the repo). Unset = illustrative placeholder.
+    demo_report_summary_path: str | None = None
+    # IQ-F7: optional path to a PRIVATE JSON with the customer's precomputed
+    # ML/DL study results (kept outside the repo). Unset = illustrative placeholder.
+    demo_model_lab_path: str | None = None
+    # IQ-F6: exploratory dimensional CSV import (in memory only, never persisted).
+    # Files larger than the byte cap are analysed as a sample of their head.
+    dimensional_import_max_rows: int = Field(default=200_000, ge=1_000, le=2_000_000)
+    dimensional_import_max_mb: int = Field(default=20, ge=1, le=200)
+    dimensional_import_ttl_minutes: int = Field(default=240, ge=5, le=24 * 60)
+    # IQ-F10 (plan decision D8): optional path to the manifest.json of the
+    # customer's REAL dataset, converted offline into a PRIVATE folder. Local
+    # use only: ignored when APP_ENV=production. Unset = not offered.
+    demo_real_dataset_path: str | None = None
+    demo_real_dataset_max_mb: int = Field(default=200, ge=1, le=2_000)
+    demo_real_dataset_max_pieces: int = Field(default=1_000_000, ge=1_000, le=10_000_000)
+    # IQ-F19 (plan decision D13): optional PRIVATE JSON with X/Y nominals and
+    # position tolerances for the REAL dataset (`connectors/pin_spec.py`).
+    # Unset or invalid = the REAL dataset has no X/Y position view.
+    demo_real_spec_path: str | None = None
 
     # --- Database (PostgreSQL 16) ---
     postgres_host: str

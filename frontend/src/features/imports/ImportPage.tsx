@@ -1,6 +1,10 @@
 import { Fragment, useRef, useState, type DragEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { UploadCloud } from "lucide-react";
 import { useAuth } from "../../lib/auth/AuthProvider";
+import { useEdition } from "../../lib/edition/EditionProvider";
+import { DEMO_BASE_PATH } from "../../lib/demo/steps";
+import { DimensionalImport } from "../quality-analytics/DimensionalImport";
 import { ApiError } from "../../lib/api";
 import { uploadImport, validateFileClientSide } from "../../lib/imports/api";
 import type { ImportedFile, ParseStatus } from "../../lib/imports/types";
@@ -18,6 +22,8 @@ const STATUS_CHIP: Record<ParseStatus, { status: "ok" | "nok" | "warning" | "inf
 export function ImportPage() {
   const { user } = useAuth();
   const canImport = user?.role === "metrologist" || user?.role === "admin";
+  const { edition } = useEdition();
+  const navigate = useNavigate();
 
   // Session-local: F4.5 exposes upload + get-by-id, not a list-all-imports
   // endpoint, so (same as F5.M's mock) history only covers what this browser
@@ -69,6 +75,18 @@ export function ImportPage() {
           </p>
         )}
       </div>
+
+      {edition === "industrial" && canImport && (
+        <Card>
+          <CardHeader title="Análisis dimensional con mapeo de columnas (exploratorio)" />
+          <p className="mb-3 text-sm text-text-secondary">
+            Para exportaciones con cualquier formato de columnas (largo o ancho). El resultado alimenta el diagnóstico de
+            calidad de la demo; no se escribe en el historial de mediciones. Para cargar al historial usa la carga de
+            abajo, con el formato del catálogo.
+          </p>
+          <DimensionalImport onImported={(ds) => navigate(`${DEMO_BASE_PATH}/quality?dataset=${encodeURIComponent(ds.id)}`)} />
+        </Card>
+      )}
 
       <Card>
         <CardHeader title="Upload a file" />

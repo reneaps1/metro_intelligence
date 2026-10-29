@@ -33,6 +33,16 @@
   --chart-5: #db2777;
   --chart-6: #64748b;
 
+  /* Engineering workbench chrome (industrial demo, docs/design/design-system.md §4.1) */
+  --wb-chrome: #e3e7eb;
+  --wb-chrome-text: #344054;
+  --wb-ribbon: #f7f8fa;
+  --wb-gutter: #c9d0d7;
+  --wb-pane-header: #edf0f3;
+  --wb-selected: rgba(14, 124, 134, 0.12);
+  --wb-status: #0e7c86;
+  --wb-status-text: #ffffff;
+
   --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.1);
 }
 
@@ -64,5 +74,82 @@
   --status-neutral: #98a6b3;
   --status-neutral-bg: rgba(152, 166, 179, 0.14);
 
+  --wb-chrome: #14181c;
+  --wb-chrome-text: #aab4bf;
+  --wb-ribbon: #232a31;
+  --wb-gutter: #0a0d10;
+  --wb-pane-header: #222a33;
+  --wb-selected: rgba(63, 176, 186, 0.18);
+  --wb-status: #145e5b;
+  --wb-status-text: #e6f4f3;
+
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Industrial demo workbench (design-system.md §4.1, decisions.md 2026-10-28):
+   ISA-101 neutral grays scoped to the module -- light gray background; dark is
+   graphite (IQ-F16), not pure black. Status colors are re-tuned to keep >= 4.5:1
+   on these surfaces; the rest of the platform keeps the tokens above. */
+.wb-root {
+  --bg-app: #dde1e5;
+  --bg-surface: #f5f6f8;
+  --bg-surface-raised: #ffffff;
+  --border-default: #b7bec6;
+  --text-secondary: #475467;
+  --status-warning: #8f4a06;
+  --wb-chrome: #e3e7eb;
+  --wb-pane-header: #eceef1;
+  --wb-selected: rgba(14, 124, 134, 0.14);
+  --wb-status: #e3e7eb;
+  --wb-status-text: #344054;
+  /* Data marks for the whole workbench (design-system.md §4.3, IQ-F16): neutral
+     bar, the highlighted mark (dark neutral, never an alarm color), its soft
+     counterpart and the single-hue ramp as "r, g, b" for rgba(). */
+  --wb-bar: #7b8591;
+  --wb-mark: #2f3a48;
+  --wb-mark-soft: #c4cad1;
+  --wb-ramp: 47, 58, 72;
+  /* Muted NOK accent (IQ-F16): a light touch for what has to stand out -- NOK
+     pieces, the worst group, outliers. Far less saturated than the alarm red
+     (--lp-p1-fill), which stays for alarms only. >= 4.5:1 as text. */
+  --wb-nok: #a64d58;
+  --wb-nok-soft: rgba(166, 77, 88, 0.12);
+  /* Line quality panel (design-system.md §4.2): alarm band fills (same in both
+     themes, text on them fixed); piece strip, bar and ramp alias the marks above. */
+  --lp-p1-fill: #c8102e;
+  --lp-p1-on: #ffffff;
+  --lp-p2-fill: #f5a524;
+  --lp-p2-on: #1f2328;
+  --lp-piece-ok: var(--wb-mark-soft);
+  --lp-piece-nok: var(--wb-mark);
+  --lp-bar: var(--wb-bar);
+  --lp-ramp: var(--wb-ramp);
+}
+
+:root[data-theme="dark"] .wb-root {
+  --brand-primary: #8fb3e8;
+  --brand-primary-hover: #a9c4ee;
+  --bg-app: #1b1e22;
+  --bg-surface: #212529;
+  --bg-surface-raised: #292e33;
+  --border-default: #3a4048;
+  --text-primary: #eef1f4;
+  --text-secondary: #b6bfc9;
+  --status-nok: #ff8a9a;
+  --status-nok-bg: rgba(255, 138, 154, 0.16);
+  --status-warning: #f5a524;
+  --status-warning-bg: rgba(245, 165, 36, 0.16);
+  --status-info: #8fb3e8;
+  --wb-chrome: #131518;
+  --wb-chrome-text: #b6bfc9;
+  --wb-pane-header: #272c31;
+  --wb-selected: rgba(63, 176, 186, 0.2);
+  --wb-status: #131518;
+  --wb-status-text: #b6bfc9;
+  --wb-bar: #8f99a4;
+  --wb-mark: #e6eaee;
+  --wb-mark-soft: #454c55;
+  --wb-ramp: 230, 234, 238;
+  --wb-nok: #d98e97;
+  --wb-nok-soft: rgba(217, 142, 151, 0.16);
 }

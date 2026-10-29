@@ -14,6 +14,8 @@ Default and first-class deployment: **fully inside customer infrastructure, no i
 
 Single host, Docker Compose: reverse proxy (TLS) → frontend + backend; PostgreSQL + MinIO on an internal-only Docker network; ports bound to 127.0.0.1 except the proxy. Segmented Docker networks mirror the zone model (docs/security/network-segmentation.md).
 
+Two editions (metrology + industrial demo) on the same host, each with its own database and object storage: [deployment-editions.md](deployment-editions.md).
+
 ## Production footprint (Phase 15–16)
 
 - Compose-hardened or Kubernetes (customer choice); NetworkPolicies encode zone boundaries.

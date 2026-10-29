@@ -40,6 +40,16 @@ export default {
           neutral: "var(--status-neutral)",
           "neutral-bg": "var(--status-neutral-bg)",
         },
+        wb: {
+          chrome: "var(--wb-chrome)",
+          "chrome-text": "var(--wb-chrome-text)",
+          ribbon: "var(--wb-ribbon)",
+          gutter: "var(--wb-gutter)",
+          "pane-header": "var(--wb-pane-header)",
+          selected: "var(--wb-selected)",
+          status: "var(--wb-status)",
+          "status-text": "var(--wb-status-text)",
+        },
         chart: {
           1: "var(--chart-1)",
           2: "var(--chart-2)",

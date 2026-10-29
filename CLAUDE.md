@@ -14,6 +14,10 @@ As of 2026-07-09 the near-term priority is a **navigable, visual demo**, not str
 - Backend/database work (F2.4, F3, F4) is not abandoned — it continues in parallel on its own branches — but is no longer the blocking path for what gets built next.
 - Once the visual golden path exists end-to-end, resume standard phase order and wire the frontend to the real API per `docs/roadmap.md`. Delete this section at that point.
 
+## 0b. Active workstream — Industrial Quality demo (temporary)
+
+Work on the `feat/industrial-quality-demo` branch follows `docs/tasks/IQ-plan-demo-industrial-quality.md` (Spanish). **At the start of every session, read that plan first and follow its "Protocolo de sesión"**: one phase per chat session, keep the status board and log in that file up to date, commit + push the branch at the end of each phase, never merge or deploy without explicit authorization. Confidential client context lives in `demo-private/` (gitignored) — read it if present, never commit or copy it into tracked files. Delete this section when the workstream is merged.
+
 ## 1. Product vision
 
 Metro Intelligence Platform is the first product of OnKaizen's **Manufacturing Intelligence Platform**. First use case: dimensional metrology intelligence for a high-end automotive customer (initially BMW). The platform turns measurement data + industrial context into **decision support**: compliance, SPC, dimensional risk, and adaptive inspection frequency recommendations. The strategic goal is to **optimize inspection strategy — reduce unnecessary inspections without increasing quality risk**, not merely to speed up reporting.
