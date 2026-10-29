@@ -12,6 +12,8 @@ import type { XYCentroid, XYDetailResponse } from "../../lib/quality-analytics/t
 
 /** Groups with fewer pieces are drawn but never called "the worst" (same rule as the backend ranking). */
 export const XY_MIN_GROUP_PIECES = 30;
+/** Group means labelled in the zoomed chart (the rest: tooltip and table). */
+const MAX_GROUP_LABELS = 8;
 
 const SIZE = 460;
 const M = { left: 56, right: 16, top: 16, bottom: 44 };
@@ -202,15 +204,24 @@ export function GroupMeansChart({
   const fmt = (v: number) => v.toLocaleString("es-MX", { minimumFractionDigits: digits, maximumFractionDigits: digits });
   const worst = worstGroup(detail);
   const unit = detail.pair.unit;
-  // Means that coincide would print their labels on top of each other: stack them below one another.
+  // Only the groups that stand out are labelled (the worst one and those farthest from the
+  // centre of all means); with 32 cavities, labelling every mean would bury the plot. Every
+  // mark keeps its tooltip, and the table below lists them all. A label that would collide
+  // with one already placed is dropped rather than moved away from its mark.
+  const mx = groups.reduce((a, g) => a + g.centroid!.dx, 0) / groups.length;
+  const my = groups.reduce((a, g) => a + g.centroid!.dy, 0) / groups.length;
+  const far = [...groups].sort(
+    (a, b) => Math.hypot(b.centroid!.dx - mx, b.centroid!.dy - my) - Math.hypot(a.centroid!.dx - mx, a.centroid!.dy - my),
+  );
+  const candidates = [...(worst ? [worst] : []), ...far.filter((g) => g !== worst)].slice(0, MAX_GROUP_LABELS);
   const placed: { x: number; y: number }[] = [];
-  const labelY = new Map<number | string, number>();
-  for (const g of [...groups].sort((a, b) => sy(a.centroid!.dy) - sy(b.centroid!.dy) || sx(a.centroid!.dx) - sx(b.centroid!.dx))) {
+  const labelled = new Set<number | string>();
+  for (const g of candidates) {
     const x = sx(g.centroid!.dx) + 6;
-    let y = sy(g.centroid!.dy) + 3.5;
-    while (placed.some((p) => Math.abs(p.x - x) < 26 && Math.abs(p.y - y) < 10)) y += 10;
+    const y = sy(g.centroid!.dy) + 3.5;
+    if (placed.some((p) => Math.abs(p.x - x) < 26 && Math.abs(p.y - y) < 11)) continue;
     placed.push({ x, y });
-    labelY.set(g.group, y);
+    labelled.add(g.group);
   }
   return (
     <svg
@@ -247,15 +258,17 @@ export function GroupMeansChart({
           <g key={String(g.group)} data-testid="xy-group">
             <title>{`${groupLabel(g.group)}: ${g.nok} NOK / ${g.pieces} piezas · promedio ΔX ${signed(c.dx)} · ΔY ${signed(c.dy)} ${unit}`}</title>
             <circle cx={sx(c.dx)} cy={sy(c.dy)} r={isWorst ? 4.5 : 3.5} fill={isWorst ? WB.nok : WB.mark} />
-            <text
-              x={sx(c.dx) + 6}
-              y={labelY.get(g.group)}
-              fontSize={9.5}
-              fontWeight={isWorst ? 700 : 600}
-              fill={isWorst ? WB.nok : WB.ref}
-            >
-              {groupLabel(g.group)}
-            </text>
+            {labelled.has(g.group) && (
+              <text
+                x={sx(c.dx) + 6}
+                y={sy(c.dy) + 3.5}
+                fontSize={9.5}
+                fontWeight={isWorst ? 700 : 600}
+                fill={isWorst ? WB.nok : WB.ref}
+              >
+                {groupLabel(g.group)}
+              </text>
+            )}
           </g>
         );
       })}

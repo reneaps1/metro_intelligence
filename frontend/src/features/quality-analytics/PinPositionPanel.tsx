@@ -136,7 +136,7 @@ export function PinPositionPanel({ dataset }: { dataset: QualityDataset }) {
             {markBy !== "nok" &&
               ` A la derecha, ampliado: el promedio de cada ${markBy === "nest" ? "nido" : "cavidad"} (centro = nominal)${
                 worst ? `; resaltado, ${groupLabel(worst.group)}, la mayor tasa NOK con al menos ${XY_MIN_GROUP_PIECES} piezas` : ""
-              }.`}
+              }; se rotulan los que más se separan (todos tienen detalle al pasar el cursor y en la tabla).`}
             {d.points.length < d.points_total
               ? ` Se dibuja una muestra de ${d.points.length.toLocaleString("es-MX")} de ${d.points_total.toLocaleString("es-MX")} piezas (todas las NOK de la muestra se conservan); los indicadores usan todas.`
               : ""}{" "}

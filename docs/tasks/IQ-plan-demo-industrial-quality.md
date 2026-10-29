@@ -42,6 +42,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F17 | Normalización del número de nido (desfase del PLC) conservando el crudo | ✅ Hecho | `claude/gifted-cannon-5rrp1j` → PR a `feat/industrial-quality-demo` | Pedido por el usuario el 29/oct tras la presentación (D13) |
 | F18 | Matriz nido × cavidad de molde + filtro por hora | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct |
 | F19 | Dispersión X/Y de posición de pines contra tolerancia | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct; especificación privada (D13) |
+| F20 | Dataset sintético con cavidades de molde (patrón real, valores ficticios) | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct: que la matriz nido × cavidad se vea también sin datos reales |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
 
@@ -494,6 +495,20 @@ Pruebas:
 - `QualityAnalytics.test.tsx`.
 - Verificación en navegador (Chromium headless, claro y oscuro, sin errores de consola) contra un export largo **ficticio** generado fuera del repo con los patrones del caso: desfase +12, rotación de cavidades y X/Y en centésimas.
 
+### F20 — Cavidades de molde en el dataset sintético ✅
+
+**Objetivo:** que la matriz nido × cavidad (F18) y la vista por cavidad (F19) funcionen en cualquier despliegue (Render, VPS) sin datos del cliente. Se copia la **estructura** observada en el export real; todos los valores son ficticios.
+
+Entregables (hechos):
+- `synthetic.py`: 32 cavidades en 8 grupos de 4 (`MOLD_GROUPS`), con el orden de llegada fijo, mientras los nidos giran del 1 al 12.
+  - Como 8 y 12 comparten el factor 4, cada grupo pasa solo por 3 nidos separados de 4 en 4.
+  - El ciclo se desfasa una visita en `CYCLE_SLIPS_S` (días 1.1, 3.2 y 5.2), y el trío de nidos cambia.
+  - La combinación crítica es el nido crítico × cavidades 5, 10 y 15: posición X +0.025 mm, con alrededor de 40–45 % NOK en esas celdas. Solo aparece en los periodos en que esas cavidades llegan a ese nido.
+- La asignación de cavidad no consume números aleatorios: los demás valores del dataset no cambian (`dim-sim-1.1.0`). El mecanismo nuevo queda listado en «verdad conocida».
+- Gráfica X/Y: en el panel ampliado se rotulan solo los grupos que se separan (máx. 8, el peor primero); los demás tienen tooltip y aparecen en la tabla. La etiqueta del círculo sintético ya no repite el diámetro.
+
+Pruebas: ajustes en `test_line_panel.py`, `test_quality_analytics_api.py`, `test_real_dataset_service.py` y `test_position_xy.py` (el desplazamiento esperado del nido crítico ahora incluye la combinación). Backend 1271 passed / 4 skipped. Verificado en navegador en claro y oscuro, sin errores de consola.
+
 ## 4. Definition of Done (checklist de aceptación)
 
 - [x] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
@@ -557,6 +572,7 @@ Pruebas:
 | 2026-10-29 | F17 | Hecho. En la presentación con el dataset REAL apareció un «nido 13»; el análisis fuera del repo mostró que es el nido 1 con un desfase de +12 en el registro (misma posición en la rotación, mismas cavidades y misma tasa NOK; también 19–24 = 7–12 en una vuelta). Regla `remap` en el mapping privado con valor crudo conservado (D13). Pruebas: backend 52 passed en los módulos de convertidor, dataset REAL y analítica; frontend 38 passed en quality-analytics; `tsc -b` y ruff limpios. Pendiente local: actualizar el mapping privado y re-convertir. |
 | 2026-10-29 | F18 | Hecho. En el análisis del export real (fuera del repo), en un periodo dado cada cavidad de molde pasó solo por 3 de los 12 nidos, y ese trío cambió después de los paros. El salto de rechazo tras el paro del primer día coincide con el cambio de cavidades que recibe el nido crítico. La matriz nido × cavidad y el filtro por hora permiten mostrarlo en la demo. Pruebas: backend 53 passed (convertidor, dataset REAL, analítica y API); frontend 36 passed en quality-analytics; `tsc -b` limpio. |
 | 2026-10-29 | F19 | Hecho. Gráfica X/Y de posición de pines pedida por el cliente tras la presentación, para ver hacia dónde se desvía la posición dentro del rango de tolerancia. Nominales y tolerancias del plano y de fin de línea solo en la especificación privada (D13). Durante el trabajo el usuario pidió respetar el diseño industrial: marcas neutras, un solo acento NOK y límites rotulados (D12). Pruebas: backend 1271 passed / 4 skipped (suite completa); frontend 213 passed (29 archivos), `tsc -b` y build limpios; confidencialidad y deploy 21 passed / 16 skipped. Pendiente local: crear `pin-spec.json` en `demo-private/` con los nominales del plano y re-convertir con la regla de F17. |
+| 2026-10-29 | F20 | Hecho. El usuario pidió que la agrupación nido × cavidad se basara en los datos reales; como esos datos no pueden ir a un servidor ni al repo (D8), se acordó copiar el patrón real con valores ficticios. Pie del login cambiado a «Powered by OnKaizen» y prueba de CI que impide el nombre de marca anterior (PR #45, mergeado). |
 
 ## 7. Pendientes / ideas fuera de fase
 

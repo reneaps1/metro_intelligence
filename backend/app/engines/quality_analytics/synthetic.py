@@ -18,7 +18,7 @@ from functools import lru_cache
 from app.engines.quality_analytics.dataset import DimensionalDataset, PinPair, ToleranceCircle, Variable
 
 SYNTHETIC_DATASET_ID = "demo-synthetic-dimensional"
-GENERATOR_VERSION = "dim-sim-1.0.0"
+GENERATOR_VERSION = "dim-sim-1.1.0"
 SEED = 20261013
 
 PERIOD_START = datetime(2026, 10, 13, 0, 0, tzinfo=UTC)
@@ -53,7 +53,7 @@ PIN_PAIRS = (
         3.200,
         5.600,
         0.040,
-        (ToleranceCircle("Posición Ø0.080", 0.080),),
+        (ToleranceCircle("Posición", 0.080),),
     ),
 )
 
@@ -68,6 +68,35 @@ WAVES = (
     (4.3 * D, 4 * H, "INY-01"),
     (5.8 * D, 2.5 * H, "INY-01"),
 )
+# IQ-F20: mold cavities, with the STRUCTURE observed on a real line (values are
+# fictitious). The mold has 32 cavities that reach the nests in groups of 4,
+# in a fixed order of 8 groups, while the nests turn 1..12. As 8 and 12 share
+# a factor of 4, a cavity group only meets 3 nests (4 apart) until the cycle
+# slips by one visit (a stop, a removed piece); then it moves to 3 other
+# nests. One nest x cavity combination is bad, so its NOK comes and goes with
+# the slips -- the effect the nest x mold cavity matrix is meant to expose.
+MOLD_GROUPS: tuple[tuple[int, int, int, int], ...] = (
+    (1, 2, 5, 6),
+    (25, 26, 29, 30),
+    (9, 10, 13, 14),
+    (17, 18, 21, 22),
+    (3, 4, 7, 8),
+    (27, 28, 31, 32),
+    (11, 12, 15, 16),
+    (19, 20, 23, 24),
+)
+CYCLE_SLIPS_S = (1.1 * D, 3.2 * D, 5.2 * D)  # each one shifts the cavity groups by one visit
+BAD_MOLD_CAVITIES = frozenset({5, 10, 15})  # on the critical nest only
+BAD_COMBO_SHIFT_MM = 0.025  # PinPositionX
+
+
+def mold_cavity_of(visit: int, offset_s: float) -> int:
+    """Mold cavity reaching the nest at this nest visit (deterministic, no randomness)."""
+    phase = sum(1 for slip in CYCLE_SLIPS_S if offset_s >= slip)
+    group = MOLD_GROUPS[(visit + phase) % len(MOLD_GROUPS)]
+    return group[(visit // len(MOLD_GROUPS)) % len(group)]
+
+
 TOOL_CHANGE_S = 3.5 * D  # INY-01 HousingWidth wear drift resets here
 WEAR_MM = 0.045
 BATCH_PERIOD_S = 36 * H
@@ -112,6 +141,8 @@ def _build(crit: int) -> DimensionalDataset:
     group_ids: list[int] = []
     machines: list[str | None] = []
     cavities: list[int | None] = []
+    molds: list[int | None] = []
+    visits = {m: 0 for m in MACHINES}
     shifts: list[str | None] = []
     batches: list[str | None] = []
     values: dict[str, list[float | None]] = {v.key: [] for v in VARIABLES}
@@ -133,6 +164,9 @@ def _build(crit: int) -> DimensionalDataset:
                 group_ids.append(group)
                 machines.append(machine)
                 cavities.append(nest)
+                mold = mold_cavity_of(visits[machine], offset)
+                visits[machine] += 1
+                molds.append(mold)
                 shifts.append(shift)
                 batches.append(batch)
                 for v in VARIABLES:
@@ -150,6 +184,8 @@ def _build(crit: int) -> DimensionalDataset:
                         sd *= 1.3
                     if nest == crit and key == "PinPositionX":
                         mean += 0.010
+                        if mold in BAD_MOLD_CAVITIES:
+                            mean += BAD_COMBO_SHIFT_MM
                     if wave and key == "PinPositionY":
                         mean += 0.030
                     if key == "HousingWidth":
@@ -165,7 +201,8 @@ def _build(crit: int) -> DimensionalDataset:
         id=SYNTHETIC_DATASET_ID,
         name="Dataset dimensional sintético (estilo cliente)",
         description=(
-            f"{DAYS} días, {len(MACHINES)} máquinas, {NEST_COUNT} nidos, {len(VARIABLES)} cotas. "
+            f"{DAYS} días, {len(MACHINES)} máquinas, {NEST_COUNT} nidos, "
+            f"{sum(len(g) for g in MOLD_GROUPS)} cavidades de molde, {len(VARIABLES)} cotas. "
             "Generado con semilla fija: no son mediciones de ninguna planta."
         ),
         source_type="SIMULATED",
@@ -177,6 +214,7 @@ def _build(crit: int) -> DimensionalDataset:
         shifts=shifts,
         batches=batches,
         values=values,
+        mold_cavities=molds,
         pin_pairs=PIN_PAIRS,
         mechanisms=[
             f"Nido {crit}: longitud de pines desplazada +0.028 mm y 30 % más dispersa; posición X +0.010 mm.",
@@ -186,6 +224,13 @@ def _build(crit: int) -> DimensionalDataset:
             "Turno C (22–06 h): espesor de pared 30 % más disperso.",
             f"Lote {SHRINK_BATCH}: ancho de ranura −0.009 mm (contracción).",
             "INY-02: coplanaridad media +0.010 mm.",
+            "Cavidades de molde: 32 en 8 grupos de 4; cada grupo pasa solo por 3 nidos (separados de 4 en 4) "
+            "hasta que el ciclo se desfasa una visita (días "
+            + ", ".join(f"{s / D:.1f}" for s in CYCLE_SLIPS_S)
+            + f"). Nido {crit} × cavidades "
+            + ", ".join(str(c) for c in sorted(BAD_MOLD_CAVITIES))
+            + f": posición X +{BAD_COMBO_SHIFT_MM} mm adicional; solo aparece en los periodos en que "
+            "esas cavidades llegan a ese nido.",
         ],
     )
 
