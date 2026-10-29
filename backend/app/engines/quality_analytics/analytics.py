@@ -176,6 +176,28 @@ def _group_rates(column: list[int | None], idx: list[int], flags: list[bool]) ->
     return rows
 
 
+def _nest_mold_matrix(ds: DimensionalDataset, idx: list[int], flags: list[bool]) -> list[dict[str, Any]]:
+    """IQ-F18: NOK rate per (nest, mold cavity) combination actually observed.
+
+    Only combinations with pieces are returned: a mold cavity reaches a nest
+    only when the injection and nest cycles line up, so an absent cell means
+    "never met in this selection", not "0 % NOK".
+    """
+    if ds.mold_cavities is None:
+        return []
+    counts: dict[tuple[int, int], list[int]] = defaultdict(lambda: [0, 0])
+    for i, bad in zip(idx, flags, strict=True):
+        nest, mold = ds.cavities[i], ds.mold_cavities[i]
+        if nest is None or mold is None:
+            continue
+        counts[(nest, mold)][0] += 1
+        counts[(nest, mold)][1] += bad
+    return [
+        {"nest": nest, "mold_cavity": mold, "pieces": n, "nok": k, "rate": _rate(k, n)}
+        for (nest, mold), (n, k) in sorted(counts.items())
+    ]
+
+
 def _worst(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     # A group with no NOK is never "the riskiest" (e.g. a file without tolerances).
     ranked = [c for c in rows if c["pieces"] >= MIN_PIECES_FOR_RANKING and c["nok"] > 0]
@@ -363,6 +385,7 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
         "station_pareto": _station_pareto(ds, idx, flags) if ds.stations else [],
         "heatmap": heatmap,
         "heatmap_axis": "station" if reported else "variable",
+        "nest_mold": _nest_mold_matrix(ds, idx, flags),
     }
 
 

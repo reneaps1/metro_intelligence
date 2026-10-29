@@ -936,6 +936,12 @@ export function realOverviewFixture(params: URLSearchParams) {
       { cavity: 2, variable: "st_b", pieces: 300, nok: 5, rate: 5 / 300 },
     ],
     heatmap_axis: "station",
+    // IQ-F18: nest 1 never met mold cavity 3 in this fixture.
+    nest_mold: [
+      { nest: 1, mold_cavity: 1, pieces: 150, nok: 1, rate: 1 / 150 },
+      { nest: 2, mold_cavity: 1, pieces: 75, nok: 2, rate: 2 / 75 },
+      { nest: 2, mold_cavity: 3, pieces: 150, nok: 27, rate: 27 / 150 },
+    ],
   };
 }
 

@@ -149,6 +149,15 @@ export interface HeatmapCell {
   rate: number | null;
 }
 
+/** IQ-F18: one observed (nest, mold cavity) combination; absent = never met. */
+export interface NestMoldCell {
+  nest: number;
+  mold_cavity: number;
+  pieces: number;
+  nok: number;
+  rate: number | null;
+}
+
 export interface OverviewResponse {
   dataset_id: string;
   source_type: DatasetSourceType;
@@ -162,6 +171,7 @@ export interface OverviewResponse {
   station_pareto?: StationParetoRow[];
   /** "station": heatmap rows are stations (first failing), not variables. */
   heatmap_axis?: "variable" | "station";
+  nest_mold?: NestMoldCell[];
 }
 
 export interface GroupBox {

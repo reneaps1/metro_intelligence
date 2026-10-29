@@ -40,7 +40,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F15 | Panel de calidad en línea: vistas Andon, Mapa de proceso y Respuesta guiada (frontend) | ✅ Hecho | `feat/industrial-quality-demo` | Pantalla completa, botones Normal/Atención/Paro sobre momentos reales |
 | F16 | Interfaz unificada: el lenguaje del panel en todo el banco de trabajo | ✅ Hecho | `feat/industrial-quality-demo` | Pedido por el usuario el 28/oct (D12); modo oscuro grafito |
 | F17 | Normalización del número de nido (desfase del PLC) conservando el crudo | ✅ Hecho | `claude/gifted-cannon-5rrp1j` → PR a `feat/industrial-quality-demo` | Pedido por el usuario el 29/oct tras la presentación (D13) |
-| F18 | Matriz nido × cavidad de molde + filtro por hora | ⬜ Pendiente | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct |
+| F18 | Matriz nido × cavidad de molde + filtro por hora | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct |
 | F19 | Dispersión X/Y de posición de pines contra tolerancia | ⬜ Pendiente | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct; especificación privada (D13) |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
@@ -451,6 +451,23 @@ Entregables (hechos):
 
 Pruebas: `tests/test_long_signal_batch.py` (+3 casos, 5 variantes de reglas inseguras, compatibilidad v1), `filters.test.ts` y `RealDataset.test.tsx`. Todo con datos ficticios (desfase +4 en un rango 1–4).
 
+### F18 — Matriz nido × cavidad de molde y filtro por hora ✅
+
+**Objetivo:** mostrar que el riesgo depende de la combinación nido × cavidad de molde y no de cada eje por separado. Cada cavidad pasa solo por algunos nidos a la vez (los ciclos de inyección y de nidos comparten un factor), y el reparto cambia después de los paros.
+
+Entregables (hechos):
+- Motor: `analytics._nest_mold_matrix` → `overview()["nest_mold"]` con celdas `{nest, mold_cavity, pieces, nok, rate}`, **solo combinaciones observadas**. Respeta todos los filtros y la base de NOK. Esquema `NestMoldCell` / `OverviewResponse.nest_mold`.
+- Frontend:
+  - `NestMoldMatrix` en `QualityCharts.tsx`: filas = nidos, columnas = cavidades. Las celdas que no coincidieron se dibujan aparte («·», borde punteado), distintas de un 0 % medido. La peor celda con ≥ 30 piezas se recuadra con el acento NOK. La leyenda dice «asociación, no causa».
+  - Tarjeta «NOK por nido × cavidad de molde» con CSV agregado (`nestMoldCsv`).
+- Filtro: horas de planta opcionales junto a «Desde/Hasta» (`startHour` 0–23, `endHour` 1–24 exclusiva). Sin cambios en el backend. Sirve para comparar antes y después de un paro.
+
+Pruebas:
+- `tests/test_quality_analytics.py`: matriz calculada a mano, incluidas las combinaciones ausentes y el efecto de un filtro.
+- `filters.test.ts`: límites horarios.
+- `RealDataset.test.tsx`: matriz y horas.
+- Se corrigió una carrera en una prueba previa: retenía el bloque KPI antes de que el dataset REAL reemplazara al sintético.
+
 ## 4. Definition of Done (checklist de aceptación)
 
 - [x] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
@@ -512,6 +529,7 @@ Pruebas: `tests/test_long_signal_batch.py` (+3 casos, 5 variantes de reglas inse
 | 2026-10-28 | F13 | Hecho. Backend: calendario opcional en `Scenario` (salida idéntica byte a byte de los escenarios existentes, verificada con hashes antes y después), `build_calendar_scenario` y servicio `process_join_service` con cachés por señal, intervalo y objetivo, motor `process_join` y endpoint `/quality-analytics/process-join` (404 sin REAL, 422 por señal/objetivo/intervalo/desfase). Frontend: `QualityJoinPanel` (Vista A) en el paso 5 con insignias REAL + Simulado + Experimental y notas de unión ilustrativa y de relación impuesta por construcción; procedencia del paso 5 con REAL. Pruebas: backend 1254 passed / 4 skipped (32 nuevas); frontend 29/29 archivos (3 nuevas), `tsc -b` limpio; ruff limpio; lint de confidencialidad sin coincidencias. Navegador (Edge headless, backend local con el dataset REAL): temperatura de molde con asociación fuerte por construcción y presiones de control con asociación débil, como se espera; series cortadas en los paros; claro y oscuro; 0 errores de consola. Primera llamada local < 1 s, luego milisegundos. Con esto el tablero queda completo salvo la ejecución de F9 en el VPS. |
 | 2026-10-28 | F16 | Hecho. Maqueta Hoy/Propuesta revisada por el usuario fuera del repo; aprobó el lenguaje del panel para todo el banco de trabajo, cifras grandes, oscuro grafito y «un leve color donde hay que resaltar» (D12). Tokens grafito y de marcas de datos con alias `--lp-*` (el panel solo cambia de tono), acento NOK atenuado `--wb-nok`, `workbench.css` acotado a `.wb-root` con clases marcadoras en `Card`/`CardHeader`/`Button` (metrología sin cambios, verificado en el dashboard), `components/workbench/` (`Kpi` con valor completo para lectores de pantalla y unidad pequeña, `Notice`, `Key`) y `lib/demo/chartTheme.ts`. Barrido de pasos 1–7, árbol, inspector y barra de herramientas (teclas Re Pág/Av Pág visibles en pantallas anchas). El acento se limita a piezas NOK, tasa NOK, peor grupo, outliers y lo que una alarma no detectó; las plumas de señales IIoT conservan su paleta. Pruebas: frontend 208 passed con `--maxWorkers=4`, `tsc -b` limpio, build OK; lint de confidencialidad y deploy 21 passed / 16 skipped; navegador en claro y oscuro de inicio, pasos 1–7, panel y dashboard de metrología contra el dataset REAL local, sin errores de consola salvo 404 previos al reinicio del backend. |
 | 2026-10-29 | F17 | Hecho. En la presentación con el dataset REAL apareció un «nido 13»; el análisis fuera del repo mostró que es el nido 1 con un desfase de +12 en el registro (misma posición en la rotación, mismas cavidades y misma tasa NOK; también 19–24 = 7–12 en una vuelta). Regla `remap` en el mapping privado con valor crudo conservado (D13). Pruebas: backend 52 passed en los módulos de convertidor, dataset REAL y analítica; frontend 38 passed en quality-analytics; `tsc -b` y ruff limpios. Pendiente local: actualizar el mapping privado y re-convertir. |
+| 2026-10-29 | F18 | Hecho. En el análisis del export real (fuera del repo), en un periodo dado cada cavidad de molde pasó solo por 3 de los 12 nidos, y ese trío cambió después de los paros. El salto de rechazo tras el paro del primer día coincide con el cambio de cavidades que recibe el nido crítico. La matriz nido × cavidad y el filtro por hora permiten mostrarlo en la demo. Pruebas: backend 53 passed (convertidor, dataset REAL, analítica y API); frontend 36 passed en quality-analytics; `tsc -b` limpio. |
 
 ## 7. Pendientes / ideas fuera de fase
 

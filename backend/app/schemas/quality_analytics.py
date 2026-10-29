@@ -160,6 +160,16 @@ class HeatmapCell(BaseModel):
     rate: float | None
 
 
+class NestMoldCell(BaseModel):
+    """IQ-F18: one observed (nest, mold cavity) combination."""
+
+    nest: int
+    mold_cavity: int
+    pieces: int
+    nok: int
+    rate: float | None
+
+
 class OverviewResponse(BaseModel):
     dataset_id: str
     source_type: SourceType
@@ -173,6 +183,8 @@ class OverviewResponse(BaseModel):
     station_pareto: list[StationParetoRow] = Field(default_factory=list)
     # "variable": cells are nest x variable; "station": nest x first failing station.
     heatmap_axis: Literal["variable", "station"] = "variable"
+    # IQ-F18: nest x mold cavity (only combinations with pieces; empty without mold cavities).
+    nest_mold: list[NestMoldCell] = Field(default_factory=list)
 
 
 class Spec(BaseModel):

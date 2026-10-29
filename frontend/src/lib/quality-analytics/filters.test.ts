@@ -56,6 +56,18 @@ describe("quality filters", () => {
     expect(activeFilterCount({ ...DEFAULT_QUALITY_FILTERS, stations: ["a"], moldCavities: [1], excludeSuspect: true })).toBe(3);
   });
 
+  it("adds plant-time hour bounds to the day range (IQ-F18)", () => {
+    const base = { ...DEFAULT_QUALITY_FILTERS, startDay: "2026-01-05", endDay: "2026-01-06" };
+    const p = filterParams({ ...base, startHour: 15, endHour: 8 }, -300);
+    expect(p.get("start")).toBe("2026-01-05T15:00:00-05:00");
+    expect(p.get("end")).toBe("2026-01-06T08:00:00-05:00");
+    // End hour 24 (or none) = the whole last day.
+    expect(filterParams({ ...base, endHour: 24 }, -300).get("end")).toBe("2026-01-07T00:00:00-05:00");
+    expect(filterParams(base, -300).get("start")).toBe("2026-01-05T00:00:00-05:00");
+    // Hours without a day are ignored.
+    expect(filterParams({ ...DEFAULT_QUALITY_FILTERS, startHour: 15 }).has("start")).toBe(false);
+  });
+
   it("combines the suspect and remapped-nest exclusions into one flag mask (IQ-F17)", () => {
     const both = filterParams({ ...DEFAULT_QUALITY_FILTERS, excludeSuspect: true, excludeRemapped: true });
     expect(both.get("exclude_flags")).toBe("10");

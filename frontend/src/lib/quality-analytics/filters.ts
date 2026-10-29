@@ -15,6 +15,9 @@ export interface QualityFilters {
   /** Inclusive day range, "YYYY-MM-DD"; null = open */
   startDay: string | null;
   endDay: string | null;
+  /** IQ-F18: optional hour bounds (plant time) on those days: start hour 0-23, exclusive end hour 1-24. */
+  startHour: number | null;
+  endHour: number | null;
   machines: string[];
   cavities: number[];
   shifts: string[];
@@ -39,6 +42,8 @@ export const DEFAULT_QUALITY_FILTERS: QualityFilters = {
   datasetId: DEMO_DATASET_ID,
   startDay: null,
   endDay: null,
+  startHour: null,
+  endHour: null,
   machines: [],
   cavities: [],
   shifts: [],
@@ -72,8 +77,12 @@ function nextDay(day: string): string {
 export function filterParams(f: QualityFilters, offsetMinutes = 0): URLSearchParams {
   const params = new URLSearchParams({ dataset: f.datasetId });
   const tz = offsetSuffix(offsetMinutes);
-  if (f.startDay) params.set("start", `${f.startDay}T00:00:00${tz}`);
-  if (f.endDay) params.set("end", `${nextDay(f.endDay)}T00:00:00${tz}`);
+  const hh = (h: number) => String(h).padStart(2, "0");
+  if (f.startDay) params.set("start", `${f.startDay}T${hh(f.startHour ?? 0)}:00:00${tz}`);
+  if (f.endDay) {
+    const end = f.endHour === null || f.endHour >= 24 ? `${nextDay(f.endDay)}T00:00:00` : `${f.endDay}T${hh(f.endHour)}:00:00`;
+    params.set("end", `${end}${tz}`);
+  }
   if (f.moldCavities.length) params.set("mold_cavities", f.moldCavities.join(","));
   const excluded = (f.excludeSuspect ? SUSPECT_FLAGS : 0) | (f.excludeRemapped ? REMAPPED_FLAGS : 0);
   if (excluded) params.set("exclude_flags", String(excluded));

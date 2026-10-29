@@ -72,6 +72,36 @@ def test_overview_counts_and_definitions() -> None:
     assert s["top_variables"] == ["len", "flat"]
 
 
+def test_nest_by_mold_cavity_matrix_lists_only_observed_combinations() -> None:
+    """IQ-F18: hand-checked cells; combinations that never met are absent, not 0 %."""
+    from dataclasses import replace
+
+    base = _ds()
+    # Order: per day, per piece, nest 1 then nest 2. Pieces 0-1 -> molds 1/3, piece 2 -> mold 2.
+    molds = [
+        (1 if nest == 1 else 3) if piece < 2 else 2
+        for _day in range(2)
+        for piece in range(3)
+        for nest in (1, 2)
+    ]
+    ds = replace(base, mold_cavities=molds)
+    cells = {
+        (c["nest"], c["mold_cavity"]): (c["pieces"], c["nok"])
+        for c in overview(ds, QualityFilter())["nest_mold"]
+    }
+    assert cells == {(1, 1): (4, 1), (1, 2): (2, 0), (2, 2): (2, 0), (2, 3): (4, 2)}
+    rate = next(
+        c["rate"]
+        for c in overview(ds, QualityFilter())["nest_mold"]
+        if c["nest"] == 2 and c["mold_cavity"] == 3
+    )
+    assert rate == pytest.approx(0.5)
+    # Filters apply (only day 2: the nest 2 x mold 3 NOKs disappear).
+    day2 = overview(ds, QualityFilter(start=DAY))["nest_mold"]
+    assert {(c["nest"], c["mold_cavity"]): c["nok"] for c in day2}[(2, 3)] == 0
+    assert overview(base, QualityFilter())["nest_mold"] == []  # no mold cavities -> no matrix
+
+
 def test_variable_selection_changes_the_nok_definition() -> None:
     s = overview(_ds(), QualityFilter(variables=("flat",)))["summary"]
     assert s["nok_pieces"] == 1 and s["variables_counted"] == ["flat"]

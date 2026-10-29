@@ -15,7 +15,14 @@ import {
 } from "recharts";
 import { WB, axisTick, gridProps, lineLabel, rampFill, refLine, secondaryLine, tooltipStyle } from "../../lib/demo/chartTheme";
 import { formatPct } from "../../lib/quality-analytics/filters";
-import type { CavityRate, HeatmapCell, ParetoRow, StationParetoRow, TrendBucket } from "../../lib/quality-analytics/types";
+import type {
+  CavityRate,
+  HeatmapCell,
+  NestMoldCell,
+  ParetoRow,
+  StationParetoRow,
+  TrendBucket,
+} from "../../lib/quality-analytics/types";
 
 // IQ-F5: charts for the quality diagnosis step. Rates are shown in %, always
 // next to their denominator (pieces) in tooltips. IQ-F16: workbench chart
@@ -227,6 +234,84 @@ export function CavityHeatmap({
       </table>
       <p className="mt-1 text-xs text-text-secondary">
         Número = {countLabel}; tono proporcional a la tasa (máx. {formatPct(max)}, recuadrada).
+      </p>
+    </div>
+  );
+}
+
+/** Cells with fewer pieces than this are shaded but never named "the worst" (same rule as the backend ranking). */
+export const NEST_MOLD_MIN_PIECES = 30;
+
+// IQ-F18: NOK rate by nest x mold cavity. A mold cavity reaches a nest only
+// when the injection and nest cycles line up, so empty cells mean "never met
+// in this selection" -- drawn apart from a measured 0 %.
+export function NestMoldMatrix({ cells }: { cells: NestMoldCell[] }) {
+  const nests = [...new Set(cells.map((c) => c.nest))].sort((a, b) => a - b);
+  const molds = [...new Set(cells.map((c) => c.mold_cavity))].sort((a, b) => a - b);
+  const byKey = new Map(cells.map((c) => [`${c.nest}:${c.mold_cavity}`, c]));
+  const ranked = cells.filter((c) => c.pieces >= NEST_MOLD_MIN_PIECES && c.nok > 0);
+  const max = Math.max(...ranked.map((c) => c.rate ?? 0), 0);
+  const worst = ranked.find((c) => c.rate === max) ?? null;
+  return (
+    <div className="overflow-x-auto">
+      <table className="border-separate border-spacing-0.5 text-xs" aria-label="Matriz NOK nido por cavidad de molde">
+        <thead>
+          <tr>
+            <th className="sticky left-0 bg-surface px-1 text-left font-medium text-text-secondary">Nido \ Cavidad</th>
+            {molds.map((m) => (
+              <th key={m} className="px-0.5 font-mono font-medium text-text-secondary">
+                C{m}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {nests.map((nest) => (
+            <tr key={nest}>
+              <th scope="row" className="sticky left-0 whitespace-nowrap bg-surface px-1 text-left font-mono font-medium text-text-primary">
+                {nest}
+              </th>
+              {molds.map((mold) => {
+                const c = byKey.get(`${nest}:${mold}`);
+                if (!c) {
+                  return (
+                    <td
+                      key={mold}
+                      title={`Nido ${nest} · cavidad ${mold}: sin piezas (no coincidieron en esta selección)`}
+                      aria-label="sin piezas"
+                      className="h-7 min-w-[30px] rounded-sm text-center text-[10px] text-text-secondary"
+                      style={{ background: "transparent", outline: "1px dashed var(--border-default)", outlineOffset: "-2px" }}
+                    >
+                      ·
+                    </td>
+                  );
+                }
+                const fill = max > 0 && c.rate ? rampFill(Math.min(c.rate / max, 1)) : null;
+                const top = worst !== null && c === worst;
+                return (
+                  <td
+                    key={mold}
+                    title={`Nido ${nest} · cavidad ${mold}: ${c.nok} NOK / ${c.pieces} piezas (${formatPct(c.rate)})`}
+                    className="h-7 min-w-[30px] rounded-sm text-center font-mono text-[10px]"
+                    style={{
+                      background: fill?.background ?? "var(--bg-app)",
+                      color: fill?.color ?? "var(--text-primary)",
+                      boxShadow: top ? `inset 0 0 0 2px ${WB.nok}` : undefined,
+                    }}
+                  >
+                    {c.nok ? c.nok : ""}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-1 text-xs text-text-secondary">
+        Número = piezas NOK de esa cavidad en ese nido; tono proporcional a la tasa
+        {worst ? ` (máx. ${formatPct(worst.rate)}: nido ${worst.nest} × C${worst.mold_cavity}, recuadrada)` : ""}. «·» = la
+        cavidad no pasó por ese nido en la selección. Celdas con menos de {NEST_MOLD_MIN_PIECES} piezas no se marcan como la
+        peor. Asociación, no causa.
       </p>
     </div>
   );
