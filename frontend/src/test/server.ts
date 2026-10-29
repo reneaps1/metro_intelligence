@@ -680,7 +680,45 @@ export const QUALITY_DATASET_FIXTURE = {
   available_filters: { machine: true, cavity: true, shift: true, batch: false },
   mechanisms: ["Nido 4: longitud de pines desplazada."],
   has_reported_verdict: false,
+  pin_pairs: [{ key: "pin", label: "Posición de pin (X/Y)" }],
 };
+
+/** IQ-F19: fictitious X/Y detail; nest 4 drifts in +X and has the most NOK. */
+export function xyFixture(groupBy: string) {
+  const nest = groupBy === "nest";
+  return {
+    dataset_id: QUALITY_DATASET_FIXTURE.id,
+    source_type: "SIMULATED",
+    pair: { key: "pin", label: "Posición de pin (X/Y)", unit: "mm", nominal_x: 3.2, nominal_y: 5.6, tol_xy: 0.04 },
+    group_by: groupBy,
+    pieces: 1200,
+    nok_pieces: 30,
+    nok_label: "pieza NOK (alguna cota fuera de tolerancia)",
+    circles: [{ label: "Posición", diameter: 0.08, outside: 12, outside_rate: 0.01 }],
+    box_outside: 9,
+    box_outside_rate: 0.0075,
+    tp: { median: 0.026, p95: 0.057, max: 0.131 },
+    centroid: { dx: 0.002, dy: 0.001 },
+    nok_centroid: { dx: 0.012, dy: 0.004 },
+    groups: nest
+      ? [1, 2, 3, 4].map((g) => ({
+          group: g,
+          pieces: 300,
+          nok: g === 4 ? 24 : 2,
+          centroid: { dx: g === 4 ? 0.01 : -0.001, dy: 0.001 },
+        }))
+      : [
+          { group: "OK", pieces: 1170, nok: 0, centroid: { dx: 0.002, dy: 0.001 } },
+          { group: "NOK", pieces: 30, nok: 30, centroid: { dx: 0.012, dy: 0.004 } },
+        ],
+    points: [
+      [0.01, 0.0, nest ? 1 : null, false],
+      [-0.02, 0.01, nest ? 2 : null, false],
+      [0.05, 0.02, nest ? 4 : null, true],
+    ],
+    points_total: 1200,
+  };
+}
 
 function overviewFixture(cavities: number[] | null) {
   const pieces = cavities ? 300 * cavities.length : 1200;
@@ -990,6 +1028,9 @@ export const qualityHandlers = [
     }
     return HttpResponse.json(VARIABLE_DETAIL_FIXTURE);
   }),
+  http.get(`${API_BASE_URL}/quality-analytics/xy`, ({ request }) =>
+    HttpResponse.json(xyFixture(new URL(request.url).searchParams.get("group_by") ?? "nok")),
+  ),
   http.get(`${API_BASE_URL}/quality-analytics/report-summary`, () =>
     HttpResponse.json({
       source: "placeholder",

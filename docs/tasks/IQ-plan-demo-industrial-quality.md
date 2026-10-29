@@ -41,7 +41,7 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F16 | Interfaz unificada: el lenguaje del panel en todo el banco de trabajo | ✅ Hecho | `feat/industrial-quality-demo` | Pedido por el usuario el 28/oct (D12); modo oscuro grafito |
 | F17 | Normalización del número de nido (desfase del PLC) conservando el crudo | ✅ Hecho | `claude/gifted-cannon-5rrp1j` → PR a `feat/industrial-quality-demo` | Pedido por el usuario el 29/oct tras la presentación (D13) |
 | F18 | Matriz nido × cavidad de molde + filtro por hora | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct |
-| F19 | Dispersión X/Y de posición de pines contra tolerancia | ⬜ Pendiente | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct; especificación privada (D13) |
+| F19 | Dispersión X/Y de posición de pines contra tolerancia | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct; especificación privada (D13) |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
 
@@ -468,6 +468,32 @@ Pruebas:
 - `RealDataset.test.tsx`: matriz y horas.
 - Se corrigió una carrera en una prueba previa: retenía el bloque KPI antes de que el dataset REAL reemplazara al sintético.
 
+### F19 — Dispersión X/Y de posición de pines contra tolerancia ✅
+
+**Objetivo:** ver hacia dónde se desvía la posición de cada pin, dentro de la tolerancia del plano y de la de fin de línea, y qué nidos o cavidades empujan esa desviación.
+
+Entregables (hechos):
+- Motor:
+  - `PinPair` / `ToleranceCircle` en `dataset.py` (validados con `check_pin_pairs`).
+  - `position.xy_detail`: desviación respecto al nominal con factor de escala; TP = 2·√(dx² + dy²); % fuera de cada círculo y del cuadro ±tol; TP mediana/p95/máx.; desplazamiento promedio general, de las NOK y por nido o cavidad; muestra determinista de ≤ 4 000 puntos, con las NOK muestreadas aparte.
+- Datos:
+  - Sintético: par ficticio `PinPositionX/Y` (Ø0.080, ±0.040), donde se ve el desvío del nido crítico.
+  - REAL: especificación privada `DEMO_REAL_SPEC_PATH` (`connectors/pin_spec.py`, formato `pin-spec-v1`, D13). Una especificación inválida solo oculta la vista.
+- API:
+  - `GET /quality-analytics/xy?pair=…&group_by=nok|nest|mold_cavity` con los mismos filtros y la misma base de NOK que el overview.
+  - `DatasetOut.pin_pairs`.
+- Frontend (paso 3): tarjeta «Posición de pines X/Y vs. tolerancia» en el lenguaje del banco de trabajo (D12).
+  - Gráfica SVG con ejes iguales; piezas en marca neutra; NOK como triángulos con el acento atenuado.
+  - Primera zona discontinua y las demás punteadas, rotuladas en mayúsculas; flecha nominal → promedio.
+  - Al marcar por nido o cavidad, panel ampliado de promedios por grupo, con el peor (≥ 30 piezas) resaltado.
+  - KPIs y tabla alternativa accesible.
+
+Pruebas:
+- `tests/test_position_xy.py`: valores calculados a mano, borde de zona, agrupación, muestreo que no oculta NOK, validaciones, mecanismo sintético y especificación privada.
+- `test_real_dataset_service.py`: especificación REAL, especificación inválida y API.
+- `QualityAnalytics.test.tsx`.
+- Verificación en navegador (Chromium headless, claro y oscuro, sin errores de consola) contra un export largo **ficticio** generado fuera del repo con los patrones del caso: desfase +12, rotación de cavidades y X/Y en centésimas.
+
 ## 4. Definition of Done (checklist de aceptación)
 
 - [x] 1. La demo abre y se recorre sin cargar archivos ni tocar código. (F1)
@@ -530,6 +556,7 @@ Pruebas:
 | 2026-10-28 | F16 | Hecho. Maqueta Hoy/Propuesta revisada por el usuario fuera del repo; aprobó el lenguaje del panel para todo el banco de trabajo, cifras grandes, oscuro grafito y «un leve color donde hay que resaltar» (D12). Tokens grafito y de marcas de datos con alias `--lp-*` (el panel solo cambia de tono), acento NOK atenuado `--wb-nok`, `workbench.css` acotado a `.wb-root` con clases marcadoras en `Card`/`CardHeader`/`Button` (metrología sin cambios, verificado en el dashboard), `components/workbench/` (`Kpi` con valor completo para lectores de pantalla y unidad pequeña, `Notice`, `Key`) y `lib/demo/chartTheme.ts`. Barrido de pasos 1–7, árbol, inspector y barra de herramientas (teclas Re Pág/Av Pág visibles en pantallas anchas). El acento se limita a piezas NOK, tasa NOK, peor grupo, outliers y lo que una alarma no detectó; las plumas de señales IIoT conservan su paleta. Pruebas: frontend 208 passed con `--maxWorkers=4`, `tsc -b` limpio, build OK; lint de confidencialidad y deploy 21 passed / 16 skipped; navegador en claro y oscuro de inicio, pasos 1–7, panel y dashboard de metrología contra el dataset REAL local, sin errores de consola salvo 404 previos al reinicio del backend. |
 | 2026-10-29 | F17 | Hecho. En la presentación con el dataset REAL apareció un «nido 13»; el análisis fuera del repo mostró que es el nido 1 con un desfase de +12 en el registro (misma posición en la rotación, mismas cavidades y misma tasa NOK; también 19–24 = 7–12 en una vuelta). Regla `remap` en el mapping privado con valor crudo conservado (D13). Pruebas: backend 52 passed en los módulos de convertidor, dataset REAL y analítica; frontend 38 passed en quality-analytics; `tsc -b` y ruff limpios. Pendiente local: actualizar el mapping privado y re-convertir. |
 | 2026-10-29 | F18 | Hecho. En el análisis del export real (fuera del repo), en un periodo dado cada cavidad de molde pasó solo por 3 de los 12 nidos, y ese trío cambió después de los paros. El salto de rechazo tras el paro del primer día coincide con el cambio de cavidades que recibe el nido crítico. La matriz nido × cavidad y el filtro por hora permiten mostrarlo en la demo. Pruebas: backend 53 passed (convertidor, dataset REAL, analítica y API); frontend 36 passed en quality-analytics; `tsc -b` limpio. |
+| 2026-10-29 | F19 | Hecho. Gráfica X/Y de posición de pines pedida por el cliente tras la presentación, para ver hacia dónde se desvía la posición dentro del rango de tolerancia. Nominales y tolerancias del plano y de fin de línea solo en la especificación privada (D13). Durante el trabajo el usuario pidió respetar el diseño industrial: marcas neutras, un solo acento NOK y límites rotulados (D12). Pruebas: backend 1271 passed / 4 skipped (suite completa); frontend 213 passed (29 archivos), `tsc -b` y build limpios; confidencialidad y deploy 21 passed / 16 skipped. Pendiente local: crear `pin-spec.json` en `demo-private/` con los nominales del plano y re-convertir con la regla de F17. |
 
 ## 7. Pendientes / ideas fuera de fase
 

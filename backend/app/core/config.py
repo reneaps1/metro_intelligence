@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     demo_real_dataset_path: str | None = None
     demo_real_dataset_max_mb: int = Field(default=200, ge=1, le=2_000)
     demo_real_dataset_max_pieces: int = Field(default=1_000_000, ge=1_000, le=10_000_000)
+    # IQ-F19 (plan decision D13): optional PRIVATE JSON with X/Y nominals and
+    # position tolerances for the REAL dataset (`connectors/pin_spec.py`).
+    # Unset or invalid = the REAL dataset has no X/Y position view.
+    demo_real_spec_path: str | None = None
 
     # --- Database (PostgreSQL 16) ---
     postgres_host: str

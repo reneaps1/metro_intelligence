@@ -86,6 +86,25 @@ describe("DimensionalStep (exploration)", () => {
     expect(await screen.findAllByText(/Cp no aplica a tolerancia unilateral/)).not.toHaveLength(0);
   });
 
+  it("plots the pin X/Y position against its tolerance and marks the worst nest (IQ-F19)", async () => {
+    const user = userEvent.setup();
+    render(<DimensionalStep />);
+    const kpis = await screen.findByLabelText("Indicadores de posición");
+    expect(within(kpis).getByText("Fuera de Posición Ø0.08")).toBeInTheDocument();
+    expect(within(kpis).getByText("1.0 %")).toBeInTheDocument();
+    expect(within(kpis).getByText("+0.002 / +0.001")).toBeInTheDocument();
+    const chart = screen.getByRole("img", { name: /Dispersión X\/Y de Posición de pin/ });
+    expect(within(chart).getByText("POSICIÓN Ø0.08")).toBeInTheDocument();
+    // Only the NOK piece takes the NOK accent (triangle); OK pieces are neutral dots.
+    expect(chart.querySelectorAll("polygon")).toHaveLength(1);
+
+    await user.click(within(screen.getByRole("group", { name: "Marcar por" })).getByRole("button", { name: "Nido" }));
+    expect(await screen.findAllByTestId("xy-group")).toHaveLength(4);
+    expect(screen.getByText(/resaltado, N4, la mayor tasa NOK/)).toBeInTheDocument();
+    // Without mold cavities in the dataset there is no "Cavidad" option.
+    expect(within(screen.getByRole("group", { name: "Marcar por" })).queryByRole("button", { name: "Cavidad" })).toBeNull();
+  });
+
   it("does not offer grouping by a missing dimension", async () => {
     render(<DimensionalStep />);
     await screen.findByLabelText("Estadística de la cota");

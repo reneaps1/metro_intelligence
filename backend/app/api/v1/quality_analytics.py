@@ -9,6 +9,9 @@ customer's REAL dataset when configured locally (IQ-F10,
 RBAC: `measurement.measurement_result.read` -- these are aggregates of
 measurement results, the same data the measurements API already exposes.
 
+IQ-F19: `/xy` returns the X/Y deviation cloud of one pin pair against its
+position tolerance (`engines/quality_analytics/position.py`).
+
 IQ-F13: `/process-join` ("Vista A") joins the REAL pieces by time with the
 SIMULATED process of the `real_calendar` scenario
 (`services/process_join_service.py`); REAL dataset only, 404 without it.
@@ -32,11 +35,13 @@ from app.engines.quality_analytics import (
     synthetic_dataset,
     variable_detail,
 )
+from app.engines.quality_analytics.position import xy_detail
 from app.models.security import User
 from app.schemas.quality_analytics import (
     DatasetListResponse,
     DatasetOut,
     OverviewResponse,
+    PinPairOut,
     PresetOut,
     ProcessJoinBucket,
     ProcessJoinLag,
@@ -45,6 +50,7 @@ from app.schemas.quality_analytics import (
     ReportSummary,
     StationOut,
     VariableDetailResponse,
+    XYDetailResponse,
 )
 from app.services.imported_dataset_store import get_imported_dataset_store
 from app.services.process_join_service import (
@@ -180,6 +186,7 @@ def dataset_out(ds: DimensionalDataset) -> DatasetOut:
         available_filters=ds.available_filters(),
         mechanisms=ds.mechanisms,
         has_reported_verdict=ds.reported_nok is not None,
+        pin_pairs=[PinPairOut(key=p.key, label=p.label) for p in ds.pin_pairs],
     )
 
 
@@ -238,6 +245,35 @@ def read_variable(
     f = _filter(ds, start, end, machines, cavities, shifts, batches, None, mold_cavities, None, exclude_flags)
     detail = variable_detail(ds, f, variable, group_by)
     return VariableDetailResponse(dataset_id=ds.id, source_type=ds.source_type, **detail)
+
+
+@router.get("/xy", response_model=XYDetailResponse)
+def read_xy(
+    pair: str = Query(..., max_length=64),
+    dataset: str = Query(SYNTHETIC_DATASET_ID, max_length=128),
+    group_by: Literal["nok", "nest", "mold_cavity"] = "nok",
+    start: datetime | None = None,
+    end: datetime | None = None,
+    machines: str | None = Query(None, max_length=512),
+    cavities: str | None = Query(None, max_length=512),
+    shifts: str | None = Query(None, max_length=128),
+    batches: str | None = Query(None, max_length=512),
+    variables: str | None = Query(None, max_length=2048),
+    mold_cavities: str | None = Query(None, max_length=512),
+    stations: str | None = Query(None, max_length=512),
+    exclude_flags: int = Query(0, ge=0, le=255),
+    user: User = Depends(_read),
+) -> XYDetailResponse:
+    ds = _dataset_or_404(dataset, user)
+    if pair not in {p.key for p in ds.pin_pairs}:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pin pair not found.")
+    if group_by == "mold_cavity" and ds.mold_cavities is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Dataset has no mold cavities.")
+    f = _filter(
+        ds, start, end, machines, cavities, shifts, batches, variables, mold_cavities, stations, exclude_flags
+    )
+    detail = xy_detail(ds, f, pair, group_by)
+    return XYDetailResponse(dataset_id=ds.id, source_type=ds.source_type, **detail)
 
 
 @router.get("/report-summary", response_model=ReportSummary)
