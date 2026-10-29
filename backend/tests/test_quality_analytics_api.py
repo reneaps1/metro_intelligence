@@ -81,7 +81,7 @@ def test_datasets_describe_filters_and_mechanisms(client: TestClient, as_role, s
         "cavity": True,
         "shift": True,
         "batch": True,
-        "mold_cavity": False,
+        "mold_cavity": True,  # IQ-F20
         "station": False,
         "quality_flags": False,
     }

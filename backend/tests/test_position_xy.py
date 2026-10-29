@@ -16,7 +16,7 @@ from app.engines.quality_analytics import (
 )
 from app.engines.quality_analytics.dataset import PinPair, ToleranceCircle, check_pin_pairs
 from app.engines.quality_analytics.position import xy_detail
-from app.engines.quality_analytics.synthetic import critical_nest
+from app.engines.quality_analytics.synthetic import BAD_COMBO_SHIFT_MM, BAD_MOLD_CAVITIES, critical_nest
 
 PAIR = PinPair(
     "pin",
@@ -115,8 +115,12 @@ def test_synthetic_pin_pair_shows_the_critical_nest_drift() -> None:
     centroids = {g["group"]: g["centroid"]["dx"] for g in d["groups"]}
     crit = critical_nest()
     others = [dx for nest, dx in centroids.items() if nest != crit]
-    # Mechanism in synthetic.py: the critical nest's X is shifted +0.010 mm.
-    assert centroids[crit] - sum(others) / len(others) == pytest.approx(0.010, abs=0.002)
+    # Mechanisms in synthetic.py: the critical nest's X is shifted +0.010 mm, plus
+    # BAD_COMBO_SHIFT_MM on the pieces it receives from the bad mold cavities (IQ-F20).
+    nest_molds = [m for n, m in zip(ds.cavities, ds.mold_cavities or [], strict=True) if n == crit]
+    bad_share = sum(1 for m in nest_molds if m in BAD_MOLD_CAVITIES) / len(nest_molds)
+    expected = 0.010 + bad_share * BAD_COMBO_SHIFT_MM
+    assert centroids[crit] - sum(others) / len(others) == pytest.approx(expected, abs=0.002)
     assert len(d["points"]) <= position.MAX_XY_POINTS
 
 

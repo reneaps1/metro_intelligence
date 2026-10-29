@@ -307,7 +307,8 @@ def test_synthetic_moments_and_replay_shapes(client: TestClient, as_role, indust
     assert replay.status_code == 200, replay.text
     r = replay.json()
     assert r["machine"] == "INY-01" and r["nok_basis"] == "spec" and r["provenance"] == "SIMULATED"
-    assert r["line"] == {"nests": list(range(1, 13)), "mold_cavities": None, "stations": []}
+    # IQ-F20: the synthetic line also carries its 32 mold cavities.
+    assert r["line"] == {"nests": list(range(1, 13)), "mold_cavities": 32, "stations": []}
     rules = r["rules"]
     assert rules["texts"]["R1"] == (
         "5 NOK consecutivas en la línea → parar la línea y segregar desde la primera NOK de la racha."
@@ -319,11 +320,11 @@ def test_synthetic_moments_and_replay_shapes(client: TestClient, as_role, indust
     for group in ("pieces", "state"):
         assert all(len(column) == n for column in r[group].values()), group
     assert r["pieces"]["t"][0] < 0 <= r["pieces"]["t"][r["lead"]]
-    assert set(r["pieces"]["station"]) == {-1} and set(r["pieces"]["cavity"]) == {None}
+    assert set(r["pieces"]["station"]) == {-1} and set(r["pieces"]["cavity"]) <= set(range(1, 33))
     assert all(v in (0, 1) and not isinstance(v, bool) for v in r["pieces"]["nok"])
     assert r["window"]["end_ts"] - r["window"]["start_ts"] == 30 * 60
     assert r["shifts"] and r["shifts"][0]["label"] in {"06:00–14:00", "14:00–22:00", "22:00–06:00"}
-    assert r["baseline"]["by_cavity"] == [] and r["baseline"]["by_station"] == []
+    assert len(r["baseline"]["by_cavity"]) == 32 and r["baseline"]["by_station"] == []
     for alarm in r["alarms"]:
         assert alarm["id"].startswith(alarm["rule"] + ":")
         assert alarm["raised_index"] < n

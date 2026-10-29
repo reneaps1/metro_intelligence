@@ -148,10 +148,11 @@ def test_api_validation_and_absence(
         f"{BASE}/overview", params={"dataset": REAL_DATASET_ID, "mold_cavities": "x"}, headers=headers
     )
     assert bad_mold.status_code == 422
+    # IQ-F20: the synthetic dataset has mold cavities; a dataset without them answers 422.
     synthetic_mold = client.get(
         f"{BASE}/variable", params={"variable": "PinsLength", "group_by": "mold_cavity"}, headers=headers
     )
-    assert synthetic_mold.status_code == 422
+    assert synthetic_mold.status_code == 200
 
 
 # --------------------------------------------------------------------------- IQ-F19: X/Y position
@@ -224,7 +225,7 @@ def test_xy_api_on_the_synthetic_dataset(client: TestClient, headers: dict[str, 
         client.get(
             f"{BASE}/xy", params={"pair": "pin", "group_by": "mold_cavity"}, headers=headers
         ).status_code
-        == 422
+        == 200
     )
     assert (
         client.get(f"{BASE}/xy", params={"pair": "pin", "group_by": "zz"}, headers=headers).status_code == 422
