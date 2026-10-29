@@ -207,3 +207,34 @@ def test_private_scan_catches_a_planted_term(tmp_path: Path) -> None:
     binary.write_bytes(b"\x00AcmeTestCo")
     assert scan_files([str(leaky), str(clean), str(binary)], terms) == [(str(leaky), "AcmeTestCo")]
     assert load_private_terms(str(tmp_path / "missing.txt")) == []
+
+
+# Brand names that must never appear in the product (owner's decision,
+# 2026-10-29). Stored as SHA-256 of the lower-case word so this guard does not
+# itself spell the name out.
+_BANNED_WORD_SHA256 = frozenset({"dd1ec9fa335b4956dacaa9c462db191a098dbd5f6f5b14243a76bbb58e4a3686"})
+
+
+def _banned_words_in(text: str) -> bool:
+    import hashlib
+    import re
+
+    words = {w.lower() for w in re.findall(r"[A-Za-z]{4,}", text)}
+    return any(hashlib.sha256(w.encode()).hexdigest() in _BANNED_WORD_SHA256 for w in words)
+
+
+def test_no_banned_brand_name_in_any_tracked_file() -> None:
+    hits = []
+    for path in _tracked_files():
+        if _banned_words_in(path):
+            hits.append(path)
+            continue
+        try:
+            content = Path(path).read_bytes()
+        except OSError:
+            continue
+        if b"\x00" in content[:8192]:
+            continue
+        if _banned_words_in(content.decode("utf-8", "ignore")):
+            hits.append(path)
+    assert not hits, f"banned brand name found in tracked files: {hits}"
