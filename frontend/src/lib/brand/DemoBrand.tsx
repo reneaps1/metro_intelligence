@@ -1,21 +1,8 @@
-import { useState } from "react";
-import clsx from "clsx";
 import { useAuth } from "../auth/AuthProvider";
-import {
-  BRAND_NAMES,
-  BRAND_VARIANTS,
-  LEGAL_NOTICE,
-  OWNER,
-  chooseVariant,
-  isPreviewing,
-  resolveVariant,
-  watermarkUrl,
-  type BrandVariant,
-} from "./brand";
+import { LEGAL_NOTICE, OWNER, buildVariant, watermarkUrl, type BrandVariant } from "./brand";
 
 // Overlay drawn above every route (login included). Purely visual and
-// click-through (pointer-events: none), except the proposal switcher shown
-// while previewing with ?marca=.
+// click-through (pointer-events: none); the variant is fixed at build time.
 
 function Ribbon() {
   return (
@@ -58,45 +45,10 @@ function LegalStrip() {
   );
 }
 
-function Switcher({ value, onChange }: { value: BrandVariant; onChange: (v: BrandVariant) => void }) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Propuesta de marca del demo"
-      className="fixed bottom-10 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-surface-raised p-1.5 text-[11px] shadow-md print:hidden"
-    >
-      <span className="px-1 font-semibold text-text-secondary">Propuesta</span>
-      {[...BRAND_VARIANTS, "off" as const].map((v) => (
-        <button
-          key={v}
-          type="button"
-          role="radio"
-          aria-checked={value === v}
-          title={v === "off" ? "Sin marca" : BRAND_NAMES[v]}
-          onClick={() => onChange(v)}
-          className={clsx(
-            "min-h-[28px] min-w-[28px] rounded px-1.5 font-semibold uppercase",
-            value === v ? "bg-brand-primary text-text-on-brand" : "text-text-primary hover:bg-surface-app",
-          )}
-        >
-          {v === "off" ? "—" : v}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function DemoBrand() {
+export function DemoBrand({ variant = buildVariant() }: { variant?: BrandVariant }) {
   const { user } = useAuth();
-  const [variant, setVariant] = useState<BrandVariant>(() => resolveVariant());
-  const [previewing] = useState(() => isPreviewing());
   const date = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
   const viewer = user?.email ?? "Acceso restringido";
-
-  function change(v: BrandVariant) {
-    chooseVariant(v);
-    setVariant(v);
-  }
 
   return (
     <>
@@ -119,7 +71,6 @@ export function DemoBrand() {
           <Ribbon />
         </>
       )}
-      {previewing && <Switcher value={variant} onChange={change} />}
     </>
   );
 }
