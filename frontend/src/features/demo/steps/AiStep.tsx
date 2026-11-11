@@ -4,9 +4,10 @@ import { Card } from "../../../components/ui/Card";
 import { useAsync } from "../../../lib/catalog/hooks";
 import { AI_VIEW_PARAM, parseAiView, visibleAiViews, type AiViewId } from "../../../lib/demo/aiViews";
 import { useOptionalDemoSession } from "../../../lib/demo/DemoSessionProvider";
-import { storedPartId, usesReportedVerdicts } from "../../../lib/demo/part";
+import { initialPartId, usesReportedVerdicts } from "../../../lib/demo/part";
+import { useDataset } from "../../../lib/quality-analytics/useDataset";
 import { SYNTHETIC_SOURCE, type PredictiveSource } from "../../../lib/predictive/source";
-import { fetchDatasets } from "../../../lib/quality-analytics/api";
+import { fetchCatalog, fetchDatasets } from "../../../lib/quality-analytics/api";
 import { CavityAlarms } from "../../predictive/CavityAlarms";
 import { CusumPanel } from "../../predictive/CusumPanel";
 import { FailurePrediction } from "../../predictive/FailurePrediction";
@@ -43,15 +44,14 @@ export function AiStep() {
   // machine-reported verdicts (REAL ones and their fictitious twins) run the per-piece studies;
   // the injection demo dataset and CSV imports use the synthetic series.
   const session = useOptionalDemoSession();
-  const items = datasets.data?.items ?? [];
-  const stored = storedPartId();
+  const catalog = useAsync(fetchCatalog, []);
   // Until the presenter picks a part, the same default as steps 2-3: the remembered part, else REAL.
-  const selected =
-    (session?.qualityFilters.datasetChosen
-      ? items.find((d) => d.id === session.qualityFilters.datasetId)
-      : (items.find((d) => d.id === stored && d.source_type !== "IMPORTED") ??
-        items.find((d) => d.source_type === "REAL") ??
-        items.find((d) => d.id === session?.qualityFilters.datasetId))) ?? null;
+  const selectedId = session?.qualityFilters.datasetChosen
+    ? session.qualityFilters.datasetId
+    : catalog.data
+      ? (initialPartId(catalog.data.items) ?? session?.qualityFilters.datasetId ?? null)
+      : null;
+  const selected = useDataset(selectedId, datasets.data?.items ?? null).dataset;
   const real = usesReportedVerdicts(selected) ? selected : null;
   const useReal = Boolean(real);
   const source: PredictiveSource = useReal && real ? { datasetId: real.id, real } : SYNTHETIC_SOURCE;

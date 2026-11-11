@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Boxes, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import { useDemoSession } from "../../../lib/demo/DemoSessionProvider";
-import { groupParts, partFilters, storePartId } from "../../../lib/demo/part";
-import { fetchDatasets } from "../../../lib/quality-analytics/api";
+import { groupParts, storePartId } from "../../../lib/demo/part";
+import { DEFAULT_QUALITY_FILTERS } from "../../../lib/quality-analytics/filters";
+import { fetchCatalog } from "../../../lib/quality-analytics/api";
 import type { QualityDataset } from "../../../lib/quality-analytics/types";
 import { useAsync } from "../../../lib/catalog/hooks";
 import { usePopover } from "./usePopover";
@@ -20,7 +21,7 @@ const ORIGIN: Record<QualityDataset["source_type"], string> = {
 
 export function PartControl() {
   const { qualityFilters, setQualityFilters } = useDemoSession();
-  const datasets = useAsync(fetchDatasets, []);
+  const datasets = useAsync(fetchCatalog, []);
   const items = datasets.data?.items ?? [];
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
@@ -35,7 +36,8 @@ export function PartControl() {
   function apply() {
     const ds = items.find((d) => d.id === pending);
     if (ds && ds.id !== qualityFilters.datasetId) {
-      setQualityFilters(() => partFilters(ds));
+      // The full dataset (variables...) is loaded by the steps; filters of another part never carry over.
+      setQualityFilters(() => ({ ...DEFAULT_QUALITY_FILTERS, datasetId: ds.id, datasetChosen: true, detailVariable: "" }));
       storePartId(ds.id);
     }
     setOpen(false);
@@ -58,7 +60,7 @@ export function PartControl() {
         />
         <span className="text-xs text-text-secondary">Pieza</span>
         <span className="truncate text-sm font-semibold text-text-primary">
-          {active?.name ?? (datasets.loading ? "Cargando…" : "—")}
+          {active?.label ?? (datasets.loading ? "Cargando…" : "—")}
         </span>
         <ChevronDown
           size={14}
@@ -120,14 +122,11 @@ export function PartControl() {
                       </span>
                       <span className="flex-1">
                         <span className="block text-sm font-medium text-text-primary">
-                          {ds.name}
+                          {ds.label}
                         </span>
                         <span className="block text-xs text-text-secondary">
                           {ORIGIN[ds.source_type]} ·{" "}
                           {ds.pieces.toLocaleString("es-MX")} piezas
-                          {ds.stations && ds.stations.length > 0
-                            ? ` · ${ds.stations.length} estaciones`
-                            : ""}
                         </span>
                       </span>
                     </button>

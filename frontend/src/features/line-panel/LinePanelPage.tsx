@@ -16,13 +16,13 @@ import {
   shiftCounts,
 } from "../../lib/line-panel/model";
 import type { LineAlarmEvent, LineMoment, LineMoments, LineReplay, MomentKind } from "../../lib/line-panel/types";
-import { fetchDatasets } from "../../lib/quality-analytics/api";
+import { fetchCatalog } from "../../lib/quality-analytics/api";
 import { useTheme } from "../../lib/theme/ThemeProvider";
 import { ActionDialog, type PanelView } from "./parts";
 import { AndonView } from "./views/AndonView";
 import { GuidedResponseView } from "./views/GuidedResponseView";
 import { ProcessMapView } from "./views/ProcessMapView";
-import { storedPartId } from "../../lib/demo/part";
+import { initialPartId } from "../../lib/demo/part";
 import "./linePanel.css";
 
 // IQ-F15: full-screen line quality panel (docs/design/line-quality-panel.md).
@@ -33,7 +33,6 @@ import "./linePanel.css";
 type ViewId = "A" | "B" | "C";
 const VIEW_NAMES: Record<ViewId, string> = { A: "Andon de línea", B: "Mapa de proceso", C: "Respuesta guiada" };
 const SPEEDS = [1, 5, 20];
-const REAL_ID = "real-dimensional";
 const SYNTHETIC_ID = "demo-synthetic-dimensional";
 /** Replay seconds shown before a stop / attention event when the presenter jumps to it. */
 const PREROLL_S = 15;
@@ -67,12 +66,8 @@ export function LinePanelPage() {
   // Dataset (IQ-F22): the part chosen in the demo's "Pieza" control when it is still offered
   // (not a CSV import), else the local REAL one when the backend has it, else the synthetic one.
   useEffect(() => {
-    const stored = storedPartId();
-    fetchDatasets()
-      .then(({ items }) => {
-        const chosen = items.find((d) => d.id === stored && d.source_type !== "IMPORTED");
-        setDataset(chosen ? chosen.id : items.some((d) => d.id === REAL_ID) ? REAL_ID : SYNTHETIC_ID);
-      })
+    fetchCatalog()
+      .then(({ items }) => setDataset(initialPartId(items) ?? SYNTHETIC_ID))
       .catch(() => setDataset(SYNTHETIC_ID));
   }, []);
 

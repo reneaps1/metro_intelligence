@@ -5,8 +5,9 @@ import { Card } from "../../../components/ui/Card";
 import { Notice } from "../../../components/workbench/Notice";
 import { useAsync } from "../../../lib/catalog/hooks";
 import { useDemoSession } from "../../../lib/demo/DemoSessionProvider";
-import { storedPartId, storePartId } from "../../../lib/demo/part";
-import { fetchDatasets } from "../../../lib/quality-analytics/api";
+import { initialPartId, storePartId } from "../../../lib/demo/part";
+import { useDataset } from "../../../lib/quality-analytics/useDataset";
+import { fetchCatalog, fetchDatasets } from "../../../lib/quality-analytics/api";
 import { DEFAULT_QUALITY_FILTERS, DEMO_DATASET_ID } from "../../../lib/quality-analytics/filters";
 import { deleteImportedDataset } from "../../../lib/quality-analytics/imports";
 import type { QualityDataset } from "../../../lib/quality-analytics/types";
@@ -138,25 +139,32 @@ function DatasetStep({ children }: { children: (dataset: QualityDataset) => Reac
   const [params, setParams] = useSearchParams();
   const requested = params.get("dataset");
 
+  const catalog = useAsync(fetchCatalog, []);
   const fetched = datasets.data?.items ?? [];
-  const items = [...fetched, ...added.filter((a) => !fetched.some((d) => d.id === a.id))];
-  const dataset = items.find((d) => d.id === qualityFilters.datasetId) ?? null;
+  const listed = [...fetched, ...added.filter((a) => !fetched.some((d) => d.id === a.id))];
+  // IQ-F22: private parts are not in the plain list; their full description is fetched on demand.
+  const selected = useDataset(qualityFilters.datasetId, datasets.data ? listed : null);
+  const dataset = selected.dataset;
+  const items = dataset && !listed.some((d) => d.id === dataset.id) ? [dataset, ...listed] : listed;
   const select = (ds: QualityDataset) => {
     setQualityFilters(() => filtersFor(ds, true));
     storePartId(ds.id);
   };
   // IQ-F22: the part remembered in this browser, else (IQ-F10) the REAL dataset when configured,
   // is the default until the presenter explicitly picks another one in the "Pieza" control.
-  const stored = storedPartId();
-  const initial =
-    fetched.find((d) => d.id === stored && d.source_type !== "IMPORTED") ??
-    fetched.find((d) => d.source_type === "REAL") ??
-    null;
+  const initialId = catalog.data ? initialPartId(catalog.data.items) : null;
   useEffect(() => {
-    if (initial && !qualityFilters.datasetChosen && qualityFilters.datasetId !== initial.id && !requested) {
-      setQualityFilters(() => filtersFor(initial, false));
+    if (initialId && !qualityFilters.datasetChosen && qualityFilters.datasetId !== initialId && !requested) {
+      setQualityFilters(() => ({ ...DEFAULT_QUALITY_FILTERS, datasetId: initialId, detailVariable: "" }));
     }
-  }, [initial, qualityFilters.datasetChosen, qualityFilters.datasetId, requested, setQualityFilters]);
+  }, [initialId, qualityFilters.datasetChosen, qualityFilters.datasetId, requested, setQualityFilters]);
+
+  // A part chosen in the toolbar arrives without its variables: default to its first one.
+  useEffect(() => {
+    if (!dataset || dataset.variables.some((v) => v.key === qualityFilters.detailVariable)) return;
+    const first = dataset.id === DEMO_DATASET_ID ? DEFAULT_QUALITY_FILTERS.detailVariable : dataset.variables[0]?.key;
+    if (first && first !== qualityFilters.detailVariable) setQualityFilters((prev) => ({ ...prev, detailVariable: first }));
+  }, [dataset, qualityFilters.detailVariable, setQualityFilters]);
 
   // Deep link from the import page: /demo/industrial-quality/quality?dataset=<id>
   useEffect(() => {
@@ -168,7 +176,7 @@ function DatasetStep({ children }: { children: (dataset: QualityDataset) => Reac
   }, [requested, datasets.data]);
 
   // An imported dataset expires (in-memory TTL) or was discarded: back to the demo dataset.
-  const missing = Boolean(datasets.data) && !datasets.loading && !dataset && !requested;
+  const missing = Boolean(datasets.data) && !datasets.loading && !dataset && !selected.loading && Boolean(selected.error) && !requested;
   useEffect(() => {
     if (missing) setQualityFilters(() => DEFAULT_QUALITY_FILTERS);
   }, [missing, setQualityFilters]);

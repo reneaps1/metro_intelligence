@@ -1,3 +1,4 @@
+import type { QualityDataset } from "../lib/quality-analytics/types";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { predictiveHandlers } from "./predictiveFixtures";
@@ -1003,6 +1004,24 @@ export function realQualityHandlers(seen: URLSearchParams[] = []) {
 
 export const qualityHandlers = [
   http.get(`${API_BASE_URL}/quality-analytics/datasets`, () => HttpResponse.json({ items: [QUALITY_DATASET_FIXTURE] })),
+  // IQ-F22: the part catalog mirrors whatever `/datasets` returns in the current test (handlers may override it).
+  http.get(`${API_BASE_URL}/quality-analytics/catalog`, async () => {
+    const res = await fetch(`${API_BASE_URL}/quality-analytics/datasets`);
+    const { items } = (await res.json()) as { items: QualityDataset[] };
+    const entries = items.map((d) => ({
+      id: d.id,
+      label: d.name,
+      line: d.line ?? null,
+      description: d.description,
+      source_type: d.source_type,
+      pieces: d.pieces,
+      period_start: d.period_start,
+      period_end: d.period_end,
+      loaded: true,
+    }));
+    const real = entries.find((e) => e.source_type === "REAL");
+    return HttpResponse.json({ items: entries, omitted: 0, initial_id: real?.id ?? "demo-synthetic-dimensional" });
+  }),
   http.post(`${API_BASE_URL}/quality-analytics/imports/preview`, () => HttpResponse.json(IMPORT_PREVIEW_FIXTURE)),
   http.post(`${API_BASE_URL}/quality-analytics/datasets`, () =>
     HttpResponse.json({ report: IMPORT_REPORT_FIXTURE, dataset: IMPORTED_DATASET_FIXTURE }, { status: 201 }),

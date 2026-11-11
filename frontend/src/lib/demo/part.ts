@@ -50,14 +50,27 @@ export function usesReportedVerdicts(
   );
 }
 
-export interface PartGroup {
+interface Groupable {
+  id: string;
+  line?: string | null;
+  source_type: QualityDataset["source_type"];
+}
+
+export interface PartGroup<T extends Groupable = QualityDataset> {
   line: string;
-  items: QualityDataset[];
+  items: T[];
+}
+
+/** The part the demo opens with: the one remembered in this browser, else the first REAL one. */
+export function initialPartId(items: Groupable[]): string | null {
+  const stored = storedPartId();
+  const remembered = items.find((d) => d.id === stored && d.source_type !== "IMPORTED");
+  return (remembered ?? items.find((d) => d.source_type === "REAL"))?.id ?? null;
 }
 
 /** Selector entries grouped by line; datasets without a line go under their origin. */
-export function groupParts(items: QualityDataset[]): PartGroup[] {
-  const groups: PartGroup[] = [];
+export function groupParts<T extends Groupable>(items: T[]): PartGroup<T>[] {
+  const groups: PartGroup<T>[] = [];
   for (const ds of items) {
     const line =
       ds.line ??

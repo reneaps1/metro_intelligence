@@ -15,6 +15,28 @@ export function fetchDatasets(): Promise<{ items: QualityDataset[] }> {
   return apiFetch<{ items: QualityDataset[] }>("/quality-analytics/datasets");
 }
 
+/** IQ-F21/F22: one entry of the part selector, described without loading the private dataset. */
+export interface CatalogEntry {
+  id: string;
+  label: string;
+  line: string | null;
+  description: string;
+  source_type: QualityDataset["source_type"];
+  pieces: number;
+  period_start: string | null;
+  period_end: string | null;
+  loaded: boolean;
+}
+
+export function fetchCatalog(): Promise<{ items: CatalogEntry[]; omitted: number; initial_id: string }> {
+  return apiFetch("/quality-analytics/catalog");
+}
+
+/** One dataset in full; loads a private part on the server on first use. */
+export function fetchDataset(id: string): Promise<QualityDataset> {
+  return apiFetch<QualityDataset>(`/quality-analytics/datasets/${encodeURIComponent(id)}`);
+}
+
 export function fetchOverview(f: QualityFilters, offsetMinutes = 0): Promise<OverviewResponse> {
   const params = filterParams(f, offsetMinutes);
   params.set("granularity", f.granularity);
