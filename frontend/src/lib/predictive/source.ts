@@ -12,6 +12,11 @@ export interface PredictiveSource {
   real: QualityDataset | null;
 }
 
+/** IQ-F22: provenance of the analysed data: REAL only for the customer's own parts, never for twins. */
+export function sourceOrigin(source: PredictiveSource): "REAL" | "SIMULATED" {
+  return source.real?.source_type === "REAL" ? "REAL" : "SIMULATED";
+}
+
 export const SYNTHETIC_SOURCE: PredictiveSource = { datasetId: DEMO_DATASET_ID, real: null };
 
 /** NOK targets of a REAL dataset: the total verdict or one station (first failing). */

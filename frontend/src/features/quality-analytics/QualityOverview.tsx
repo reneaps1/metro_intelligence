@@ -81,10 +81,10 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
                   : undefined
               }
             />
-            {s.worst_mold_cavity !== undefined && (
+            {s.worst_mold_cavity !== undefined && (dataset.mold_cavities?.length ?? 0) > 0 && (
               <Kpi
                 label={`${words.secondary} de mayor riesgo`}
-                value={s.worst_mold_cavity ? `Cav. ${s.worst_mold_cavity.cavity}` : "—"}
+                value={s.worst_mold_cavity ? `${words.secondary === "Cavidad de molde" ? "Cav." : words.secondary} ${s.worst_mold_cavity.cavity}` : "—"}
                 hint={
                   s.worst_mold_cavity
                     ? `${formatPct(s.worst_mold_cavity.rate)} · RR ${s.worst_mold_cavity.relative_risk?.toFixed(1) ?? "—"}× vs. resto`

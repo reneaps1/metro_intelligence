@@ -4,7 +4,7 @@ import { Card, CardHeader } from "../../components/ui/Card";
 import { useAsync } from "../../lib/catalog/hooks";
 import { WB, gridProps, secondaryLine } from "../../lib/demo/chartTheme";
 import { fetchPieceRisk } from "../../lib/predictive/api";
-import { plantLabel, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
+import { plantLabel, sourceOrigin, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
 import type { ScoreEval } from "../../lib/predictive/types";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import { Callout, LoadState, Metric, PanelHeader, axisTick, fieldControl, legendText, n, tooltipStyle } from "./shared";
@@ -38,7 +38,7 @@ export function PieceRisk({ source }: { source: PredictiveSource }) {
 
   return (
     <section className="space-y-4" aria-label="Riesgo por pieza">
-      <PanelHeader title="Riesgo por pieza antes de inspeccionar" origins={["REAL", "EXPERIMENTAL"]}>
+      <PanelHeader title="Riesgo por pieza antes de inspeccionar" origins={[sourceOrigin(source), "EXPERIMENTAL"]}>
         ¿Qué piezas conviene revisar primero? Solo usa lo que pasó con piezas anteriores (su cavidad, su nido y la línea).
       </PanelHeader>
       <label className="wb-label block">

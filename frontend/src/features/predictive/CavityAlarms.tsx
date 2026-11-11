@@ -4,7 +4,7 @@ import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } fro
 import { useAsync } from "../../lib/catalog/hooks";
 import { WB } from "../../lib/demo/chartTheme";
 import { fetchGroupAlarms, type GroupAlarmParams } from "../../lib/predictive/api";
-import { plantLabel, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
+import { plantLabel, sourceOrigin, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import { Callout, LoadState, Metric, PanelHeader, axisTick, fieldControl, legendText, n, tooltipStyle } from "./shared";
 
@@ -62,8 +62,8 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
 
   return (
     <section className="space-y-4" aria-label="Alarma por cavidad">
-      <PanelHeader title="Alarma por cavidad: ¿habría avisado a tiempo?" origins={["REAL", "EXPERIMENTAL"]}>
-        Evaluación retrospectiva sobre el período real: la regla solo usa piezas ya inspeccionadas de cada {groupWord}.
+      <PanelHeader title="Alarma por cavidad: ¿habría avisado a tiempo?" origins={[sourceOrigin(source), "EXPERIMENTAL"]}>
+        Evaluación retrospectiva sobre el período {sourceOrigin(source) === "REAL" ? "real" : "simulado (gemelo ficticio)"}: la regla solo usa piezas ya inspeccionadas de cada {groupWord}.
       </PanelHeader>
       <div className="flex flex-wrap items-center gap-4">
         <label className="wb-label">

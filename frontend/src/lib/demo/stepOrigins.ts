@@ -16,5 +16,7 @@ export function stepOrigins(step: DemoStep, datasetId: string, aiDatasetId: stri
   const dimensional = step.id === "quality" || step.id === "dimensional";
   if (!dimensional) return step.origins;
   if (isRealDatasetId(datasetId)) return step.id === "quality" ? ["REAL", "PRECOMPUTED"] : ["REAL"];
+  // IQ-F22: fictitious twin parts (`demo-*`) are simulated, never a historical period.
+  if (datasetId.startsWith("demo-")) return step.id === "quality" ? ["SIMULATED", "PRECOMPUTED"] : ["SIMULATED"];
   return datasetId !== DEMO_DATASET_ID ? ["HISTORICAL"] : step.origins;
 }

@@ -41,7 +41,7 @@ from app.core.config import get_settings
 from app.core.private_data import private_data_allowed
 from app.engines.quality_analytics.dataset import DimensionalDataset
 from app.engines.quality_analytics.synthetic import SYNTHETIC_DATASET_ID, synthetic_dataset
-from app.engines.quality_analytics.twins import build_twin, twin_meta, twin_spec
+from app.engines.quality_analytics.twins import build_twin, twin_ids, twin_meta, twin_spec
 from app.services import dataset_cache, real_dataset_service
 from app.services.imported_dataset_store import get_imported_dataset_store
 
@@ -252,8 +252,16 @@ def initial_dataset_id() -> str | None:
     return entries[0].id if entries else None
 
 
+def _build_twins() -> None:
+    for dataset_id in twin_ids():
+        spec = twin_spec(dataset_id)
+        if spec is not None:
+            build_twin(spec.slug)
+
+
 def warm_up_in_background() -> None:
-    """Preload only the entry the selector opens with, off the request path."""
+    """Preload the fictitious twins and the private entry the selector opens with, off the request path."""
+    threading.Thread(target=_build_twins, name="twins-warmup", daemon=True).start()
     target = initial_dataset_id()
     if target is None:
         return
