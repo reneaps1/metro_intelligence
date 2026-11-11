@@ -7,7 +7,6 @@ import random
 from collections.abc import Callable, Iterator
 
 import pytest
-from app.api.v1 import quality_analytics as quality_api
 from app.api.v1.auth import router as auth_router
 from app.api.v1.quality_analytics import router as quality_router
 from app.core.config import get_settings
@@ -23,7 +22,7 @@ from app.engines.quality_analytics.process_join import (
     lag_scan,
     piece_counts,
 )
-from app.services import process_join_service, real_predictive_service
+from app.services import process_join_service, real_dataset_service, real_predictive_service
 from app.services.process_join_service import CAUSAL_NOTE, CONTROL_NOTE, ILLUSTRATIVE_NOTE
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -225,7 +224,7 @@ def as_role(client: TestClient) -> Callable[[str], dict[str, str]]:
 
 @pytest.fixture
 def with_real(settings_patch, monkeypatch: pytest.MonkeyPatch, real) -> DimensionalDataset:
-    monkeypatch.setattr(quality_api, "load_real_dataset", lambda: real)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: real)
     return real
 
 
@@ -284,9 +283,9 @@ def test_unknown_dataset_or_real_absent_is_404(
     client: TestClient, as_role, settings_patch, monkeypatch: pytest.MonkeyPatch, real
 ) -> None:
     headers = as_role("metrologist")
-    monkeypatch.setattr(quality_api, "load_real_dataset", lambda: None)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: None)
     assert client.get(BASE, params={"signal": MOLD}, headers=headers).status_code == 404
-    monkeypatch.setattr(quality_api, "load_real_dataset", lambda: real)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: real)
     for dataset in ("demo-synthetic-dimensional", "nope"):
         response = client.get(BASE, params={"signal": MOLD, "dataset": dataset}, headers=headers)
         assert response.status_code == 404
@@ -295,7 +294,7 @@ def test_unknown_dataset_or_real_absent_is_404(
 def test_auth_rbac_and_edition(
     client: TestClient, as_role, settings_patch, monkeypatch: pytest.MonkeyPatch, real
 ) -> None:
-    monkeypatch.setattr(quality_api, "load_real_dataset", lambda: real)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: real)
     params = {"signal": HOLD}
     assert client.get(BASE, params=params).status_code == 401
     assert client.get(BASE, params=params, headers=as_role("viewer")).status_code == 403

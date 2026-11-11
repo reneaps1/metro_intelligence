@@ -32,6 +32,7 @@ from typing import Literal
 from app.engines.line_alarms.rules import LineAlarm, LineEvaluation, Rule, evaluate_line
 from app.engines.quality_analytics.analytics import QualityFilter, piece_nok_flags
 from app.engines.quality_analytics.dataset import DimensionalDataset
+from app.services import dataset_cache
 
 Provenance = Literal["REAL", "SIMULATED"]
 MomentKind = Literal["stop", "attention", "normal"]
@@ -138,6 +139,16 @@ def reset_cache() -> None:
     """Tests only."""
     with _lock:
         _cache.clear()
+
+
+def _forget(dataset_id: str) -> None:
+    """IQ-F21: a panel holds its dataset; drop it when the dataset is evicted or reloaded."""
+    with _lock:
+        for key in [k for k in _cache if k[0] == dataset_id]:
+            del _cache[key]
+
+
+dataset_cache.register(_forget)
 
 
 def provenance(ds: DimensionalDataset) -> Provenance:

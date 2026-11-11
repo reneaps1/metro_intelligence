@@ -31,6 +31,7 @@ from app.engines.experimental_ml.nok_waves import (
 )
 from app.engines.experimental_ml.piece_risk import RiskStudy, run_risk_study
 from app.engines.quality_analytics.dataset import DimensionalDataset
+from app.services import dataset_cache
 from app.services.predictive_service import NOK_RATE_SERIES, CusumStudy, HourBucket, WaveStudy
 
 TOTAL_TARGET = "total"
@@ -61,6 +62,16 @@ def reset_cache() -> None:
         _cache.clear()
 
 
+def _forget(dataset_id: str) -> None:
+    """IQ-F21: keys start with (dataset id, object id); drop that dataset's results."""
+    with _lock:
+        for key in [k for k in _cache if k[0] == dataset_id]:
+            del _cache[key]
+
+
+dataset_cache.register(_forget)
+
+
 def validate_target(ds: DimensionalDataset, target: str) -> str:
     """``total`` or ``station:<key>`` of a station the dataset carries; ValueError otherwise."""
     if target == TOTAL_TARGET:
@@ -87,7 +98,7 @@ def target_flags(ds: DimensionalDataset, target: str) -> list[bool]:
         key = target[len(STATION_PREFIX) :]
         return [p == key for p in ds.primary_fail]
 
-    flags: list[bool] = _cached((id(ds), "flags", target), build)
+    flags: list[bool] = _cached((ds.id, id(ds), "flags", target), build)
     return flags
 
 
@@ -134,7 +145,7 @@ def real_wave_study(
         interval = (series[-1].ts - series[0].ts) / (len(series) - 1) if len(series) > 1 else 0.0
         return WaveStudy(LINE_LABEL, series, episodes, alerts, evaluation, hours, interval)
 
-    key = (id(ds), "waves", target, window, threshold, horizon, episode_window, episode_threshold)
+    key = (ds.id, id(ds), "waves", target, window, threshold, horizon, episode_window, episode_threshold)
     study: WaveStudy = _cached(key, build)
     return study
 
@@ -199,7 +210,7 @@ def group_alarm_study(
     gap = longest_gap(ds.timestamps)
     since = gap[1] if scope == "after_longest_gap" and gap is not None else None
     evaluation = _cached(
-        (id(ds), "alarms", grouping, target, k, n, scope),
+        (ds.id, id(ds), "alarms", grouping, target, k, n, scope),
         lambda: evaluate_group_alarms(ds.timestamps, column, flags, k, n, since=since),  # type: ignore[arg-type]
     )
     return evaluation, gap, since
@@ -215,7 +226,7 @@ def piece_risk_study(ds: DimensionalDataset, target: str) -> RiskStudy:
     flags = target_flags(ds, target)
     molds = ds.mold_cavities
     study: RiskStudy = _cached(
-        (id(ds), "risk", target),
+        (ds.id, id(ds), "risk", target),
         lambda: run_risk_study(ds.timestamps, molds, ds.cavities, flags, ds.utc_offset_s),
     )
     return study

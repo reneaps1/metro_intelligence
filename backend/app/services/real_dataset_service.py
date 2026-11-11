@@ -24,8 +24,10 @@ from pydantic import ValidationError
 from app.connectors.pieces_file import read_pieces
 from app.connectors.pin_spec import read_pin_spec
 from app.core.config import get_settings
+from app.core.private_data import private_data_allowed
 from app.engines.quality_analytics.analytics import Granularity, QualityFilter, overview
 from app.engines.quality_analytics.dataset import DimensionalDataset, check_pin_pairs
+from app.services import dataset_cache
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +37,21 @@ _MB = 1024 * 1024
 _lock = threading.Lock()
 _cache: tuple[tuple[object, ...], DimensionalDataset] | None = None
 # Overview over 10^5 pieces costs seconds in pure Python; the UI re-asks the
-# same few filter combinations, so keep the last results (keyed by dataset object).
+# same few filter combinations, so keep the last results (keyed by dataset id + object; IQ-F21 drops
+# a dataset's entries through `dataset_cache.forget` when it is reloaded or evicted).
 _OVERVIEW_CACHE_SIZE = 32
 _overview_lock = threading.Lock()
-_overview_cache: OrderedDict[tuple[int, QualityFilter, str], dict[str, Any]] = OrderedDict()
+_overview_cache: OrderedDict[tuple[str, int, QualityFilter, str], dict[str, Any]] = OrderedDict()
 
 
 def real_dataset_configured() -> bool:
     settings = get_settings()
-    return bool(settings.demo_real_dataset_path) and settings.app_env != "production"
+    return bool(settings.demo_real_dataset_path) and private_data_allowed(settings)
+
+
+def is_loaded() -> bool:
+    with _lock:
+        return _cache is not None
 
 
 def load_real_dataset() -> DimensionalDataset | None:
@@ -53,8 +61,9 @@ def load_real_dataset() -> DimensionalDataset | None:
     path_value = settings.demo_real_dataset_path
     if not path_value:
         return None
-    if settings.app_env == "production":
-        logger.warning("A real dataset path is configured in production; it is ignored (plan decision D8).")
+    if not private_data_allowed(settings):
+        # IQ-F21 (D15): production, a non-loopback browser origin or a hosted platform.
+        logger.warning("A real dataset path is configured where private data is not allowed; it is ignored.")
         return None
     path = Path(path_value)
     try:
@@ -75,7 +84,9 @@ def load_real_dataset() -> DimensionalDataset | None:
                 max_bytes=settings.demo_real_dataset_max_mb * _MB,
                 max_pieces=settings.demo_real_dataset_max_pieces,
             )
-            _attach_pin_spec(dataset, settings.demo_real_spec_path)
+            attach_pin_spec(dataset, settings.demo_real_spec_path)
+            if _cache is not None:
+                dataset_cache.forget(REAL_DATASET_ID)
             _cache = (key, dataset)
             return dataset
     except (OSError, ValueError, ValidationError):
@@ -94,7 +105,7 @@ def _spec_key(path_value: str | None) -> tuple[str, int, int] | None:
     return (path_value, stat.st_mtime_ns, stat.st_size)
 
 
-def _attach_pin_spec(dataset: DimensionalDataset, path_value: str | None) -> None:
+def attach_pin_spec(dataset: DimensionalDataset, path_value: str | None) -> None:
     """IQ-F19: X/Y pairs from the private spec; an unusable spec only hides the X/Y view."""
     if not path_value:
         return
@@ -108,8 +119,8 @@ def _attach_pin_spec(dataset: DimensionalDataset, path_value: str | None) -> Non
 
 
 def cached_overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity) -> dict[str, Any]:
-    """`overview` with a small LRU; the key includes the dataset object, so a reload invalidates it."""
-    key = (id(ds), f, granularity)
+    """`overview` with a small LRU, keyed by dataset id and object."""
+    key = (ds.id, id(ds), f, granularity)
     with _overview_lock:
         hit = _overview_cache.get(key)
         if hit is not None:
@@ -121,6 +132,15 @@ def cached_overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granu
         while len(_overview_cache) > _OVERVIEW_CACHE_SIZE:
             _overview_cache.popitem(last=False)
     return result
+
+
+def _forget_overviews(dataset_id: str) -> None:
+    with _overview_lock:
+        for key in [k for k in _overview_cache if k[0] == dataset_id]:
+            del _overview_cache[key]
+
+
+dataset_cache.register(_forget_overviews)
 
 
 def warm_up_in_background() -> None:

@@ -120,5 +120,13 @@ inside the backend container and checks the running edition.
 - Real customer CSVs are never uploaded to the public VPS without the
   customer's explicit authorization; the demo runs on fictitious and private
   summary data.
+- IQ-F21 (D15): private datasets (`DEMO_REAL_DATASET_PATH`,
+  `DEMO_REAL_DATASETS_DIR`) are offered only when the backend runs outside
+  production, every `CORS_ORIGINS` entry is loopback and no hosting-platform
+  variable (e.g. `RENDER`) is present (`backend/app/core/private_data.py`).
+  A server therefore never offers them even if a copied `.env` sets the
+  paths; the hosted demo shows synthetic and fictitious data only. Serving
+  real data from an authorized private host is plan phase F30 (blocked until
+  the customer authorizes it in writing).
 - `.env*` files and `~/metro-private` stay on the VPS, mode 600/700.
 - Secrets differ between editions.

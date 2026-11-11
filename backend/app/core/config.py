@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     # position tolerances for the REAL dataset (`connectors/pin_spec.py`).
     # Unset or invalid = the REAL dataset has no X/Y position view.
     demo_real_spec_path: str | None = None
+    # IQ-F21 (plan decisions D14, D15): optional PRIVATE folder holding one
+    # converted dataset per part (`<slug>/manifest.json`), offered in the part
+    # selector. Local use only: also ignored unless `core/private_data.py`
+    # allows private data (not production, loopback origins, not a hosted
+    # platform). Each entry uses the same size caps as the legacy dataset.
+    demo_real_datasets_dir: str | None = None
+    demo_real_datasets_max_loaded: int = Field(default=2, ge=1, le=8)
 
     # --- Database (PostgreSQL 16) ---
     postgres_host: str

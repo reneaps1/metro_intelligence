@@ -78,3 +78,28 @@ python -m app.connectors.long_signal_batch convert --mapping <private>/mapping.j
 - The output directory must be outside the repository or under
   `demo-private/`. The backend loads it only when `DEMO_REAL_DATASET_PATH` is
   set and never in production (plan decision D8).
+
+### Private part registry (IQ-F21)
+
+Several converted datasets, one per part, are offered by the demo's part
+selector when `DEMO_REAL_DATASETS_DIR` points at a private folder:
+
+```
+<private>/datasets/<slug>/manifest.json        pieces-v1/v2 (+ optional blocks below)
+<private>/datasets/<slug>/pieces.csv.gz
+<private>/datasets/<slug>/spec.json            optional, pin-spec-v1 (X/Y view)
+<private>/datasets/<slug>/report-summary.json  optional, private report block
+<private>/datasets/<slug>/model-lab.json       optional, private study results
+```
+
+`<slug>` matches `^[a-z0-9][a-z0-9-]{0,39}$` (`dimensional` is reserved) and
+becomes the id `real-<slug>`. The manifest may carry optional, backwards
+compatible blocks (`pieces_file.Manifest`): `display` (selector label, line,
+description, order), `groups` (labels of the two grouping slots), `time_basis`,
+`window` and `history` (what part of the source was kept), `views`
+(`process_join`, off by default: plan decision D27) and `assumptions`. They
+are written by the operator or the converter, never derived from file names.
+Invalid folders are skipped and counted; the registry loads pieces lazily
+(LRU of `DEMO_REAL_DATASETS_MAX_LOADED`). Like the single dataset above, it is
+only offered when `app/core/private_data.py` allows private data: not
+production, every CORS origin loopback, no hosting-platform variable.

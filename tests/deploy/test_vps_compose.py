@@ -140,6 +140,13 @@ def test_real_customer_dataset_is_never_wired_into_the_vps() -> None:
         assert "DEMO_REAL_DATASET" not in path.read_text(encoding="utf-8"), path.name
 
 
+def test_private_part_registry_is_never_wired_into_the_vps() -> None:
+    """IQ-F21 (D15): the per-part private folder is local-only too (explicit, not just by substring)."""
+    for path in (COMPOSE, SCRIPT, WORKFLOW):
+        text = path.read_text(encoding="utf-8")
+        assert "DEMO_REAL_DATASETS_DIR" not in text and "DEMO_REAL_DATASETS_MAX_LOADED" not in text, path.name
+
+
 def test_deploy_script_is_valid_bash_with_its_guards() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     for guard in ("APP_EDITION=", "SKIP industrial", "config --quiet", "app_edition", "/health"):
