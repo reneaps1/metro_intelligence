@@ -20,6 +20,7 @@ from app.connectors.pieces_file import read_pieces
 from app.core.config import get_settings
 from app.core.private_data import hosted_platform_detected, only_loopback_origins, private_data_allowed
 from app.engines.quality_analytics.synthetic import SYNTHETIC_DATASET_ID
+from app.engines.quality_analytics.twins import twin_ids
 from app.services import dataset_cache, dataset_registry, real_dataset_service, real_predictive_service
 from app.services.dataset_registry import DatasetNotFoundError
 from app.services.real_predictive_service import TOTAL_TARGET, target_flags
@@ -300,7 +301,7 @@ def test_catalog_api_lists_without_loading(
     configure(demo_real_datasets_dir=str(private_root))
     body = client.get(f"{BASE}/catalog", headers=headers).json()
     ids = [i["id"] for i in body["items"]]
-    assert ids == ["real-pieza-a", "real-pieza-b", SYNTHETIC_DATASET_ID]
+    assert ids == ["real-pieza-a", "real-pieza-b", SYNTHETIC_DATASET_ID, *twin_ids()]
     assert body["initial_id"] == "real-pieza-a" and body["omitted"] == 3
     first = body["items"][0]
     assert (first["label"], first["line"], first["source_type"], first["loaded"]) == (
@@ -323,7 +324,8 @@ def test_catalog_on_a_public_host_is_synthetic_only(
     configure(demo_real_datasets_dir=str(private_root))
     monkeypatch.setenv("RENDER", "true")
     body = client.get(f"{BASE}/catalog", headers=headers).json()
-    assert [i["id"] for i in body["items"]] == [SYNTHETIC_DATASET_ID]
+    assert [i["id"] for i in body["items"]] == [SYNTHETIC_DATASET_ID, *twin_ids()]
+    assert all(i["source_type"] == "SIMULATED" for i in body["items"])
     assert body["initial_id"] == SYNTHETIC_DATASET_ID and body["omitted"] == 0
     assert client.get(f"{BASE}/datasets/real-pieza-a", headers=headers).status_code == 404
 

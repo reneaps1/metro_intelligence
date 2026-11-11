@@ -47,6 +47,7 @@ from app.engines.quality_analytics import (
     variable_detail,
 )
 from app.engines.quality_analytics.position import xy_detail
+from app.engines.quality_analytics.twins import build_twin, twin_ids, twin_spec
 from app.models.security import User
 from app.schemas.quality_analytics import (
     CatalogEntryOut,
@@ -236,7 +237,7 @@ def _described(ds: DimensionalDataset, *, loaded: bool = True) -> CatalogEntryOu
     return CatalogEntryOut(
         id=ds.id,
         label=ds.name,
-        line=None,
+        line=dataset_registry.meta(ds).line,
         description=ds.description,
         source_type=ds.source_type,
         pieces=len(ds),
@@ -272,6 +273,7 @@ def read_catalog(user: User = Depends(_read)) -> CatalogResponse:
         for e in catalog.entries
     ]
     items.append(_described(synthetic_dataset()))
+    items += [_described(build_twin(twin_spec(i).slug)) for i in twin_ids()]  # type: ignore[union-attr]
     items += [_described(item.dataset) for item in get_imported_dataset_store().list_for(user.id)]
     initial = next((i.id for i in items if i.source_type == "REAL"), SYNTHETIC_DATASET_ID)
     return CatalogResponse(items=items, omitted=omitted, initial_id=initial)
@@ -288,7 +290,8 @@ def list_datasets(user: User = Depends(_read)) -> DatasetListResponse:
     imported = [dataset_out(item.dataset) for item in get_imported_dataset_store().list_for(user.id)]
     real = real_dataset_service.load_real_dataset()
     leading = [dataset_out(real)] if real is not None else []
-    return DatasetListResponse(items=[*leading, dataset_out(synthetic_dataset()), *imported])
+    twins = [dataset_out(build_twin(twin_spec(i).slug)) for i in twin_ids()]  # type: ignore[union-attr]
+    return DatasetListResponse(items=[*leading, dataset_out(synthetic_dataset()), *twins, *imported])
 
 
 @router.get("/overview", response_model=OverviewResponse)

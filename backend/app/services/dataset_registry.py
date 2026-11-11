@@ -41,6 +41,7 @@ from app.core.config import get_settings
 from app.core.private_data import private_data_allowed
 from app.engines.quality_analytics.dataset import DimensionalDataset
 from app.engines.quality_analytics.synthetic import SYNTHETIC_DATASET_ID, synthetic_dataset
+from app.engines.quality_analytics.twins import build_twin, twin_meta, twin_spec
 from app.services import dataset_cache, real_dataset_service
 from app.services.imported_dataset_store import get_imported_dataset_store
 
@@ -285,6 +286,9 @@ def resolve(
     """The one lookup every router uses. Raises `DatasetNotFoundError`."""
     if dataset_id == SYNTHETIC_DATASET_ID:
         return synthetic_dataset()
+    twin = twin_spec(dataset_id)
+    if twin is not None:
+        return build_twin(twin.slug)
     if dataset_id == real_dataset_service.REAL_DATASET_ID:
         real = real_dataset_service.load_real_dataset()
         if real is not None:
@@ -327,6 +331,10 @@ class Meta:
 
 
 def meta(ds: DimensionalDataset) -> Meta:
+    twin = twin_meta(ds.id)
+    if twin is not None:
+        line, labels, assumptions = twin
+        return Meta(line, labels, assumptions, False)
     if ds.id == real_dataset_service.REAL_DATASET_ID:
         return Meta(process_join=ds.source_type == "REAL")
     found = entry(ds.id)
