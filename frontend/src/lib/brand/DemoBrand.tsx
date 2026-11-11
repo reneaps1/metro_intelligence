@@ -63,7 +63,7 @@ function Switcher({ value, onChange }: { value: BrandVariant; onChange: (v: Bran
     <div
       role="radiogroup"
       aria-label="Propuesta de marca del demo"
-      className="fixed left-2 top-1/2 z-toast flex -translate-y-1/2 flex-col gap-1 rounded-md border border-border bg-surface-raised p-1.5 text-[11px] shadow-md print:hidden"
+      className="fixed bottom-10 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-surface-raised p-1.5 text-[11px] shadow-md print:hidden"
     >
       <span className="px-1 font-semibold text-text-secondary">Propuesta</span>
       {[...BRAND_VARIANTS, "off" as const].map((v) => (
