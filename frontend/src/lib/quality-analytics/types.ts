@@ -68,6 +68,12 @@ export interface QualityDataset {
   data_quality?: Record<string, number>;
   /** IQ-F19: X/Y pairs with a position tolerance (empty = no position view). */
   pin_pairs?: { key: string; label: string }[];
+  /** IQ-F21: production line this part belongs to (part selector grouping). */
+  line?: string | null;
+  /** IQ-F21: vocabulary of the grouping slots, e.g. { primary: "Cavidad", secondary: "Lado" }. */
+  group_labels?: Record<string, string>;
+  /** IQ-F21: declared assumptions (time basis, twin notice...). */
+  assumptions?: string[];
 }
 
 export interface CavityRate {

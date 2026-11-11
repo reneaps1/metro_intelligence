@@ -34,8 +34,7 @@ function render() {
 describe("AiStep with the REAL dataset", () => {
   it("defaults to real data and offers the REAL-only studies", async () => {
     render();
-    const data = await screen.findByRole("group", { name: "Datos del laboratorio" });
-    expect(within(data).getByRole("button", { name: /Reales · Cliente demo/ })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByText(/Datos reales · Cliente demo/)).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Alarma por cavidad" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Riesgo por pieza" })).toBeInTheDocument();
   });
@@ -70,12 +69,11 @@ describe("AiStep with the REAL dataset", () => {
     expect(screen.getByText(/episodio etiquetado a posteriori/)).toBeInTheDocument();
   });
 
-  it("switches back to synthetic data and hides the REAL-only studies", async () => {
-    const user = userEvent.setup();
+  it("follows the remembered part: the synthetic demo hides the REAL-only studies (IQ-F22)", async () => {
+    localStorage.setItem("mi-demo-part", "demo-synthetic-dimensional");
     render();
-    await user.click(await screen.findByRole("button", { name: "Sintéticos (demo)" }));
+    expect(await screen.findByText("Dataset de demostración (inyección simulada)")).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Alarma por cavidad" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sintéticos (demo)" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("lets the model lab switch between private studies", async () => {

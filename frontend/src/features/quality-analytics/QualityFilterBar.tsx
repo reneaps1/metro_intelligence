@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { groupWords } from "../../lib/demo/part";
 import { FilterX } from "lucide-react";
 import clsx from "clsx";
 import { Card } from "../../components/ui/Card";
@@ -93,6 +94,7 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
   const reported = dataset.nok_basis === "reported";
   const stations = dataset.stations ?? [];
   const moldCavities = dataset.mold_cavities ?? [];
+  const words = groupWords(dataset);
   const presets = dataset.presets ?? [];
   const sameStations = (keys: string[]) => keys.length === f.stations.length && keys.every((k) => f.stations.includes(k));
 
@@ -205,21 +207,21 @@ export function QualityFilterBar({ dataset, showVariables = true }: { dataset: Q
           ))}
         </Group>
       )}
-      <Group title={moldCavities.length ? "Nido" : "Nido / cavidad"} enabled={available.cavity}>
+      <Group title={moldCavities.length || dataset.group_labels?.primary ? words.primary : "Nido / cavidad"} enabled={available.cavity}>
         {dataset.cavities.map((c) => (
-          <Chip key={c} active={f.cavities.includes(c)} onClick={() => set({ cavities: toggle(f.cavities, c) })} label={`Nido ${c}`}>
+          <Chip key={c} active={f.cavities.includes(c)} onClick={() => set({ cavities: toggle(f.cavities, c) })} label={`${words.primary} ${c}`}>
             {c}
           </Chip>
         ))}
       </Group>
       {available.mold_cavity && (
-        <Group title="Cavidad de molde" enabled>
+        <Group title={words.secondary} enabled>
           {moldCavities.map((c) => (
             <Chip
               key={c}
               active={f.moldCavities.includes(c)}
               onClick={() => set({ moldCavities: toggle(f.moldCavities, c) })}
-              label={`Cavidad de molde ${c}`}
+              label={`${words.secondary} ${dataset.group_labels?.secondary === "Lado" ? (c === 1 ? "Izq" : "Der") : c}`}
             >
               {c}
             </Chip>

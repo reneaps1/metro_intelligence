@@ -2,8 +2,9 @@ import { useEffect, useRef, type ComponentType, type KeyboardEvent } from "react
 import { useSearchParams } from "react-router-dom";
 import { Card } from "../../../components/ui/Card";
 import { useAsync } from "../../../lib/catalog/hooks";
-import { AI_DATA_PARAM, AI_VIEW_PARAM, parseAiView, visibleAiViews, type AiViewId } from "../../../lib/demo/aiViews";
+import { AI_VIEW_PARAM, parseAiView, visibleAiViews, type AiViewId } from "../../../lib/demo/aiViews";
 import { useOptionalDemoSession } from "../../../lib/demo/DemoSessionProvider";
+import { storedPartId, usesReportedVerdicts } from "../../../lib/demo/part";
 import { SYNTHETIC_SOURCE, type PredictiveSource } from "../../../lib/predictive/source";
 import { fetchDatasets } from "../../../lib/quality-analytics/api";
 import { CavityAlarms } from "../../predictive/CavityAlarms";
@@ -38,8 +39,21 @@ const PANELS: Record<AiViewId, ComponentType<{ source: PredictiveSource }>> = {
 export function AiStep() {
   const [params, setParams] = useSearchParams();
   const datasets = useAsync(fetchDatasets, []);
-  const real = datasets.data?.items.find((d) => d.source_type === "REAL") ?? null;
-  const useReal = Boolean(real) && params.get(AI_DATA_PARAM) !== "sintetico";
+  // IQ-F22: the lab follows the part chosen in the workbench's "Pieza" control. Parts with
+  // machine-reported verdicts (REAL ones and their fictitious twins) run the per-piece studies;
+  // the injection demo dataset and CSV imports use the synthetic series.
+  const session = useOptionalDemoSession();
+  const items = datasets.data?.items ?? [];
+  const stored = storedPartId();
+  // Until the presenter picks a part, the same default as steps 2-3: the remembered part, else REAL.
+  const selected =
+    (session?.qualityFilters.datasetChosen
+      ? items.find((d) => d.id === session.qualityFilters.datasetId)
+      : (items.find((d) => d.id === stored && d.source_type !== "IMPORTED") ??
+        items.find((d) => d.source_type === "REAL") ??
+        items.find((d) => d.id === session?.qualityFilters.datasetId))) ?? null;
+  const real = usesReportedVerdicts(selected) ? selected : null;
+  const useReal = Boolean(real);
   const source: PredictiveSource = useReal && real ? { datasetId: real.id, real } : SYNTHETIC_SOURCE;
   const AI_VIEWS = visibleAiViews(useReal);
   const requested = parseAiView(params.get(AI_VIEW_PARAM));
@@ -48,23 +62,12 @@ export function AiStep() {
   const Panel = PANELS[view];
   const ready = Boolean(datasets.data || datasets.error);
   // Tell the shell which data the lab analyses, so the step badges and the inspector say REAL.
-  const setAiDatasetId = useOptionalDemoSession()?.setAiDatasetId;
-  const realId = useReal && real ? real.id : null;
+  const setAiDatasetId = session?.setAiDatasetId;
+  const realId = useReal && real && real.source_type === "REAL" ? real.id : null;
   useEffect(() => {
     setAiDatasetId?.(realId);
     return () => setAiDatasetId?.(null);
   }, [realId, setAiDatasetId]);
-
-  function setData(value: "real" | "sintetico") {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set(AI_DATA_PARAM, value);
-        return next;
-      },
-      { replace: true },
-    );
-  }
 
   function select(id: AiViewId, focus = false) {
     setParams(
@@ -92,26 +95,15 @@ export function AiStep() {
 
   return (
     <div className="space-y-4">
-      {real && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="wb-label">Datos del laboratorio</span>
-          <div className="wb-seg" role="group" aria-label="Datos del laboratorio">
-            {(
-              [
-                ["real", `Reales · ${real.name.replace(/^Datos reales · /, "")}`],
-                ["sintetico", "Sintéticos (demo)"],
-              ] as const
-            ).map(([value, label]) => (
-              <button key={value} type="button" aria-pressed={(value === "real") === useReal} onClick={() => setData(value)}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <span className="text-xs text-text-secondary">
-            Modelos ML/DL, What-if y Fallas de máquina no dependen de esta selección.
-          </span>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="wb-label">Datos del laboratorio</span>
+        <span className="text-sm font-semibold text-text-primary">
+          {real ? real.name : "Dataset de demostración (inyección simulada)"}
+        </span>
+        <span className="text-xs text-text-secondary">
+          Se cambia con «Pieza» en la barra. Modelos ML/DL, What-if y Fallas de máquina no dependen de ella.
+        </span>
+      </div>
       <div role="tablist" aria-label="Laboratorio predictivo" onKeyDown={onKeyDown} className="wb-seg lg">
         {AI_VIEWS.map((v, i) => {
           const selected = v.id === view;
