@@ -39,6 +39,16 @@ export interface QualityPreset {
   group_by: "nest" | "mold_cavity";
 }
 
+/** IQ-F28: drawing data of a part (private product file). */
+export interface ProductInfo {
+  name: string | null;
+  part_number: string | null;
+  drawing: string | null;
+  customer_program: string | null;
+  /** Characteristics with drawing limits: Cpk and specification lines are available for them. */
+  characteristics_with_limits: number;
+}
+
 export interface QualityDataset {
   id: string;
   name: string;
@@ -68,6 +78,8 @@ export interface QualityDataset {
   data_quality?: Record<string, number>;
   /** IQ-F19: X/Y pairs with a position tolerance (empty = no position view). */
   pin_pairs?: { key: string; label: string }[];
+  /** IQ-F28: the part as named on the customer's drawing (private file; absent = unnamed). */
+  product?: ProductInfo | null;
   /** IQ-F21: production line this part belongs to (part selector grouping). */
   line?: string | null;
   /** IQ-F21: vocabulary of the grouping slots, e.g. { primary: "Cavidad", secondary: "Lado" }. */
@@ -203,7 +215,12 @@ export interface VariableDetailResponse {
   source_type: DatasetSourceType;
   variable: string;
   name: string;
-  spec: { nominal: number | null; lsl: number | null; usl: number | null; unit: string };
+  spec: {
+    nominal: number | null;
+    lsl: number | null;
+    usl: number | null;
+    unit: string;
+  };
   n: number;
   nok: number;
   nok_rate: number | null;
@@ -211,8 +228,17 @@ export interface VariableDetailResponse {
   std: number | null;
   min: number | null;
   max: number | null;
-  capability: { cp: number | null; cpk: number | null; reason: string | null } | null;
-  control_limits: { center_line: number; ucl: number; lcl: number; engine: string } | null;
+  capability: {
+    cp: number | null;
+    cpk: number | null;
+    reason: string | null;
+  } | null;
+  control_limits: {
+    center_line: number;
+    ucl: number;
+    lcl: number;
+    engine: string;
+  } | null;
   histogram: { x0: number; x1: number; count: number }[];
   /** [epoch ms, value, is_nok] */
   series: [number, number, boolean][];
@@ -252,19 +278,36 @@ export interface XYCentroid {
 export interface XYDetailResponse {
   dataset_id: string;
   source_type: DatasetSourceType;
-  pair: { key: string; label: string; unit: string; nominal_x: number; nominal_y: number; tol_xy: number | null };
+  pair: {
+    key: string;
+    label: string;
+    unit: string;
+    nominal_x: number;
+    nominal_y: number;
+    tol_xy: number | null;
+  };
   group_by: XYGroupBy;
   pieces: number;
   nok_pieces: number;
   nok_label: string;
   /** Position zones (e.g. drawing and end-of-line), true position TP = 2·√(dx²+dy²) compared with the diameter. */
-  circles: { label: string; diameter: number; outside: number; outside_rate: number | null }[];
+  circles: {
+    label: string;
+    diameter: number;
+    outside: number;
+    outside_rate: number | null;
+  }[];
   box_outside: number | null;
   box_outside_rate: number | null;
   tp: { median: number | null; p95: number | null; max: number | null };
   centroid: XYCentroid | null;
   nok_centroid: XYCentroid | null;
-  groups: { group: number | string; pieces: number; nok: number; centroid: XYCentroid | null }[];
+  groups: {
+    group: number | string;
+    pieces: number;
+    nok: number;
+    centroid: XYCentroid | null;
+  }[];
   /** [dx, dy, group (nest / mold cavity or null), nok]: a sample, NOK pieces kept apart. */
   points: [number, number, number | null, boolean][];
   points_total: number;

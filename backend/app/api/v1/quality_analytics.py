@@ -34,6 +34,7 @@ from fastapi import Path as PathParam
 from pydantic import ValidationError
 
 from app.connectors.pieces_file import read_manifest
+from app.connectors.product_spec import ProductSpec
 from app.core.config import get_settings
 from app.core.edition import require_industrial_edition
 from app.core.security import require_permission
@@ -61,6 +62,7 @@ from app.schemas.quality_analytics import (
     ProcessJoinLag,
     ProcessJoinResponse,
     ProcessJoinSignal,
+    ProductOut,
     ReportSummary,
     StationOut,
     VariableDetailResponse,
@@ -206,6 +208,21 @@ def dataset_out(ds: DimensionalDataset) -> DatasetOut:
         group_labels=meta.group_labels,
         assumptions=list(meta.assumptions),
         process_join=meta.process_join,
+        product=product_out(meta.product),
+    )
+
+
+def product_out(spec: ProductSpec | None) -> ProductOut | None:
+    if spec is None:
+        return None
+    p = spec.product
+    limited = sum(1 for c in spec.characteristics if c.lsl is not None or c.usl is not None)
+    return ProductOut(
+        name=p.name,
+        part_number=p.part_number,
+        drawing=p.drawing,
+        customer_program=p.customer_program,
+        characteristics_with_limits=limited,
     )
 
 
@@ -269,6 +286,7 @@ def read_catalog(user: User = Depends(_read)) -> CatalogResponse:
             period_start=e.period_start,
             period_end=e.period_end,
             loaded=dataset_registry.is_loaded(e.id),
+            product=product_out(e.product),
         )
         for e in catalog.entries
     ]

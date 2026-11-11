@@ -103,3 +103,16 @@ Invalid folders are skipped and counted; the registry loads pieces lazily
 (LRU of `DEMO_REAL_DATASETS_MAX_LOADED`). Like the single dataset above, it is
 only offered when `app/core/private_data.py` allows private data: not
 production, every CORS origin loopback, no hosting-platform variable.
+
+#### Product file (IQ-F28)
+
+An optional private `product.json` next to the manifest (`product_spec.py`,
+format `product-spec-v1`) names the part as on the customer's drawing
+(`product`: name, part number, drawing, customer program) and gives drawing
+data per variable (`characteristics`: name, balloon, nominal, lsl, usl, unit,
+class). The registry applies it when loading: the selector shows
+«program · name (part number)», variables gain the drawing names and limits
+(capability indices and specification lines), and the NOK basis stays the
+machine's verdict. A file naming variables the part does not have is never
+applied. It can be uploaded with the part (`PUT /api/v1/private-datasets/<slug>`,
+field `product`). Like everything in the private root, it never enters the repo.

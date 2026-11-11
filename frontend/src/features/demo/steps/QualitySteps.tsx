@@ -31,6 +31,10 @@ function DatasetBanner({ dataset }: { dataset: QualityDataset }) {
     <Notice icon={<Database size={16} aria-hidden="true" />}>
       <span>
         <strong>{dataset.name}.</strong> {dataset.description}{" "}
+        {dataset.product?.drawing ? `Plano ${dataset.product.drawing}. ` : ""}
+        {dataset.product && dataset.product.characteristics_with_limits > 0
+          ? `${dataset.product.characteristics_with_limits} características con nominal y tolerancia del plano; el veredicto OK/NOK sigue siendo el de la máquina. `
+          : ""}
         {dataset.source_type === "SIMULATED"
           ? "Los mecanismos de defecto se inyectaron a propósito; se listan en «Verdad conocida del dataset sintético» (paso 2)."
           : dataset.source_type === "IMPORTED"

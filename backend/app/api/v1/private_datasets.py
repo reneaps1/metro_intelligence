@@ -27,6 +27,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.connectors.pieces_file import MAX_MANIFEST_BYTES, read_manifest, read_pieces
+from app.connectors.product_spec import MAX_PRODUCT_BYTES, apply_product_spec, read_product_spec
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.edition import require_industrial_edition
@@ -92,6 +93,7 @@ async def upload_private_dataset(
     slug: str = PathParam(..., pattern=SLUG),
     manifest: UploadFile = File(...),
     pieces: UploadFile = File(...),
+    product: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     _user: User = Depends(_admin),
     context: AuditContext = Depends(get_audit_context),
@@ -112,7 +114,7 @@ async def upload_private_dataset(
             pieces, staging / parsed.pieces_file, settings.demo_real_dataset_max_mb * _MB
         )
         try:
-            read_pieces(
+            loaded = read_pieces(
                 manifest_path,
                 dataset_id=f"{dataset_registry.REGISTRY_PREFIX}{slug}",
                 name=slug,
@@ -124,6 +126,17 @@ async def upload_private_dataset(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Pieces file does not match the manifest."
             ) from None
+        product_sha = None
+        if product is not None:
+            # IQ-F28: the part's drawing data; it must describe THIS part's variables.
+            product_path = staging / "product.json"
+            product_sha = await _save(product, product_path, MAX_PRODUCT_BYTES)
+            try:
+                apply_product_spec(loaded, read_product_spec(product_path))
+            except (OSError, ValueError, ValidationError):
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Product file does not match the part."
+                ) from None
         final = root / slug
         if final.exists():
             shutil.rmtree(final)
@@ -138,7 +151,12 @@ async def upload_private_dataset(
         action="private_dataset_uploaded",
         entity_type="quality_analytics.private_dataset",
         entity_id=_slug_id(slug),
-        after={"slug": slug, "pieces": parsed.pieces, "pieces_sha256": pieces_sha},
+        after={
+            "slug": slug,
+            "pieces": parsed.pieces,
+            "pieces_sha256": pieces_sha,
+            "product_sha256": product_sha,
+        },
     )
     db.commit()
     entry = dataset_registry.entry(f"{dataset_registry.REGISTRY_PREFIX}{slug}")

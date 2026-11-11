@@ -1,6 +1,7 @@
 import { apiFetch } from "../api";
 import { filterParams, type QualityFilters } from "./filters";
 import type {
+  ProductInfo,
   OverviewResponse,
   QualityDataset,
   ReportSummary,
@@ -26,30 +27,47 @@ export interface CatalogEntry {
   period_start: string | null;
   period_end: string | null;
   loaded: boolean;
+  product?: ProductInfo | null;
 }
 
-export function fetchCatalog(): Promise<{ items: CatalogEntry[]; omitted: number; initial_id: string }> {
+export function fetchCatalog(): Promise<{
+  items: CatalogEntry[];
+  omitted: number;
+  initial_id: string;
+}> {
   return apiFetch("/quality-analytics/catalog");
 }
 
 /** One dataset in full; loads a private part on the server on first use. */
 export function fetchDataset(id: string): Promise<QualityDataset> {
-  return apiFetch<QualityDataset>(`/quality-analytics/datasets/${encodeURIComponent(id)}`);
+  return apiFetch<QualityDataset>(
+    `/quality-analytics/datasets/${encodeURIComponent(id)}`,
+  );
 }
 
-export function fetchOverview(f: QualityFilters, offsetMinutes = 0): Promise<OverviewResponse> {
+export function fetchOverview(
+  f: QualityFilters,
+  offsetMinutes = 0,
+): Promise<OverviewResponse> {
   const params = filterParams(f, offsetMinutes);
   params.set("granularity", f.granularity);
   if (f.variables.length) params.set("variables", f.variables.join(","));
   if (f.stations.length) params.set("stations", f.stations.join(","));
-  return apiFetch<OverviewResponse>(`/quality-analytics/overview?${params.toString()}`);
+  return apiFetch<OverviewResponse>(
+    `/quality-analytics/overview?${params.toString()}`,
+  );
 }
 
-export function fetchVariableDetail(f: QualityFilters, offsetMinutes = 0): Promise<VariableDetailResponse> {
+export function fetchVariableDetail(
+  f: QualityFilters,
+  offsetMinutes = 0,
+): Promise<VariableDetailResponse> {
   const params = filterParams(f, offsetMinutes);
   params.set("variable", f.detailVariable);
   params.set("group_by", f.groupBy);
-  return apiFetch<VariableDetailResponse>(`/quality-analytics/variable?${params.toString()}`);
+  return apiFetch<VariableDetailResponse>(
+    `/quality-analytics/variable?${params.toString()}`,
+  );
 }
 
 /** IQ-F19: X/Y deviation cloud of one pin pair; same filters (and NOK basis) as the overview. */
@@ -64,7 +82,9 @@ export function fetchXyDetail(
   params.set("group_by", groupBy);
   if (f.variables.length) params.set("variables", f.variables.join(","));
   if (f.stations.length) params.set("stations", f.stations.join(","));
-  return apiFetch<XYDetailResponse>(`/quality-analytics/xy?${params.toString()}`);
+  return apiFetch<XYDetailResponse>(
+    `/quality-analytics/xy?${params.toString()}`,
+  );
 }
 
 export function fetchReportSummary(): Promise<ReportSummary> {

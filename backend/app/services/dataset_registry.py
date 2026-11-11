@@ -37,6 +37,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.connectors.pieces_file import Manifest, read_manifest, read_pieces
+from app.connectors.product_spec import ProductSpec, apply_product_spec, product_label, read_product_spec
 from app.core.config import get_settings
 from app.core.private_data import private_data_allowed
 from app.engines.quality_analytics.dataset import DimensionalDataset
@@ -54,6 +55,7 @@ RESERVED_SLUGS = frozenset({"dimensional"})
 MAX_ENTRIES = 64
 MANIFEST = "manifest.json"
 SPEC_FILE = "spec.json"
+PRODUCT_FILE = "product.json"
 EXTRA_FILES = frozenset({"report-summary.json", "model-lab.json"})
 _MB = 1024 * 1024
 
@@ -79,6 +81,8 @@ class Entry:
     group_labels: dict[str, str]
     assumptions: tuple[str, ...]
     signature: tuple[object, ...]
+    # IQ-F28: the part's private drawing data (product.json), when present and valid.
+    product: ProductSpec | None = None
 
     @property
     def manifest_path(self) -> Path:
@@ -116,9 +120,21 @@ def _ms(value: int | None) -> datetime | None:
     return datetime.fromtimestamp(value / 1000, tz=UTC) if value else None
 
 
+def _product(folder: Path) -> ProductSpec | None:
+    path = folder / PRODUCT_FILE
+    if not path.is_file():
+        return None
+    try:
+        return read_product_spec(path)
+    except (OSError, ValueError, ValidationError):
+        logger.warning("A private product file could not be read; the part is offered without it.")
+        return None
+
+
 def _entry(folder: Path, manifest: Manifest) -> Entry:
     slug = folder.name
     display = manifest.display
+    product = _product(folder)
     labels: dict[str, str] = {}
     if manifest.groups is not None:
         if manifest.groups.primary is not None:
@@ -130,7 +146,7 @@ def _entry(folder: Path, manifest: Manifest) -> Entry:
     return Entry(
         id=f"{REGISTRY_PREFIX}{slug}",
         folder=folder,
-        label=display.label if display else slug,
+        label=product_label(product, display.label if display else slug),
         line=display.line if display else None,
         description=(display.description if display and display.description else ""),
         order=display.order if display else 100,
@@ -140,7 +156,13 @@ def _entry(folder: Path, manifest: Manifest) -> Entry:
         process_join=manifest.views.process_join,
         group_labels=labels,
         assumptions=tuple(manifest.assumptions),
-        signature=(_stat(folder / MANIFEST), pieces_stat, _stat(folder / SPEC_FILE)),
+        signature=(
+            _stat(folder / MANIFEST),
+            pieces_stat,
+            _stat(folder / SPEC_FILE),
+            _stat(folder / PRODUCT_FILE),
+        ),
+        product=product,
     )
 
 
@@ -218,6 +240,11 @@ def load(dataset_id: str) -> DimensionalDataset | None:
         except (OSError, ValueError, ValidationError):
             logger.warning("A private dataset could not be loaded; it is not offered.")
             return None
+        if found.product is not None and found.product.characteristics:
+            try:
+                dataset = apply_product_spec(dataset, found.product)
+            except ValueError:
+                logger.warning("A private product file does not match its part; its limits are not applied.")
         spec = found.folder / SPEC_FILE
         if spec.is_file():
             real_dataset_service.attach_pin_spec(dataset, str(spec))
@@ -336,6 +363,7 @@ class Meta:
     group_labels: dict[str, str] = field(default_factory=dict)
     assumptions: tuple[str, ...] = ()
     process_join: bool = False
+    product: ProductSpec | None = None
 
 
 def meta(ds: DimensionalDataset) -> Meta:
@@ -348,4 +376,4 @@ def meta(ds: DimensionalDataset) -> Meta:
     found = entry(ds.id)
     if found is None:
         return Meta()
-    return Meta(found.line, dict(found.group_labels), found.assumptions, found.process_join)
+    return Meta(found.line, dict(found.group_labels), found.assumptions, found.process_join, found.product)

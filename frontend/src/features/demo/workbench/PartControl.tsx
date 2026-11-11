@@ -37,7 +37,12 @@ export function PartControl() {
     const ds = items.find((d) => d.id === pending);
     if (ds && ds.id !== qualityFilters.datasetId) {
       // The full dataset (variables...) is loaded by the steps; filters of another part never carry over.
-      setQualityFilters(() => ({ ...DEFAULT_QUALITY_FILTERS, datasetId: ds.id, datasetChosen: true, detailVariable: "" }));
+      setQualityFilters(() => ({
+        ...DEFAULT_QUALITY_FILTERS,
+        datasetId: ds.id,
+        datasetChosen: true,
+        detailVariable: "",
+      }));
       storePartId(ds.id);
     }
     setOpen(false);
@@ -127,6 +132,14 @@ export function PartControl() {
                         <span className="block text-xs text-text-secondary">
                           {ORIGIN[ds.source_type]} ·{" "}
                           {ds.pieces.toLocaleString("es-MX")} piezas
+                          {ds.product?.drawing
+                            ? ` · Plano ${ds.product.drawing}`
+                            : ""}
+                          {ds.product
+                            ? ds.product.characteristics_with_limits > 0
+                              ? ` · ${ds.product.characteristics_with_limits} características con tolerancia`
+                              : " · sin tolerancias del plano"
+                            : ""}
                         </span>
                       </span>
                     </button>

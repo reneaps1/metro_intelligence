@@ -137,3 +137,28 @@ def test_invalid_uploads_leave_nothing_behind(client: TestClient, as_role, host,
     assert client.put(f"{BASE}/dimensional", files=_files(converted), headers=admin).status_code == 422
     assert client.put(f"{BASE}/Bad_Slug", files=_files(converted), headers=admin).status_code == 422
     assert [p.name for p in root.iterdir()] == []
+
+
+def test_upload_with_a_product_file(client: TestClient, as_role, host, converted: Path) -> None:
+    root = host(demo_private_host_authorization=AUTH_REF, private_datasets_upload_enabled=True)
+    admin = as_role("admin")
+    product = {
+        "format": "product-spec-v1",
+        "product": {"name": "Conector demo", "part_number": "MI-DEMO-0042"},
+        "characteristics": [{"variable": "x0", "lsl": 0.5, "usl": 1.5}],
+    }
+    files = {**_files(converted), "product": ("product.json", json.dumps(product).encode())}
+    r = client.put(f"{BASE}/pieza-p", files=files, headers=admin)
+    assert r.status_code == 200, r.text
+    assert r.json()["label"] == "Conector demo (MI-DEMO-0042)"
+    assert (root / "pieza-p" / "product.json").is_file()
+    detail = client.get("/api/v1/quality-analytics/datasets/real-pieza-p", headers=admin).json()
+    assert detail["product"]["part_number"] == "MI-DEMO-0042"
+    assert detail["product"]["characteristics_with_limits"] == 1
+    x0 = next(v for v in detail["variables"] if v["key"] == "x0")
+    assert (x0["lsl"], x0["usl"]) == (0.5, 1.5)
+
+    foreign = {**product, "characteristics": [{"variable": "nope", "usl": 1.0}]}
+    files = {**_files(converted), "product": ("product.json", json.dumps(foreign).encode())}
+    assert client.put(f"{BASE}/pieza-q", files=files, headers=admin).status_code == 422
+    assert not (root / "pieza-q").exists()

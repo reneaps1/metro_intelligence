@@ -50,6 +50,17 @@ class PinPairOut(BaseModel):
     label: str
 
 
+class ProductOut(BaseModel):
+    """IQ-F28: the part as named on the customer's drawing (private file; absent = unnamed)."""
+
+    name: str | None = None
+    part_number: str | None = None
+    drawing: str | None = None
+    customer_program: str | None = None
+    # Characteristics that carry drawing limits (enables Cpk and specification lines).
+    characteristics_with_limits: int = 0
+
+
 class DatasetOut(BaseModel):
     id: str
     name: str
@@ -88,6 +99,8 @@ class DatasetOut(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     # D27: Vista A (process join) is offered for this dataset.
     process_join: bool = False
+    # IQ-F28: the part's drawing data, when a private product file exists.
+    product: ProductOut | None = None
 
 
 class DatasetListResponse(BaseModel):
@@ -107,6 +120,7 @@ class CatalogEntryOut(BaseModel):
     period_end: datetime | None = None
     # Already in memory: selecting it is instant.
     loaded: bool = False
+    product: ProductOut | None = None
 
 
 class CatalogResponse(BaseModel):
