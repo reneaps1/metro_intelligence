@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Guía del demo IIoT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* OnKaizen print palette: pino de la marca + verdes OnKaizen + neutros carbón. */
+  :root {
+    --pino: #1b4720;
+    --pino-2: #24582a;
+    --verde: #4a9b3a;
+    --verde-fuerte: #357a2b;
+    --verde-claro: #6abf56;
+    --verde-tinte: #f1f8ef;
+    --verde-tinte-2: #e3f1df;
+    --carbon: #1e2329;
+    --text-2: #5b636d;
+    --text-3: #80868e;
+    --gris: #a3a8ae;
+    --niebla: #f4f6f8;
+    --sunken: #f7f8f9;
+    --line: #e3e6ea;
+    --line-strong: #d6dadf;
+    --rojo: #dc2626;
+    --rojo-texto: #b91c1c;
+    --rojo-tinte: #fef2f2;
+    --ambar: #d97706;
+    --ambar-texto: #92400e;
+  }
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #fff; }
+  body {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    color: var(--carbon);
+    font-size: 9pt;
+    line-height: 1.4;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .mont { font-family: "Montserrat", system-ui, sans-serif; }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  .body { padding: 0 14mm; }
+
+  /* ---------- Encabezado (igual al de la cotización) ---------- */
+  .hdr {
+    background: var(--pino);
+    color: #fff;
+    height: 30mm;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14mm 0 12mm;
+  }
+  .logo {
+    width: 21mm; height: 21mm;
+    border: 0.35mm solid rgba(255,255,255,.75);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+  }
+  .logo b {
+    font-family: "Montserrat", sans-serif; font-weight: 700; font-size: 10.5pt; letter-spacing: .1px;
+  }
+  .logo i { display: block; width: 15mm; height: 0.5mm; background: var(--verde-claro); margin-top: 0.8mm; border-radius: 1px; }
+  .hdr-r { text-align: right; }
+  .hdr-r h2 { font-family: "Montserrat", sans-serif; font-weight: 700; font-size: 15pt; letter-spacing: .1px; }
+  .hdr-r .tag { color: var(--verde-claro); font-size: 9.5pt; margin-top: 1.2mm; }
+  .hdr-r .ct { font-size: 7.6pt; margin-top: 1.6mm; line-height: 1.55; opacity: .95; }
+  .hdr-r .ct span { color: var(--verde-claro); }
+  .strip { height: 5mm; background: var(--verde-claro); }
+
+  .hdr-sm {
+    background: var(--pino); color: #fff; height: 14mm;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 14mm;
+  }
+  .hdr-sm .brand { display: flex; align-items: center; gap: 3mm; }
+  .hdr-sm .dot { width: 8mm; height: 8mm; border: 0.3mm solid rgba(255,255,255,.75); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-family: "Montserrat"; font-weight: 700; font-size: 6pt; }
+  .hdr-sm b { font-family: "Montserrat"; font-weight: 700; font-size: 10pt; }
+  .hdr-sm .r { font-size: 8pt; color: var(--verde-claro); }
+  .strip-sm { height: 2.2mm; background: var(--verde-claro); }
+
+  /* ---------- Título ---------- */
+  .title {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 6.5mm 14mm 4.5mm; border-bottom: 0.35mm solid var(--verde);
+  }
+  .kicker { font-family: "Montserrat"; font-weight: 700; font-size: 8.5pt; letter-spacing: 2.2px; color: var(--verde); text-transform: uppercase; }
+  .title h1 { font-family: "Montserrat"; font-weight: 800; font-size: 26pt; color: var(--pino); line-height: 1.02; margin-top: 1.6mm; letter-spacing: -.4px; }
+  .title .sub { color: var(--text-2); font-size: 9.6pt; margin-top: 2mm; }
+  .meta { text-align: right; font-size: 7.8pt; line-height: 1.6; }
+  .meta b { color: var(--text-3); font-weight: 500; font-family: "Montserrat"; font-size: 7.5pt; }
+
+  /* ---------- Secciones ---------- */
+  .sec { margin-top: 5mm; }
+  .sec-h { display: flex; align-items: baseline; gap: 3mm; margin-bottom: 3.2mm; }
+  .sec-h .n {
+    font-family: "Montserrat"; font-weight: 700; font-size: 8pt; color: #fff; background: var(--pino);
+    padding: 0.6mm 2mm; border-radius: 2px; letter-spacing: .6px;
+  }
+  .sec-h h3 { font-family: "Montserrat"; font-weight: 700; font-size: 12.5pt; color: var(--pino); text-transform: uppercase; letter-spacing: .4px; }
+  .sec-h .aside { margin-left: auto; color: var(--text-2); font-size: 8pt; }
+
+  /* ---------- Flujo dato → decisión ---------- */
+  .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; position: relative; }
+  .fn { position: relative; padding: 0 2.2mm; }
+  .fn .ic {
+    height: 12.5mm; border: 0.3mm solid var(--line-strong); background: var(--sunken); border-radius: 3px;
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .fn:not(:last-child)::after {
+    content: ""; position: absolute; right: -1.6mm; top: 6.25mm; width: 3.2mm; height: 0.5mm; background: var(--verde);
+    z-index: 2;
+  }
+  .fn:not(:last-child)::before {
+    content: ""; position: absolute; right: -2.4mm; top: 5mm; z-index: 3;
+    border-left: 1.6mm solid var(--verde); border-top: 1.45mm solid transparent; border-bottom: 1.45mm solid transparent;
+  }
+  .fn.last .ic { background: var(--pino); border-color: var(--pino); }
+  .fn .k { font-family: "Montserrat"; font-weight: 700; color: var(--verde); font-size: 6.6pt; margin-top: 2mm; letter-spacing: .8px; }
+  .fn h4 { font-family: "Montserrat"; font-weight: 700; font-size: 10pt; color: var(--carbon); margin-top: .4mm; }
+  .fn p { color: var(--text-2); font-size: 7.4pt; margin-top: .6mm; line-height: 1.35; }
+  .onprem {
+    margin-top: 3mm; background: var(--verde-tinte); border-left: 1mm solid var(--verde);
+    padding: 1.6mm 3.5mm; font-size: 7.9pt; color: var(--pino); display: flex; gap: 6mm;
+  }
+  .onprem b { font-weight: 600; }
+
+  /* ---------- Ruta de pasos ---------- */
+  .route { position: relative; }
+  .route::before {
+    content: ""; position: absolute; left: 5.3mm; top: 5mm; bottom: 5mm; width: 0.5mm; background: var(--verde-tinte-2);
+  }
+  .step { display: grid; grid-template-columns: 11mm 1fr 50mm; gap: 4mm; padding: 2mm 0; border-bottom: 0.25mm solid var(--line); position: relative; align-items: start; }
+  .step:last-child { border-bottom: 0; }
+  .step .num {
+    width: 11mm; height: 11mm; border-radius: 50%; background: var(--pino); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Montserrat"; font-weight: 800; font-size: 12.5pt; position: relative; z-index: 1;
+    box-shadow: 0 0 0 1.2mm #fff;
+  }
+  .step.final .num { background: var(--verde-claro); color: var(--pino); }
+  .step h4 { font-family: "Montserrat"; font-weight: 700; font-size: 10pt; color: var(--carbon); }
+  .step .where { margin-top: .8mm; display: flex; flex-wrap: wrap; gap: 1.2mm; align-items: center; }
+  .chip {
+    font-family: "IBM Plex Mono"; font-size: 7.3pt; padding: .3mm 1.6mm; border: 0.25mm solid var(--line-strong);
+    border-radius: 2px; background: #fff; color: var(--carbon); white-space: nowrap;
+  }
+  .chip.btn { background: var(--verde-fuerte); color: #fff; border-color: var(--verde-fuerte); }
+  .chip.nav { background: var(--sunken); }
+  .arrow { color: var(--gris); font-size: 8pt; }
+  .step .do { color: var(--text-2); font-size: 7.9pt; margin-top: 1mm; }
+  .say {
+    border-left: 0.6mm solid var(--verde-claro); padding: .4mm 0 .4mm 2.6mm; font-size: 8pt; color: var(--pino);
+    font-style: italic; line-height: 1.4;
+  }
+  .say b { display: block; font-style: normal; font-family: "Montserrat"; font-weight: 700; font-size: 6.6pt; letter-spacing: 1.1px; color: var(--verde); text-transform: uppercase; margin-bottom: .6mm; }
+
+  /* ---------- Pie ---------- */
+  .foot {
+    position: absolute; left: 14mm; right: 14mm; bottom: 8mm;
+    display: flex; justify-content: space-between; font-size: 7.4pt; color: var(--text-3);
+    border-top: 0.25mm solid var(--line); padding-top: 2mm;
+  }
+  .foot b { color: var(--verde-fuerte); font-family: "Montserrat"; font-weight: 700; }
+  .foot-band {
+    position: absolute; left: 14mm; right: 14mm; bottom: 9mm; height: 10mm; background: var(--pino); color: #fff;
+    display: flex; align-items: center; justify-content: center; gap: 2.4mm; font-size: 8.4pt;
+  }
+  .foot-band b { color: var(--verde-claro); font-family: "Montserrat"; font-weight: 700; }
+  .foot-band .p { position: absolute; right: 4mm; color: rgba(255,255,255,.6); font-size: 7.4pt; }
+
+  /* ---------- Maqueta de pantalla ---------- */
+  .screen {
+    border: 0.3mm solid var(--line-strong); border-radius: 4px; overflow: hidden; background: #fff;
+    display: grid; grid-template-columns: 30mm 1fr; position: relative;
+  }
+  .sb { background: var(--sunken); border-right: 0.25mm solid var(--line); padding: 3mm 0; }
+  .sb .lg { font-family: "Montserrat"; font-weight: 700; font-size: 7.4pt; color: var(--pino); padding: 0 3mm 3mm; border-bottom: 0.25mm solid var(--line); margin-bottom: 2mm; }
+  .sb .lg span { color: var(--verde); }
+  .sb .it { font-size: 6.6pt; color: var(--text-2); padding: 1.3mm 3mm; border-left: 0.6mm solid transparent; }
+  .sb .it.on { background: var(--verde-tinte); color: var(--carbon); border-left-color: var(--verde); font-weight: 500; }
+  .main { padding: 3mm 3.4mm; position: relative; }
+  .tb { display: flex; justify-content: space-between; align-items: center; }
+  .tb h5 { font-family: "Montserrat"; font-weight: 700; font-size: 10pt; }
+  .tb .conn { font-size: 6.4pt; color: var(--text-2); display: flex; align-items: center; gap: 1mm; }
+  .sdot { width: 1.5mm; height: 1.5mm; border-radius: 50%; background: var(--verde); display: inline-block; }
+  .ctrls { display: flex; gap: 2mm; align-items: center; border: 0.25mm solid var(--line); background: var(--sunken); padding: 1.6mm 2mm; margin-top: 2mm; border-radius: 3px; font-size: 6.4pt; color: var(--text-2); }
+  .ctrl { border: 0.25mm solid var(--line-strong); background: #fff; border-radius: 2px; padding: .5mm 1.8mm; color: var(--carbon); font-size: 6.4pt; }
+  .grid8 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2mm; margin-top: 2.4mm; }
+  .sc { border: 0.25mm solid var(--line); border-radius: 3px; padding: 1.8mm 2mm; background: #fff; }
+  .sc.sel { border-color: var(--verde); box-shadow: 0 0 0 0.3mm var(--verde); }
+  .sc .nm { font-size: 6.4pt; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc .pc { font-size: 5.6pt; color: var(--text-2); font-family: "IBM Plex Mono"; }
+  .sc svg { display: block; margin: 1mm 0; width: 100%; height: 7mm; }
+  .sc .row { display: flex; justify-content: space-between; align-items: center; font-size: 6pt; }
+  .sc .v { font-family: "IBM Plex Mono"; }
+  .st { display: inline-flex; align-items: center; gap: .8mm; font-size: 5.8pt; color: var(--text-2); }
+  .st i { width: 1.4mm; height: 1.4mm; border-radius: 50%; display: inline-block; background: var(--gris); }
+  .st.ok i { background: var(--verde); }
+  .st.nok { color: var(--rojo-texto); } .st.nok i { background: var(--rojo); }
+  .st.warn { color: var(--ambar-texto); } .st.warn i { background: var(--ambar); }
+  .sc .cpk { font-size: 5.4pt; color: var(--text-2); margin-top: .6mm; font-family: "IBM Plex Mono"; }
+  .detail { border: 0.25mm solid var(--line); border-radius: 3px; margin-top: 2.4mm; }
+  .detail .dh { background: var(--sunken); border-bottom: 0.25mm solid var(--line); padding: 1.4mm 2.4mm; display: flex; justify-content: space-between; font-size: 6.4pt; }
+  .detail .dh b { font-weight: 500; }
+  .detail .db { display: grid; grid-template-columns: 1.6fr 1fr; gap: 3mm; padding: 2mm 2.4mm; }
+  .detail svg { width: 100%; height: 22mm; display: block; }
+  .kv { font-size: 6.2pt; color: var(--text-2); line-height: 1.6; }
+  .kv b { color: var(--carbon); font-weight: 500; display: block; margin-top: .8mm; font-size: 6.4pt; }
+  .lnk { color: var(--verde-fuerte); font-size: 6.2pt; margin-top: 1.4mm; display: inline-block; font-weight: 500; }
+
+  /* marcadores de anotación */
+  .mk {
+    position: absolute; width: 5.4mm; height: 5.4mm; border-radius: 50%; background: var(--pino); color: #fff;
+    font-family: "Montserrat"; font-weight: 800; font-size: 7.4pt; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 0.7mm #fff, 0 0 0 1.1mm var(--verde-claro); z-index: 5;
+  }
+  .legend { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2.6mm 5mm; margin-top: 4mm; }
+  .lg-it { display: grid; grid-template-columns: 6mm 1fr; gap: 2mm; align-items: start; }
+  .lg-it .mk { position: static; box-shadow: none; }
+  .lg-it h6 { font-family: "Montserrat"; font-weight: 700; font-size: 8.4pt; color: var(--carbon); }
+  .lg-it p { font-size: 7.6pt; color: var(--text-2); margin-top: .4mm; line-height: 1.38; }
+
+  /* ---------- Escenarios ---------- */
+  .scen { width: 100%; border-collapse: collapse; font-size: 7.8pt; }
+  .scen th { background: var(--pino); color: #fff; text-align: left; font-family: "Montserrat"; font-weight: 600; font-size: 7.6pt; padding: 1.6mm 2.4mm; white-space: nowrap; }
+  .scen td { padding: 1.2mm 2.4mm; border-bottom: 0.25mm solid var(--line); vertical-align: middle; }
+  .scen tr:nth-child(even) td { background: var(--verde-tinte); }
+  .scen td.nm { font-family: "Montserrat"; font-weight: 700; color: var(--pino); font-size: 8.2pt; white-space: nowrap; }
+  .scen td.nm span { display: block; font-family: "IBM Plex Mono"; font-weight: 400; color: var(--text-3); font-size: 6.4pt; margin-top: .3mm; }
+  .scen td.sp { width: 36mm; }
+  .scen td.sp svg { width: 34mm; height: 8mm; display: block; }
+  .scen td.cpk { font-family: "IBM Plex Mono"; text-align: right; white-space: nowrap; width: 18mm; }
+  .scen td.msg { color: var(--text-2); }
+
+  /* ---------- Página de detalle ---------- */
+  .dd-range { display: flex; gap: .6mm; border: 0.25mm solid var(--line); padding: .5mm; border-radius: 3px; }
+  .dd-range span { font-size: 6pt; padding: .4mm 1.8mm; border-radius: 2px; color: var(--text-2); }
+  .dd-range span.on { background: var(--verde-fuerte); color: #fff; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 2.2mm; border: 0.25mm solid var(--line); border-radius: 3px; }
+  .kpi { padding: 1.6mm 2.2mm; border-right: 0.25mm solid var(--line); }
+  .kpi:last-child { border-right: 0; }
+  .kpi .l { font-size: 5.6pt; color: var(--text-2); }
+  .kpi .v { font-family: "Montserrat"; font-weight: 700; font-size: 10.5pt; font-variant-numeric: tabular-nums; }
+  .kpi .v.sm { font-size: 7pt; font-family: "IBM Plex Mono"; font-weight: 400; margin-top: 1mm; }
+  .kpi .v.warn { color: var(--ambar-texto); }
+  .alarm { margin-top: 2.2mm; border: 0.25mm solid var(--line); border-left: 0.8mm solid var(--ambar); border-radius: 3px; padding: 1.6mm 2.2mm; display: flex; justify-content: space-between; align-items: center; gap: 3mm; }
+  .alarm p { font-size: 6.2pt; color: var(--carbon); }
+  .alarm p small { display: block; color: var(--text-3); font-family: "IBM Plex Mono"; font-size: 5.4pt; margin-top: .4mm; }
+  .panel { border: 0.25mm solid var(--line); border-radius: 3px; margin-top: 2.2mm; }
+  .panel .ph { background: var(--sunken); border-bottom: 0.25mm solid var(--line); padding: 1.1mm 2.2mm; font-size: 6.2pt; font-weight: 500; }
+  .panel svg { display: block; width: 100%; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 2.2mm; }
+  .exp { border: 0.25mm dashed var(--line-strong); border-radius: 3px; padding: 1.6mm 2.2mm; margin-top: 2.2mm; font-size: 6pt; color: var(--text-2); }
+  .exp .tg { font-size: 5.4pt; color: var(--ambar-texto); border: 0.25mm solid var(--ambar); border-radius: 2px; padding: .1mm 1.2mm; display: inline-block; margin-bottom: .8mm; }
+  .exp b { color: var(--carbon); font-weight: 500; }
+
+  /* ---------- Guion ---------- */
+  .tl { display: grid; grid-template-columns: 1fr 2fr 2fr 3fr 2fr; margin-top: 1mm; }
+  .tl .seg { border-top: 2.4mm solid var(--verde-tinte-2); padding: 2mm 2.2mm 0 0; position: relative; }
+  .tl .seg:nth-child(1) { border-top-color: var(--verde-tinte-2); }
+  .tl .seg:nth-child(2) { border-top-color: var(--verde-claro); }
+  .tl .seg:nth-child(3) { border-top-color: var(--verde); }
+  .tl .seg:nth-child(4) { border-top-color: var(--verde-fuerte); }
+  .tl .seg:nth-child(5) { border-top-color: var(--pino); }
+  .tl .seg + .seg { border-left: 0; }
+  .tl .t { font-family: "IBM Plex Mono"; font-size: 6.8pt; color: var(--text-3); }
+  .tl h6 { font-family: "Montserrat"; font-weight: 700; font-size: 8.6pt; margin-top: .6mm; color: var(--carbon); }
+  .tl p { font-size: 7.2pt; color: var(--text-2); margin-top: .6mm; line-height: 1.36; padding-right: 1mm; }
+
+  .rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 0.25mm solid var(--line); border-radius: 4px; overflow: hidden; }
+  .rule { padding: 2.6mm 3.4mm; border-right: 0.25mm solid var(--line); }
+  .rule:last-child { border-right: 0; }
+  .rule .big { font-family: "Montserrat"; font-weight: 800; font-size: 13pt; color: var(--verde); line-height: 1; float: left; margin-right: 2.4mm; }
+  .rule h6 { font-family: "Montserrat"; font-weight: 700; font-size: 9.2pt; color: var(--pino); line-height: 13pt; }
+  .rule p { font-size: 7.5pt; color: var(--text-2); margin-top: 1.4mm; clear: both; line-height: 1.4; }
+
+  .prep { display: grid; grid-template-columns: 0.8fr 1fr 1fr 1fr 1fr; align-items: stretch; border: 0.25mm solid var(--line); border-radius: 4px; }
+  .prep div { padding: 2.4mm 3mm; border-right: 0.25mm solid var(--line); font-size: 7.6pt; color: var(--text-2); }
+  .prep div:last-child { border-right: 0; }
+  .prep b { display: block; font-family: "Montserrat"; font-weight: 700; color: var(--carbon); font-size: 8.2pt; margin-bottom: .6mm; }
+  .prep .ck { display: inline-block; width: 2.6mm; height: 2.6mm; border: 0.3mm solid var(--verde); border-radius: 1px; margin-right: 1.4mm; vertical-align: -0.3mm; }
+</style>
+</head>
+<body>
+
+<!-- =========================== PÁGINA 1 =========================== -->
+<section class="page">
+  <header class="hdr">
+    <div class="logo"><b>OnKaizen</b><i></i></div>
+    <div class="hdr-r">
+      <h2>OnKaizen Intelligence</h2>
+      <div class="tag">Inteligencia Operacional · Decisiones Visibles</div>
+      <div class="ct">Metro Intelligence Platform<br><span>onkaizen.com.mx</span></div>
+    </div>
+  </header>
+  <div class="strip"></div>
+
+  <div class="title">
+    <div>
+      <div class="kicker">Guía del demo · IIoT</div>
+      <h1>Planta en vivo,<br>decisiones visibles</h1>
+      <div class="sub">Recorrido del módulo Live Monitor en 6 pasos y 10 minutos</div>
+    </div>
+    <div class="meta">
+      <div><b>Documento:</b> GD-IIOT-01</div>
+      <div><b>Versión:</b> 1.0</div>
+      <div><b>Fecha:</b> 11/Noviembre/2026</div>
+      <div><b>Audiencia:</b> Presentador del demo</div>
+      <div><b>Datos:</b> Ficticios, serie MI-DEMO</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- Flujo -->
+    <div class="sec">
+      <div class="sec-h"><span class="n">01</span><h3>Del sensor a la decisión</h3><span class="aside">Lo que ocurre detrás de cada punto en pantalla</span></div>
+      <div class="flow">
+        <div class="fn">
+          <div class="ic">
+            <svg width="40" height="34" viewBox="0 0 40 34" fill="none" stroke="#1b4720" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="25" width="32" height="5" rx="1"/><path d="M10 25V6h20"/><path d="M30 6v9"/><path d="M27 15h6l-3 5z" fill="#6abf56" stroke="#1b4720"/>
+            </svg>
+          </div>
+          <div class="k">01 · CMM</div>
+          <h4>Medición</h4>
+          <p>En el demo, replay acelerado de mediciones ya registradas.</p>
+        </div>
+        <div class="fn">
+          <div class="ic">
+            <svg width="44" height="34" viewBox="0 0 44 34" fill="none" stroke="#1b4720" stroke-width="1.6" stroke-linecap="round">
+              <path d="M4 17h8l3-8 5 16 4-12 3 4h13"/><circle cx="40" cy="17" r="2.2" fill="#6abf56"/>
+            </svg>
+          </div>
+          <div class="k">02 · WEBSOCKET</div>
+          <h4>Flujo en vivo</h4>
+          <p>Canal autenticado con permisos por rol, sin recargar.</p>
+        </div>
+        <div class="fn">
+          <div class="ic">
+            <svg width="44" height="34" viewBox="0 0 44 34" fill="none" stroke="#1b4720" stroke-width="1.6" stroke-linecap="round">
+              <path d="M4 7h36M4 27h36" stroke-dasharray="2.5 2.5" stroke="#a3a8ae"/><path d="M4 22l6-4 6 3 6-7 6 2 6-6 6 1"/><circle cx="22" cy="14" r="1.8" fill="#6abf56"/>
+            </svg>
+          </div>
+          <div class="k">03 · OK/NOK · CPK</div>
+          <h4>Motores</h4>
+          <p>OK / NOK contra la especificación vigente, Cpk y límites I-MR.</p>
+        </div>
+        <div class="fn">
+          <div class="ic">
+            <svg width="40" height="34" viewBox="0 0 40 34" fill="none" stroke="#1b4720" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 5L35 30H5z"/><path d="M20 14v7"/><circle cx="20" cy="25" r="1" fill="#1b4720"/>
+            </svg>
+          </div>
+          <div class="k">04 · REGLA + VERSIÓN</div>
+          <h4>Alarma</h4>
+          <p>Cita la regla, el umbral y la versión del motor que la disparó.</p>
+        </div>
+        <div class="fn last">
+          <div class="ic">
+            <svg width="40" height="34" viewBox="0 0 40 34" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="15" cy="11" r="5"/><path d="M5 30c0-6 4.5-10 10-10s10 4 10 10"/><path d="M26 17l4 4 7-8" stroke="#6abf56" stroke-width="2.2"/>
+            </svg>
+          </div>
+          <div class="k">05 · ROL AUTORIZADO</div>
+          <h4>Decisión</h4>
+          <p>Reconoce y acepta o rechaza. Nada se ejecuta solo.</p>
+        </div>
+      </div>
+      <div class="onprem">
+        <span><b>On-premise.</b> Todo corre dentro de la red de planta; ningún dato sale.</span>
+        <span><b>Trazable.</b> Cada punto queda ligado a parte, característica, programa y hora.</span>
+      </div>
+    </div>
+
+    <!-- Ruta -->
+    <div class="sec">
+      <div class="sec-h"><span class="n">02</span><h3>Ruta del demo</h3><span class="aside">Seis pantallas, en este orden</span></div>
+      <div class="route">
+        <div class="step">
+          <div class="num">1</div>
+          <div>
+            <h4>Entrar con rol de ingeniería de calidad</h4>
+            <div class="where"><span class="chip nav">/login</span><span class="arrow">→</span><span class="chip">quality_engineer</span><span class="arrow">o</span><span class="chip">admin</span></div>
+            <div class="do">Estos roles ven los controles del presentador; los demás solo observan.</div>
+          </div>
+          <div class="say"><b>Qué decir</b>Cada rol ve y decide solo lo que le corresponde.</div>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <div>
+            <h4>Abrir el Live Monitor</h4>
+            <div class="where"><span class="chip nav">Menú lateral</span><span class="arrow">→</span><span class="chip">Live Monitor</span><span class="arrow">·</span><span class="chip">Connected</span></div>
+            <div class="do">Ocho señales empiezan a graficarse en tiempo real.</div>
+          </div>
+          <div class="say"><b>Qué decir</b>Así se ve la planta en vivo: cada punto, evaluado al llegar.</div>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <div>
+            <h4>Elegir escenario y velocidad</h4>
+            <div class="where"><span class="chip">Scenario</span><span class="arrow">→</span><span class="chip">Slow drift</span><span class="arrow">·</span><span class="chip">Speed 20x</span><span class="arrow">·</span><span class="chip">Pause</span></div>
+            <div class="do">Cinco escenarios (página 2). A 20x, noventa días pasan en segundos.</div>
+          </div>
+          <div class="say"><b>Qué decir</b>El proceso se mueve antes de salir de tolerancia, y el sistema lo ve.</div>
+        </div>
+        <div class="step">
+          <div class="num">4</div>
+          <div>
+            <h4>Abrir una señal con alarma</h4>
+            <div class="where"><span class="chip">Clic en la tarjeta</span><span class="arrow">→</span><span class="chip">Compliance</span><span class="arrow">·</span><span class="chip">Process capability</span></div>
+            <div class="do">Debajo del grid: tendencia, límites y la explicación del motor.</div>
+          </div>
+          <div class="say"><b>Qué decir</b>Ninguna alarma es caja negra: aquí está la regla exacta.</div>
+        </div>
+        <div class="step">
+          <div class="num">5</div>
+          <div>
+            <h4>Ir al detalle completo y reconocer</h4>
+            <div class="where"><span class="chip">View full detail →</span><span class="arrow">→</span><span class="chip">7d · 30d · 90d · All</span><span class="arrow">→</span><span class="chip btn">Acknowledge</span></div>
+            <div class="do">Histórico, Cpk por ventana y alarmas. Queda registro de quién y cuándo.</div>
+          </div>
+          <div class="say"><b>Qué decir</b>La alarma queda reconocida por una persona, con fecha y nombre.</div>
+        </div>
+        <div class="step final">
+          <div class="num">6</div>
+          <div>
+            <h4>Cerrar en recomendaciones</h4>
+            <div class="where"><span class="chip">View inbox</span><span class="arrow">→</span><span class="chip nav">Recommendations</span><span class="arrow">→</span><span class="chip btn">Accept</span><span class="chip">Reject</span></div>
+            <div class="do">La frecuencia de inspección cambia solo con decisión de un rol autorizado.</div>
+          </div>
+          <div class="say"><b>Qué decir</b>El sistema recomienda; la decisión es de calidad.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Metro Intelligence Platform · Guía del demo IIoT</span><span><b>OnKaizen Intelligence</b> · 1 / 3</span></div>
+</section>
+
+<!-- =========================== PÁGINA 2 =========================== -->
+<section class="page">
+  <header class="hdr-sm">
+    <div class="brand"><div class="dot">OK</div><b>OnKaizen Intelligence</b></div>
+    <div class="r">Guía del demo · IIoT</div>
+  </header>
+  <div class="strip-sm"></div>
+
+  <div class="body">
+    <div class="sec" style="margin-top:6mm">
+      <div class="sec-h"><span class="n">03</span><h3>La pantalla Live Monitor</h3><span class="aside">Pasos 2, 3 y 4 de la ruta</span></div>
+
+      <div class="screen" id="lm">
+        <div class="sb">
+          <div class="lg">Metro <span>Intelligence</span></div>
+          <div class="it">Dashboard</div>
+          <div class="it">Import File</div>
+          <div class="it">Parts &amp; Catalog</div>
+          <div class="it">Measurements</div>
+          <div class="it on">Live Monitor</div>
+          <div class="it">Risk</div>
+          <div class="it">Recommendations</div>
+        </div>
+        <div class="main">
+          <div class="tb"><h5>Live Monitor</h5><span class="conn"><i class="sdot"></i>Connected</span></div>
+          <div class="ctrls">
+            <span class="ctrl">Pause</span>
+            <span>Speed</span><span class="ctrl">20x</span>
+            <span>Scenario</span><span class="ctrl">Slow drift</span>
+          </div>
+          <div class="grid8" id="grid8"></div>
+          <div class="detail">
+            <div class="dh"><span><span class="mono" style="color:var(--text-2)">MI-DEMO-1003</span> · <b>Bore Diameter 2</b></span><span style="color:var(--text-2)">Hide detail</span></div>
+            <div class="db">
+              <svg id="detailChart" viewBox="0 0 300 80" preserveAspectRatio="none"></svg>
+              <div class="kv">
+                <b>Compliance</b>Último punto dentro de tolerancia, desviación +0.041 mm
+                <b>Process capability</b>Cpk 0.94, por debajo del umbral de 1.33
+                <br><span class="lnk">View full detail →</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="mk" style="left:21mm; top:39.5mm">A</span>
+        <span class="mk" style="left:93mm; top:11.7mm">B</span>
+        <span class="mk" style="left:155.5mm; top:2.9mm">C</span>
+        <span class="mk" style="left:138.3mm; top:18.6mm">D</span>
+        <span class="mk" style="left:27.6mm; top:82.7mm">E</span>
+        <span class="mk" style="left:145mm; top:110.2mm">F</span>
+      </div>
+
+      <div class="legend">
+        <div class="lg-it"><span class="mk">A</span><div><h6>Menú lateral</h6><p>«Live Monitor» vive aparte de «Measurements»: en vivo y en histórico no se mezclan.</p></div></div>
+        <div class="lg-it"><span class="mk">B</span><div><h6>Controles del presentador</h6><p>Pausa, velocidad 1x, 5x o 20x y escenario. Solo con rol quality_engineer o admin.</p></div></div>
+        <div class="lg-it"><span class="mk">C</span><div><h6>Estado de la conexión</h6><p>Connected, Reconnecting o Access denied si el rol no tiene permiso de streaming.</p></div></div>
+        <div class="lg-it"><span class="mk">D</span><div><h6>Tarjeta de señal</h6><p>Característica, número de parte, sparkline, último valor, OK / NOK, alarma y Cpk con versión del motor.</p></div></div>
+        <div class="lg-it"><span class="mk">E</span><div><h6>Detalle en línea</h6><p>Clic en la tarjeta: tendencia con límites de tolerancia y de control, más el texto del motor.</p></div></div>
+        <div class="lg-it"><span class="mk">F</span><div><h6>Salto al detalle completo</h6><p>«View full detail →» abre la página de la característica con todo su histórico (página 3).</p></div></div>
+      </div>
+    </div>
+
+    <div class="sec" style="margin-top:6mm">
+      <div class="sec-h"><span class="n">04</span><h3>Cinco escenarios para contar la historia</h3><span class="aside">Selector «Scenario» · datos del seed</span></div>
+      <table class="scen">
+        <thead><tr><th>Escenario</th><th>Forma de la señal</th><th style="text-align:right">Cpk típico</th><th>Qué mostrar</th></tr></thead>
+        <tbody>
+          <tr><td class="nm">Stable / capable<span>stable_capable</span></td><td class="sp"><svg data-s="stable" viewBox="0 0 120 32"></svg></td><td class="cpk">&gt; 1.67</td><td class="msg">Proceso controlado. Candidato a reducir frecuencia de inspección sin subir el riesgo.</td></tr>
+          <tr><td class="nm">Slow drift<span>slow_drift</span></td><td class="sp"><svg data-s="drift" viewBox="0 0 120 32"></svg></td><td class="cpk">baja</td><td class="msg">La media camina hacia un límite. La alerta llega antes de la primera pieza NOK.</td></tr>
+          <tr><td class="nm">Shift after event<span>shift_after_event</span></td><td class="sp"><svg data-s="shift" viewBox="0 0 120 32"></svg></td><td class="cpk">cae</td><td class="msg">Salto de media tras un evento de proceso, como un cambio de herramienta.</td></tr>
+          <tr><td class="nm">High variance<span>high_variance</span></td><td class="sp"><svg data-s="var" viewBox="0 0 120 32"></svg></td><td class="cpk">&lt; 1.00</td><td class="msg">Dispersión cerca de los límites. Caso para subir frecuencia o inspeccionar de inmediato.</td></tr>
+          <tr><td class="nm">NOK outliers<span>outlier_nok</span></td><td class="sp"><svg data-s="nok" viewBox="0 0 120 32"></svg></td><td class="cpk">estable</td><td class="msg">Proceso estable con piezas fuera de tolerancia aisladas. Flujo completo de alarma.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="foot"><span>Metro Intelligence Platform · Guía del demo IIoT</span><span><b>OnKaizen Intelligence</b> · 2 / 3</span></div>
+</section>
+
+<!-- =========================== PÁGINA 3 =========================== -->
+<section class="page">
+  <header class="hdr-sm">
+    <div class="brand"><div class="dot">OK</div><b>OnKaizen Intelligence</b></div>
+    <div class="r">Guía del demo · IIoT</div>
+  </header>
+  <div class="strip-sm"></div>
+
+  <div class="body">
+    <div class="sec" style="margin-top:6mm">
+      <div class="sec-h"><span class="n">05</span><h3>Detalle completo de la característica</h3><span class="aside">Pasos 5 y 6 · /live-monitor/&lt;característica&gt;</span></div>
+
+      <div class="screen" style="grid-template-columns: 1fr">
+        <div class="main" style="padding:3.4mm 4mm">
+          <div style="font-size:6.2pt; color:var(--text-2)">← Back to Live Monitor</div>
+          <div class="tb" style="margin-top:1.4mm; align-items:flex-end">
+            <div>
+              <div class="mono" style="font-size:5.8pt; color:var(--text-2)">MI-DEMO-1003 · Balloon #12</div>
+              <h5>Bore Diameter 2</h5>
+              <div style="font-size:6pt; color:var(--text-2)">Nominal 24.000 mm · −0.050 / +0.050</div>
+            </div>
+            <div class="dd-range"><span>7d</span><span class="on">30d</span><span>90d</span><span>All</span></div>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><div class="l">Cpk (most recent window)</div><div class="v warn">0.94</div></div>
+            <div class="kpi"><div class="l">Points in range</div><div class="v">15</div></div>
+            <div class="kpi"><div class="l">Windows</div><div class="v">6</div></div>
+            <div class="kpi"><div class="l">Engine</div><div class="v sm">spc_engine v1</div></div>
+          </div>
+          <div class="alarm">
+            <p><span class="st warn"><i></i>Warning</span>&nbsp; Cpk 0.94 por debajo de 1.33 en las últimas 6 ventanas; tendencia descendente.<small>alarm_rules_engine · v1</small></p>
+            <span class="ctrl" style="white-space:nowrap">Acknowledge</span>
+          </div>
+          <div class="panel">
+            <div class="ph">Trend (I-MR) — tolerance and control limits</div>
+            <svg id="ddTrend" viewBox="0 0 420 70" preserveAspectRatio="none" style="height:18mm"></svg>
+          </div>
+          <div class="two">
+            <div class="panel">
+              <div class="ph">Cpk history</div>
+              <svg id="ddCpk" viewBox="0 0 200 60" preserveAspectRatio="none" style="height:15mm"></svg>
+            </div>
+            <div>
+              <div class="exp"><span class="tg">Experimental</span><br><b>Drift CUSUM</b> · señal de deriva calculada sobre el histórico real de Cpk. Solo informativo.</div>
+              <div class="exp"><span class="tg">Experimental</span><br><b>Muestreo adaptativo</b> · frecuencia sugerida de inspección. Junto a <b>Existing recommendations</b> · View inbox</div>
+            </div>
+          </div>
+        </div>
+        <span class="mk" style="left:141mm; top:13.2mm">G</span>
+        <span class="mk" style="left:41mm; top:22.6mm">H</span>
+        <span class="mk" style="left:151mm; top:37mm">I</span>
+        <span class="mk" style="left:170mm; top:47mm">J</span>
+        <span class="mk" style="left:171.5mm; top:79mm">K</span>
+      </div>
+
+      <div class="legend">
+        <div class="lg-it"><span class="mk">G</span><div><h6>Rango de fechas</h6><p>7d, 30d, 90d o All. Toda la página se recalcula sobre el rango elegido.</p></div></div>
+        <div class="lg-it"><span class="mk">H</span><div><h6>Cifras de capacidad</h6><p>Cpk de la última ventana, puntos, ventanas y el motor con su versión.</p></div></div>
+        <div class="lg-it"><span class="mk">I</span><div><h6>Alarmas activas</h6><p>Texto de la regla y motor. «Acknowledge» registra quién la reconoce. El rol auditor no lo ve.</p></div></div>
+        <div class="lg-it"><span class="mk">J</span><div><h6>Tendencia e histórico de Cpk</h6><p>Serie completa con límites de tolerancia y de control, y la evolución del Cpk por ventana.</p></div></div>
+        <div class="lg-it"><span class="mk">K</span><div><h6>Bloques experimentales</h6><p>Marcados como experimentales y solo consultivos. «View inbox» lleva a «Recommendations».</p></div></div>
+      </div>
+    </div>
+
+    <div class="sec" style="margin-top:5.5mm">
+      <div class="sec-h"><span class="n">06</span><h3>Guion de 10 minutos</h3></div>
+      <div class="tl">
+        <div class="seg"><div class="t">0:00 – 1:00</div><h6>Contexto</h6><p>Login y flujo de datos.</p></div>
+        <div class="seg"><div class="t">1:00 – 3:00</div><h6>Planta en vivo</h6><p>Grid de 8 señales a 1x. Leer una tarjeta.</p></div>
+        <div class="seg"><div class="t">3:00 – 5:00</div><h6>Historia</h6><p>Slow drift a 20x. Pausar cuando aparece la alarma.</p></div>
+        <div class="seg"><div class="t">5:00 – 8:00</div><h6>Explicación</h6><p>Detalle, regla del motor, rango 90d, histórico de Cpk y Acknowledge.</p></div>
+        <div class="seg"><div class="t">8:00 – 10:00</div><h6>Decisión</h6><p>Recommendations: aceptar o rechazar con comentario.</p></div>
+      </div>
+    </div>
+
+    <div class="sec" style="margin-top:5.5mm">
+      <div class="sec-h"><span class="n">07</span><h3>Tres mensajes que deben quedar</h3></div>
+      <div class="rules">
+        <div class="rule"><div class="big">01</div><h6>Explicable</h6><p>Cada alarma y cada Cpk muestran la regla, el umbral y la versión del motor. Nada se presenta como caja negra.</p></div>
+        <div class="rule"><div class="big">02</div><h6>Decide una persona</h6><p>El sistema alerta y recomienda. No libera piezas, no cambia frecuencias ni ajusta máquinas por sí mismo.</p></div>
+        <div class="rule"><div class="big">03</div><h6>On-premise</h6><p>Corre completo dentro de la red de planta, sin servicios externos. Ningún dato de medición sale.</p></div>
+      </div>
+    </div>
+
+    <div class="sec" style="margin-top:4.5mm">
+      <div class="prep">
+        <div style="background:var(--verde-tinte)"><b>Antes de empezar</b>Lista de verificación</div>
+        <div><span class="ck"></span>Sesión con rol quality_engineer</div>
+        <div><span class="ck"></span>Live Monitor en «Connected»</div>
+        <div><span class="ck"></span>Escenario «Default mix» a 1x</div>
+        <div><span class="ck"></span>Datos ficticios MI&#8209;DEMO cargados</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-band">Planta en vivo, decisiones visibles <span>·</span> <b>OnKaizen Intelligence</b> <span>·</span> onkaizen.com.mx<span class="p">3 / 3</span></div>
+</section>
+
+<script>
+  // Series deterministas (sin aleatoriedad del navegador) para que el PDF salga igual siempre.
+  function rng(seed) { let s = seed; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+  function gauss(r) { return (r() + r() + r() - 1.5) / 1.5; }
+  function series(kind, n, seed) {
+    const r = rng(seed); const out = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      let v = 0, noise = 0.12;
+      if (kind === "stable") { noise = 0.1; }
+      if (kind === "drift") { v = 0.78 * t; noise = 0.09; }
+      if (kind === "shift") { v = t > 0.5 ? 0.55 : 0; noise = 0.09; }
+      if (kind === "var") { noise = 0.32; }
+      if (kind === "nok") { noise = 0.1; }
+      v += gauss(r) * noise;
+      if (kind === "nok" && (i === Math.round(n * 0.32) || i === Math.round(n * 0.74))) v = (i % 2 ? -1.25 : 1.25);
+      out.push(v);
+    }
+    return out;
+  }
+  const NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; }
+  // Dibuja una serie con banda de tolerancia [-1, 1]. y crece hacia arriba.
+  function plot(svg, vals, o) {
+    const W = o.w, H = o.h, pad = o.pad ?? 3;
+    const y = v => H / 2 - v * (H / 2 - pad) / (o.range ?? 1.35);
+    const x = i => pad + i * (W - 2 * pad) / (vals.length - 1);
+    if (o.tol !== false) {
+      el("line", { x1: 0, x2: W, y1: y(1), y2: y(1), stroke: "#dc2626", "stroke-width": o.sw ?? .8, "stroke-dasharray": "3 2", "vector-effect": "non-scaling-stroke" }, svg);
+      el("line", { x1: 0, x2: W, y1: y(-1), y2: y(-1), stroke: "#dc2626", "stroke-width": o.sw ?? .8, "stroke-dasharray": "3 2", "vector-effect": "non-scaling-stroke" }, svg);
+    }
+    if (o.ctrl) {
+      for (const c of o.ctrl) el("line", { x1: 0, x2: W, y1: y(c), y2: y(c), stroke: "#a3a8ae", "stroke-width": .7, "stroke-dasharray": "1.5 1.5", "vector-effect": "non-scaling-stroke" }, svg);
+    }
+    el("line", { x1: 0, x2: W, y1: y(0), y2: y(0), stroke: "#e3e6ea", "stroke-width": .7, "vector-effect": "non-scaling-stroke" }, svg);
+    if (o.event != null) el("line", { x1: x(o.event), x2: x(o.event), y1: 0, y2: H, stroke: "#80868e", "stroke-width": .7, "stroke-dasharray": "2 2", "vector-effect": "non-scaling-stroke" }, svg);
+    const d = vals.map((v, i) => (i ? "L" : "M") + x(i).toFixed(2) + " " + y(v).toFixed(2)).join(" ");
+    el("path", { d, fill: "none", stroke: o.color ?? "#4a9b3a", "stroke-width": o.lw ?? 1.3, "stroke-linejoin": "round", "vector-effect": "non-scaling-stroke" }, svg);
+    if (o.dots) vals.forEach((v, i) => {
+      const bad = Math.abs(v) > 1;
+      if (bad || o.dots === "all") el("circle", { cx: x(i), cy: y(v), r: bad ? (o.r ?? 1.8) * 1.2 : (o.r ?? 1.8) * .7, fill: bad ? "#dc2626" : (o.color ?? "#4a9b3a") }, svg);
+    });
+  }
+
+  // Tabla de escenarios
+  const seeds = { stable: 11, drift: 23, shift: 37, var: 41, nok: 53 };
+  document.querySelectorAll("svg[data-s]").forEach(svg => {
+    const k = svg.dataset.s;
+    plot(svg, series(k, 42, seeds[k]), { w: 120, h: 32, dots: true, r: 1.5, event: k === "shift" ? 21 : null });
+  });
+
+  // Grid de 8 señales
+  const cards = [
+    ["Bore Diameter 1", "MI-DEMO-1001", "stable", "12.004", "ok", "1.82", null],
+    ["Mounting Hole Position 1", "MI-DEMO-1001", "stable", "0.018", "ok", "1.71", null],
+    ["Flatness 1", "MI-DEMO-1002", "var", "0.046", "ok", "0.88", null],
+    ["Profile 2", "MI-DEMO-1002", "nok", "0.071", "nok", "1.41", "Alarm"],
+    ["Bore Diameter 2", "MI-DEMO-1003", "drift", "24.041", "ok", "0.94", "Alarm", true],
+    ["Mounting Hole Position 3", "MI-DEMO-1003", "stable", "0.022", "ok", "1.66", null],
+    ["Flatness 2", "MI-DEMO-1004", "shift", "0.039", "ok", "1.12", null],
+    ["Profile 1", "MI-DEMO-1005", "stable", "0.011", "ok", "1.94", null],
+  ];
+  const g = document.getElementById("grid8");
+  cards.forEach(([nm, pc, k, v, st, cpk, alarm, sel], i) => {
+    const c = document.createElement("div"); c.className = "sc" + (sel ? " sel" : "");
+    c.innerHTML = `<div class="nm">${nm}</div><div class="pc">${pc}</div>`;
+    const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 100 24"); svg.setAttribute("preserveAspectRatio", "none");
+    c.appendChild(svg);
+    plot(svg, series(k, 30, 100 + i * 7), { w: 100, h: 24, pad: 2, tol: false, lw: 1.1, range: 1.5, color: st === "nok" ? "#5b636d" : "#4a9b3a" });
+    const row = document.createElement("div"); row.className = "row";
+    row.innerHTML = `<span class="v">${v} mm</span><span class="st ${st}"><i></i>${st === "ok" ? "OK" : "NOK"}</span>`;
+    c.appendChild(row);
+    const foot = document.createElement("div"); foot.className = "row"; foot.style.marginTop = ".6mm";
+    foot.innerHTML = `<span class="cpk">Cpk ${cpk} · spc_engine v1</span>` + (alarm ? `<span class="st ${st === "nok" ? "nok" : "warn"}"><i></i>${alarm}</span>` : "");
+    c.appendChild(foot);
+    g.appendChild(c);
+  });
+
+  // Detalle en línea y página de detalle: deriva hacia el límite superior
+  const driftLong = series("drift", 60, 23).map(v => v * 1.05);
+  plot(document.getElementById("detailChart"), driftLong, { w: 300, h: 80, pad: 4, dots: "all", r: 1.4, ctrl: [0.42, -0.42], lw: 1.1 });
+  plot(document.getElementById("ddTrend"), series("drift", 90, 29).map(v => v * 1.1), { w: 420, h: 70, pad: 4, dots: "all", r: 1.2, ctrl: [0.45, -0.45], lw: 1 });
+
+  // Histórico de Cpk con umbral 1.33
+  (function () {
+    const svg = document.getElementById("ddCpk"); const W = 200, H = 60, pad = 6;
+    const cpk = [1.74, 1.62, 1.51, 1.38, 1.21, 1.08, 0.94];
+    const y = v => H - pad - (v - 0.7) / (1.9 - 0.7) * (H - 2 * pad);
+    const x = i => pad + i * (W - 2 * pad) / (cpk.length - 1);
+    el("line", { x1: 0, x2: W, y1: y(1.33), y2: y(1.33), stroke: "#d97706", "stroke-width": .8, "stroke-dasharray": "3 2", "vector-effect": "non-scaling-stroke" }, svg);
+    el("path", { d: cpk.map((v, i) => (i ? "L" : "M") + x(i) + " " + y(v)).join(" "), fill: "none", stroke: "#357a2b", "stroke-width": 1.4, "vector-effect": "non-scaling-stroke" }, svg);
+    cpk.forEach((v, i) => el("circle", { cx: x(i), cy: y(v), r: 2, fill: v < 1.33 ? "#d97706" : "#357a2b" }, svg));
+  })();
+</script>
+</body>
+</html>
