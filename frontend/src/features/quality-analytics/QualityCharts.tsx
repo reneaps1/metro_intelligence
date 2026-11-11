@@ -13,7 +13,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { WB, axisTick, gridProps, lineLabel, rampFill, refLine, secondaryLine, tooltipStyle } from "../../lib/demo/chartTheme";
+import {
+  WB,
+  axisTick,
+  gridProps,
+  lineLabel,
+  rampFill,
+  refLine,
+  secondaryLine,
+  tooltipStyle,
+} from "../../lib/demo/chartTheme";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import type {
   CavityRate,
@@ -32,13 +41,34 @@ const HOUR_MS = 3_600_000;
 
 export function NokTrendChart({ trend }: { trend: TrendBucket[] }) {
   // Hourly buckets: a stretch without production (e.g. a stop) breaks the line instead of bridging it.
-  const data: { label: string; pct: number | null; rate: number | null; nok: number; pieces: number }[] = [];
+  const data: {
+    label: string;
+    pct: number | null;
+    rate: number | null;
+    nok: number;
+    pieces: number;
+  }[] = [];
   trend.forEach((b, i) => {
     const prev = trend[i - 1];
-    if (prev?.start && b.start && b.bucket.includes("T") && Date.parse(b.start) - Date.parse(prev.start) > 1.5 * HOUR_MS) {
-      data.push({ label: "sin producción", pct: null, rate: null, nok: 0, pieces: 0 });
+    if (
+      prev?.start &&
+      b.start &&
+      b.bucket.includes("T") &&
+      Date.parse(b.start) - Date.parse(prev.start) > 1.5 * HOUR_MS
+    ) {
+      data.push({
+        label: "sin producción",
+        pct: null,
+        rate: null,
+        nok: 0,
+        pieces: 0,
+      });
     }
-    data.push({ ...b, pct: b.rate === null ? null : b.rate * 100, label: b.bucket.replace("T", " ") });
+    data.push({
+      ...b,
+      pct: b.rate === null ? null : b.rate * 100,
+      label: b.bucket.replace("T", " "),
+    });
   });
   return (
     <ResponsiveContainer width="100%" height={240}>
@@ -48,7 +78,11 @@ export function NokTrendChart({ trend }: { trend: TrendBucket[] }) {
         <YAxis tick={axisTick} width={48} unit=" %" />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(_v: number, _n: string, item: { payload?: TrendBucket }) => [
+          formatter={(
+            _v: number,
+            _n: string,
+            item: { payload?: TrendBucket },
+          ) => [
             `${formatPct(item.payload?.rate ?? null)} (${item.payload?.nok ?? 0} / ${item.payload?.pieces ?? 0} piezas)`,
             "Tasa NOK",
           ]}
@@ -57,7 +91,9 @@ export function NokTrendChart({ trend }: { trend: TrendBucket[] }) {
           dataKey="pct"
           stroke={WB.nok}
           strokeWidth={2}
-          dot={data.length < 40 ? { r: 2.5, fill: WB.nok, strokeWidth: 0 } : false}
+          dot={
+            data.length < 40 ? { r: 2.5, fill: WB.nok, strokeWidth: 0 } : false
+          }
           isAnimationActive={false}
         />
       </LineChart>
@@ -68,24 +104,71 @@ export function NokTrendChart({ trend }: { trend: TrendBucket[] }) {
 export function ParetoChart({ pareto }: { pareto: ParetoRow[] }) {
   const data = pareto
     .filter((r) => r.nok > 0)
-    .map((r) => ({ ...r, cumulative: r.cumulative_pct === null ? null : r.cumulative_pct * 100 }));
-  if (data.length === 0) return <p className="text-sm text-text-secondary">Sin mediciones NOK en la selección.</p>;
+    .map((r) => ({
+      ...r,
+      cumulative: r.cumulative_pct === null ? null : r.cumulative_pct * 100,
+    }));
+  if (data.length === 0)
+    return (
+      <p className="text-sm text-text-secondary">
+        Sin mediciones NOK en la selección.
+      </p>
+    );
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 56, left: 32 }}>
-        <XAxis dataKey="name" tick={{ ...axisTick, fontSize: 10 }} angle={-25} textAnchor="end" interval={0} />
-        <YAxis yAxisId="count" tick={axisTick} width={40} allowDecimals={false} />
-        <YAxis yAxisId="pct" orientation="right" tick={axisTick} width={40} domain={[0, 100]} unit=" %" />
+      <ComposedChart
+        data={data}
+        margin={{ top: 8, right: 8, bottom: 56, left: 32 }}
+      >
+        <XAxis
+          dataKey="name"
+          tick={{ ...axisTick, fontSize: 10 }}
+          angle={-25}
+          textAnchor="end"
+          interval={0}
+        />
+        <YAxis
+          yAxisId="count"
+          tick={axisTick}
+          width={40}
+          allowDecimals={false}
+        />
+        <YAxis
+          yAxisId="pct"
+          orientation="right"
+          tick={axisTick}
+          width={40}
+          domain={[0, 100]}
+          unit=" %"
+        />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(value: number, name: string, item: { payload?: ParetoRow }) =>
+          formatter={(
+            value: number,
+            name: string,
+            item: { payload?: ParetoRow },
+          ) =>
             name === "cumulative"
               ? [`${value.toFixed(1)} %`, "Acumulado"]
-              : [`${value} (↑${item.payload?.above ?? 0} / ↓${item.payload?.below ?? 0})`, "Mediciones NOK"]
+              : [
+                  `${value} (↑${item.payload?.above ?? 0} / ↓${item.payload?.below ?? 0})`,
+                  "Mediciones NOK",
+                ]
           }
         />
-        <Bar yAxisId="count" dataKey="nok" fill={WB.bar} isAnimationActive={false} />
-        <Line yAxisId="pct" dataKey="cumulative" {...secondaryLine} dot={false} isAnimationActive={false} />
+        <Bar
+          yAxisId="count"
+          dataKey="nok"
+          fill={WB.bar}
+          isAnimationActive={false}
+        />
+        <Line
+          yAxisId="pct"
+          dataKey="cumulative"
+          {...secondaryLine}
+          dot={false}
+          isAnimationActive={false}
+        />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -95,17 +178,50 @@ export function ParetoChart({ pareto }: { pareto: ParetoRow[] }) {
 export function StationParetoChart({ rows }: { rows: StationParetoRow[] }) {
   const data = rows
     .filter((r) => r.nok > 0)
-    .map((r) => ({ ...r, cumulative: r.cumulative_pct === null ? null : r.cumulative_pct * 100 }));
-  if (data.length === 0) return <p className="text-sm text-text-secondary">Sin piezas NOK en la selección.</p>;
+    .map((r) => ({
+      ...r,
+      cumulative: r.cumulative_pct === null ? null : r.cumulative_pct * 100,
+    }));
+  if (data.length === 0)
+    return (
+      <p className="text-sm text-text-secondary">
+        Sin piezas NOK en la selección.
+      </p>
+    );
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 80, left: 24 }}>
-        <XAxis dataKey="name" tick={{ ...axisTick, fontSize: 9 }} angle={-40} textAnchor="end" interval={0} />
-        <YAxis yAxisId="count" tick={axisTick} width={48} allowDecimals={false} />
-        <YAxis yAxisId="pct" orientation="right" tick={axisTick} width={40} domain={[0, 100]} unit=" %" />
+      <ComposedChart
+        data={data}
+        margin={{ top: 8, right: 8, bottom: 80, left: 24 }}
+      >
+        <XAxis
+          dataKey="name"
+          tick={{ ...axisTick, fontSize: 9 }}
+          angle={-40}
+          textAnchor="end"
+          interval={0}
+        />
+        <YAxis
+          yAxisId="count"
+          tick={axisTick}
+          width={48}
+          allowDecimals={false}
+        />
+        <YAxis
+          yAxisId="pct"
+          orientation="right"
+          tick={axisTick}
+          width={40}
+          domain={[0, 100]}
+          unit=" %"
+        />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(value: number, name: string, item: { payload?: StationParetoRow }) =>
+          formatter={(
+            value: number,
+            name: string,
+            item: { payload?: StationParetoRow },
+          ) =>
             name === "cumulative"
               ? [`${value.toFixed(1)} %`, "Acumulado"]
               : [
@@ -114,8 +230,19 @@ export function StationParetoChart({ rows }: { rows: StationParetoRow[] }) {
                 ]
           }
         />
-        <Bar yAxisId="count" dataKey="nok" fill={WB.bar} isAnimationActive={false} />
-        <Line yAxisId="pct" dataKey="cumulative" {...secondaryLine} dot={false} isAnimationActive={false} />
+        <Bar
+          yAxisId="count"
+          dataKey="nok"
+          fill={WB.bar}
+          isAnimationActive={false}
+        />
+        <Line
+          yAxisId="pct"
+          dataKey="cumulative"
+          {...secondaryLine}
+          dot={false}
+          isAnimationActive={false}
+        />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -144,18 +271,41 @@ export function CavityRateChart({
   }));
   // Pooled rate of the groups shown: the reference every bar is read against.
   const pieces = rows.reduce((a, r) => a + r.pieces, 0);
-  const pooled = pieces ? (rows.reduce((a, r) => a + r.nok, 0) / pieces) * 100 : null;
+  const pooled = pieces
+    ? (rows.reduce((a, r) => a + r.nok, 0) / pieces) * 100
+    : null;
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 14, right: pooled === null ? 8 : 76, bottom: 0, left: 0 }}>
-        <XAxis dataKey="label" tick={{ ...axisTick, fontSize: data.length > 16 ? 9 : 11 }} interval={0} />
+      <BarChart
+        data={data}
+        margin={{
+          top: 14,
+          right: pooled === null ? 8 : 76,
+          bottom: 0,
+          left: 0,
+        }}
+      >
+        <XAxis
+          dataKey="label"
+          tick={{ ...axisTick, fontSize: data.length > 16 ? 9 : 11 }}
+          interval={0}
+        />
         <YAxis tick={axisTick} width={48} unit=" %" />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(_v: number, _n: string, item: { payload?: CavityRate }) => {
+          formatter={(
+            _v: number,
+            _n: string,
+            item: { payload?: CavityRate },
+          ) => {
             const p = item.payload;
-            const rr = p?.relative_risk ? ` · RR ${p.relative_risk.toFixed(1)}×` : "";
-            return [`${formatPct(p?.rate ?? null)} (${p?.nok ?? 0} / ${p?.pieces ?? 0})${rr}`, "Tasa NOK"];
+            const rr = p?.relative_risk
+              ? ` · RR ${p.relative_risk.toFixed(1)}×`
+              : "";
+            return [
+              `${formatPct(p?.rate ?? null)} (${p?.nok ?? 0} / ${p?.pieces ?? 0})${rr}`,
+              "Tasa NOK",
+            ];
           }}
         />
         <Bar dataKey="pct" isAnimationActive={false}>
@@ -165,7 +315,12 @@ export function CavityRateChart({
           <ErrorBar dataKey="ci" width={4} stroke="var(--text-secondary)" />
         </Bar>
         {pooled !== null && (
-          <ReferenceLine y={pooled} {...refLine} ifOverflow="extendDomain" label={lineLabel(`Media ${pooled.toFixed(1)}%`)} />
+          <ReferenceLine
+            y={pooled}
+            {...refLine}
+            ifOverflow="extendDomain"
+            label={lineLabel(`Media ${pooled.toFixed(1)}%`)}
+          />
         )}
       </BarChart>
     </ResponsiveContainer>
@@ -177,26 +332,40 @@ export function CavityHeatmap({
   rowName,
   rowHeader = "Cota",
   countLabel = "mediciones NOK de esa cota en ese nido",
+  groupLabel = "Nido",
 }: {
   cells: HeatmapCell[];
+  /** IQ-F25: the dataset's word for the primary grouping (Nido, Cavidad...). */
+  groupLabel?: string;
   /** Display name of a row key (variable, or station on the reported basis). */
   rowName: (key: string) => string;
   rowHeader?: string;
   countLabel?: string;
 }) {
-  const cavities = [...new Set(cells.map((c) => c.cavity))].sort((a, b) => a - b);
+  const cavities = [...new Set(cells.map((c) => c.cavity))].sort(
+    (a, b) => a - b,
+  );
   const keys = [...new Set(cells.map((c) => c.variable))];
   const max = Math.max(...cells.map((c) => c.rate ?? 0), 0);
   const name = rowName;
-  const cell = (cav: number, key: string) => cells.find((c) => c.cavity === cav && c.variable === key);
+  const cell = (cav: number, key: string) =>
+    cells.find((c) => c.cavity === cav && c.variable === key);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-separate border-spacing-0.5 text-xs" aria-label={`Mapa de calor nido por ${rowHeader.toLowerCase()}`}>
+      <table
+        className="w-full border-separate border-spacing-0.5 text-xs"
+        aria-label={`Mapa de calor ${groupLabel.toLowerCase()} por ${rowHeader.toLowerCase()}`}
+      >
         <thead>
           <tr>
-            <th className="sticky left-0 bg-surface px-1 text-left font-medium text-text-secondary">{rowHeader} \ Nido</th>
+            <th className="sticky left-0 bg-surface px-1 text-left font-medium text-text-secondary">
+              {rowHeader} \ {groupLabel}
+            </th>
             {cavities.map((c) => (
-              <th key={c} className="px-1 font-mono font-medium text-text-secondary">
+              <th
+                key={c}
+                className="px-1 font-mono font-medium text-text-secondary"
+              >
                 {c}
               </th>
             ))}
@@ -205,7 +374,10 @@ export function CavityHeatmap({
         <tbody>
           {keys.map((key) => (
             <tr key={key}>
-              <th scope="row" className="sticky left-0 whitespace-nowrap bg-surface px-1 text-left font-medium text-text-primary">
+              <th
+                scope="row"
+                className="sticky left-0 whitespace-nowrap bg-surface px-1 text-left font-medium text-text-primary"
+              >
                 {name(key)}
               </th>
               {cavities.map((cav) => {
@@ -216,7 +388,7 @@ export function CavityHeatmap({
                 return (
                   <td
                     key={cav}
-                    title={`${name(key)} · nido ${cav}: ${c?.nok ?? 0} NOK / ${c?.pieces ?? 0} piezas (${formatPct(c?.rate ?? null)})`}
+                    title={`${name(key)} · ${groupLabel.toLowerCase()} ${cav}: ${c?.nok ?? 0} NOK / ${c?.pieces ?? 0} piezas (${formatPct(c?.rate ?? null)})`}
                     className="h-7 min-w-[34px] rounded-sm text-center font-mono text-[10px]"
                     style={{
                       background: fill?.background ?? "var(--bg-app)",
@@ -233,7 +405,8 @@ export function CavityHeatmap({
         </tbody>
       </table>
       <p className="mt-1 text-xs text-text-secondary">
-        Número = {countLabel}; tono proporcional a la tasa (máx. {formatPct(max)}, recuadrada).
+        Número = {countLabel}; tono proporcional a la tasa (máx.{" "}
+        {formatPct(max)}, recuadrada).
       </p>
     </div>
   );
@@ -245,22 +418,45 @@ export const NEST_MOLD_MIN_PIECES = 30;
 // IQ-F18: NOK rate by nest x mold cavity. A mold cavity reaches a nest only
 // when the injection and nest cycles line up, so empty cells mean "never met
 // in this selection" -- drawn apart from a measured 0 %.
-export function NestMoldMatrix({ cells }: { cells: NestMoldCell[] }) {
+export function NestMoldMatrix({
+  cells,
+  primary = "Nido",
+  secondary = "Cavidad",
+  secondaryName = (v: number) => `C${v}`,
+}: {
+  cells: NestMoldCell[];
+  /** IQ-F25: the dataset's words for the two grouping slots. */
+  primary?: string;
+  secondary?: string;
+  secondaryName?: (value: number) => string;
+}) {
   const nests = [...new Set(cells.map((c) => c.nest))].sort((a, b) => a - b);
-  const molds = [...new Set(cells.map((c) => c.mold_cavity))].sort((a, b) => a - b);
+  const molds = [...new Set(cells.map((c) => c.mold_cavity))].sort(
+    (a, b) => a - b,
+  );
   const byKey = new Map(cells.map((c) => [`${c.nest}:${c.mold_cavity}`, c]));
-  const ranked = cells.filter((c) => c.pieces >= NEST_MOLD_MIN_PIECES && c.nok > 0);
+  const ranked = cells.filter(
+    (c) => c.pieces >= NEST_MOLD_MIN_PIECES && c.nok > 0,
+  );
   const max = Math.max(...ranked.map((c) => c.rate ?? 0), 0);
   const worst = ranked.find((c) => c.rate === max) ?? null;
   return (
     <div className="overflow-x-auto">
-      <table className="border-separate border-spacing-0.5 text-xs" aria-label="Matriz NOK nido por cavidad de molde">
+      <table
+        className="border-separate border-spacing-0.5 text-xs"
+        aria-label={`Matriz NOK ${primary.toLowerCase()} por ${secondary.toLowerCase()}`}
+      >
         <thead>
           <tr>
-            <th className="sticky left-0 bg-surface px-1 text-left font-medium text-text-secondary">Nido \ Cavidad</th>
+            <th className="sticky left-0 bg-surface px-1 text-left font-medium text-text-secondary">
+              {primary} \ {secondary}
+            </th>
             {molds.map((m) => (
-              <th key={m} className="px-0.5 font-mono font-medium text-text-secondary">
-                C{m}
+              <th
+                key={m}
+                className="px-0.5 font-mono font-medium text-text-secondary"
+              >
+                {secondaryName(m)}
               </th>
             ))}
           </tr>
@@ -268,7 +464,10 @@ export function NestMoldMatrix({ cells }: { cells: NestMoldCell[] }) {
         <tbody>
           {nests.map((nest) => (
             <tr key={nest}>
-              <th scope="row" className="sticky left-0 whitespace-nowrap bg-surface px-1 text-left font-mono font-medium text-text-primary">
+              <th
+                scope="row"
+                className="sticky left-0 whitespace-nowrap bg-surface px-1 text-left font-mono font-medium text-text-primary"
+              >
                 {nest}
               </th>
               {molds.map((mold) => {
@@ -277,21 +476,28 @@ export function NestMoldMatrix({ cells }: { cells: NestMoldCell[] }) {
                   return (
                     <td
                       key={mold}
-                      title={`Nido ${nest} · cavidad ${mold}: sin piezas (no coincidieron en esta selección)`}
+                      title={`${primary} ${nest} · ${secondaryName(mold)}: sin piezas (no coincidieron en esta selección)`}
                       aria-label="sin piezas"
                       className="h-7 min-w-[30px] rounded-sm text-center text-[10px] text-text-secondary"
-                      style={{ background: "transparent", outline: "1px dashed var(--border-default)", outlineOffset: "-2px" }}
+                      style={{
+                        background: "transparent",
+                        outline: "1px dashed var(--border-default)",
+                        outlineOffset: "-2px",
+                      }}
                     >
                       ·
                     </td>
                   );
                 }
-                const fill = max > 0 && c.rate ? rampFill(Math.min(c.rate / max, 1)) : null;
+                const fill =
+                  max > 0 && c.rate
+                    ? rampFill(Math.min(c.rate / max, 1))
+                    : null;
                 const top = worst !== null && c === worst;
                 return (
                   <td
                     key={mold}
-                    title={`Nido ${nest} · cavidad ${mold}: ${c.nok} NOK / ${c.pieces} piezas (${formatPct(c.rate)})`}
+                    title={`${primary} ${nest} · ${secondaryName(mold)}: ${c.nok} NOK / ${c.pieces} piezas (${formatPct(c.rate)})`}
                     className="h-7 min-w-[30px] rounded-sm text-center font-mono text-[10px]"
                     style={{
                       background: fill?.background ?? "var(--bg-app)",
@@ -308,10 +514,14 @@ export function NestMoldMatrix({ cells }: { cells: NestMoldCell[] }) {
         </tbody>
       </table>
       <p className="mt-1 text-xs text-text-secondary">
-        Número = piezas NOK de esa cavidad en ese nido; tono proporcional a la tasa
-        {worst ? ` (máx. ${formatPct(worst.rate)}: nido ${worst.nest} × C${worst.mold_cavity}, recuadrada)` : ""}. «·» = la
-        cavidad no pasó por ese nido en la selección. Celdas con menos de {NEST_MOLD_MIN_PIECES} piezas no se marcan como la
-        peor. Asociación, no causa.
+        Número = piezas NOK de esa combinación {secondary.toLowerCase()} ×{" "}
+        {primary.toLowerCase()}; tono proporcional a la tasa
+        {worst
+          ? ` (máx. ${formatPct(worst.rate)}: ${primary.toLowerCase()} ${worst.nest} × ${secondaryName(worst.mold_cavity)}, recuadrada)`
+          : ""}
+        . «·» = la combinación no ocurrió en la selección. Celdas con menos de{" "}
+        {NEST_MOLD_MIN_PIECES} piezas no se marcan como la peor. Asociación, no
+        causa.
       </p>
     </div>
   );

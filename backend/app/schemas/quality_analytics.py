@@ -224,6 +224,16 @@ class NestMoldCell(BaseModel):
     rate: float | None
 
 
+class DrawingConcordance(BaseModel):
+    """IQ-F28: machine verdict vs. drawing limits, in pieces (descriptive; the machine stays the basis)."""
+
+    machine_ok_drawing_ok: int
+    machine_ok_drawing_out: int
+    machine_nok_drawing_ok: int
+    machine_nok_drawing_out: int
+    not_measured: int
+
+
 class OverviewResponse(BaseModel):
     dataset_id: str
     source_type: SourceType
@@ -239,6 +249,9 @@ class OverviewResponse(BaseModel):
     heatmap_axis: Literal["variable", "station"] = "variable"
     # IQ-F18: nest x mold cavity (only combinations with pieces; empty without mold cavities).
     nest_mold: list[NestMoldCell] = Field(default_factory=list)
+    # IQ-F28 (machine-verdict datasets with drawing limits): out-of-drawing Pareto and concordance.
+    drawing_pareto: list[ParetoRow] = Field(default_factory=list)
+    drawing_concordance: DrawingConcordance | None = None
 
 
 class Spec(BaseModel):

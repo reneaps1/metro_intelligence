@@ -86,6 +86,10 @@ def _pct(rate: float) -> str:
 def _rules(panel: LinePanel) -> RulesOut:
     ev = panel.evaluation
     c = ev.config
+    # IQ-F25: the dataset's own words for its grouping slots (Nido / Cavidad / Lado...).
+    labels = dataset_registry.meta(panel.dataset).group_labels
+    primary = labels.get("primary", "nido").lower()
+    secondary = labels.get("secondary", "cavidad de molde").lower()
     return RulesOut(
         run_limit=c.run_limit,
         nest_window=c.nest_window,
@@ -105,9 +109,9 @@ def _rules(panel: LinePanel) -> RulesOut:
                 "primera NOK de la racha."
             ),
             R2=(
-                f"Un nido con tasa NOK ≥ {c.nest_factor:g}× la del resto de nidos en sus últimas "
+                f"{primary.capitalize()} con tasa NOK ≥ {c.nest_factor:g}× la del resto en sus últimas "
                 f"{c.nest_window} piezas (mínimo {c.nest_min_nok} NOK) → revisar pines y localizador "
-                "de ese nido; bloquear el nido si persiste."
+                f"de ese {primary}; bloquearlo si persiste."
             ),
             R3=(
                 f"Tasa NOK de las últimas {c.rate_window} piezas ≥ {c.rate_factor:g}× la referencia "
@@ -115,7 +119,7 @@ def _rules(panel: LinePanel) -> RulesOut:
                 "estación que falla."
             ),
             R4=(
-                f"Cavidad de molde con tasa NOK ≥ {c.cavity_factor:g}× la referencia en sus últimas "
+                f"{secondary.capitalize()} con tasa NOK ≥ {c.cavity_factor:g}× la referencia en sus últimas "
                 f"{c.cavity_window} piezas → revisión de herramental en el próximo cambio, sin parar."
             ),
         ),

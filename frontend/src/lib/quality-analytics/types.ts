@@ -192,6 +192,18 @@ export interface OverviewResponse {
   /** "station": heatmap rows are stations (first failing), not variables. */
   heatmap_axis?: "variable" | "station";
   nest_mold?: NestMoldCell[];
+  /** IQ-F28: machine-verdict datasets with drawing limits: out-of-drawing Pareto and concordance. */
+  drawing_pareto?: ParetoRow[];
+  drawing_concordance?: DrawingConcordance | null;
+}
+
+/** IQ-F28: pieces by machine verdict vs. drawing limits (descriptive; the machine stays the basis). */
+export interface DrawingConcordance {
+  machine_ok_drawing_ok: number;
+  machine_ok_drawing_out: number;
+  machine_nok_drawing_ok: number;
+  machine_nok_drawing_out: number;
+  not_measured: number;
 }
 
 export interface GroupBox {

@@ -64,8 +64,12 @@ export interface PartGroup<T extends Groupable = QualityDataset> {
 /** The part the demo opens with: the one remembered in this browser, else the first REAL one. */
 export function initialPartId(items: Groupable[]): string | null {
   const stored = storedPartId();
-  const remembered = items.find((d) => d.id === stored && d.source_type !== "IMPORTED");
-  return (remembered ?? items.find((d) => d.source_type === "REAL"))?.id ?? null;
+  const remembered = items.find(
+    (d) => d.id === stored && d.source_type !== "IMPORTED",
+  );
+  return (
+    (remembered ?? items.find((d) => d.source_type === "REAL"))?.id ?? null
+  );
 }
 
 /** Selector entries grouped by line; datasets without a line go under their origin. */
@@ -100,4 +104,23 @@ export function groupWords(
     primary: ds?.group_labels?.primary ?? "Nido",
     secondary: ds?.group_labels?.secondary ?? "Cavidad de molde",
   };
+}
+
+/** IQ-F25: short axis prefix for a grouping slot ("C" for Cavidad, "N" for Nido, "L" for Lado), if labelled. */
+export function groupPrefix(
+  ds: Pick<QualityDataset, "group_labels"> | null | undefined,
+  slot: "primary" | "secondary",
+): string | undefined {
+  const label = ds?.group_labels?.[slot];
+  return label ? label.charAt(0).toUpperCase() : undefined;
+}
+
+/** IQ-F25: display value of the secondary slot: "Izq"/"Der" for sides, "C<n>" for mold cavities. */
+export function sideOrCavity(
+  ds: Pick<QualityDataset, "group_labels"> | null | undefined,
+  value: number,
+): string {
+  if (ds?.group_labels?.secondary === "Lado")
+    return value === 1 ? "Izq" : value === 2 ? "Der" : `L${value}`;
+  return `C${value}`;
 }

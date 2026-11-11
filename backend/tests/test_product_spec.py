@@ -114,3 +114,33 @@ def test_invalid_product_file_keeps_the_part_offered(part: Path) -> None:
     entry = dataset_registry.entry("real-pieza-demo")
     assert entry is not None and entry.product is None
     assert dataset_registry.resolve("real-pieza-demo").id == "real-pieza-demo"
+
+
+def test_drawing_concordance_and_pareto_by_hand(part: Path) -> None:
+    """Hand-checkable vector: every piece is classified by machine verdict vs. drawing limits."""
+    ds = dataset_registry.resolve("real-pieza-demo")
+    tight = {
+        "format": "product-spec-v1",
+        "characteristics": [{"variable": "x0", "lsl": 1.05, "usl": 1.45}],
+    }
+    limited = apply_product_spec(ds, ProductSpec.model_validate(tight))
+    result = overview(limited, QualityFilter(), "day")
+    concordance = result["drawing_concordance"]
+    expected = {k: 0 for k in concordance}
+    verdicts = limited.reported_nok or []
+    for i, x in enumerate(limited.values["x0"]):
+        if verdicts[i] is None:
+            continue
+        if x is None:
+            expected["not_measured"] += 1
+            continue
+        out = not 1.05 <= x <= 1.45
+        expected[f"machine_{'nok' if verdicts[i] else 'ok'}_drawing_{'out' if out else 'ok'}"] += 1
+    assert concordance == expected
+    assert sum(concordance.values()) == result["summary"]["pieces"]
+    rows = result["drawing_pareto"]
+    assert [r["variable"] for r in rows] == ["x0"]
+    assert rows[0]["nok"] == concordance["machine_ok_drawing_out"] + concordance["machine_nok_drawing_out"]
+    assert result["pareto"] == []  # the official Pareto of a machine-verdict dataset stays empty
+    plain = overview(ds, QualityFilter(), "day")
+    assert plain["drawing_concordance"] is None and plain["drawing_pareto"] == []

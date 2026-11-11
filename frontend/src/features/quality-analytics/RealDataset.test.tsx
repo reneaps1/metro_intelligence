@@ -95,7 +95,7 @@ describe("QualityStep with the REAL dataset", () => {
       name: "Matriz NOK nido por cavidad de molde",
     });
     const worst = within(matrix).getByTitle(
-      "Nido 2 · cavidad 3: 27 NOK / 150 piezas (18.00 %)",
+      "Nido 2 · C3: 27 NOK / 150 piezas (18.00 %)",
     );
     expect(worst.style.boxShadow).toContain("inset");
     expect(within(matrix).getAllByLabelText("sin piezas")).toHaveLength(1);

@@ -290,8 +290,16 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
             }
         )
     pareto_rows.sort(key=lambda r: (-r["nok"], r["variable"]))
+    # IQ-F28: with drawing limits on a machine-verdict dataset, the Pareto becomes "out of drawing"
+    # per characteristic (a separate view); the official NOK basis stays the machine's.
+    tolerance_keys = {v.key for v in variables if v.has_tolerance}
+    drawing_pareto = [dict(r) for r in pareto_rows if r["variable"] in tolerance_keys] if reported else []
+    _cumulate(drawing_pareto)
+    concordance = (
+        _drawing_concordance(ds, idx, flags, [v for v in variables if v.has_tolerance]) if reported else None
+    )
     if reported:
-        pareto_rows = []  # no tolerances: the station Pareto replaces it
+        pareto_rows = []  # no tolerances in the source: the station Pareto replaces it
     total_nok = sum(r["nok"] for r in pareto_rows)
     cumulative = 0
     for row in pareto_rows:
@@ -386,7 +394,45 @@ def overview(ds: DimensionalDataset, f: QualityFilter, granularity: Granularity 
         "heatmap": heatmap,
         "heatmap_axis": "station" if reported else "variable",
         "nest_mold": _nest_mold_matrix(ds, idx, flags),
+        "drawing_pareto": drawing_pareto,
+        "drawing_concordance": concordance,
     }
+
+
+def _cumulate(rows: list[dict[str, Any]]) -> None:
+    total = sum(r["nok"] for r in rows)
+    running = 0
+    for row in rows:
+        running += row["nok"]
+        row["cumulative_pct"] = running / total if total else None
+
+
+def _drawing_concordance(
+    ds: DimensionalDataset, idx: list[int], machine_nok: list[bool], limited: list[Variable]
+) -> dict[str, int] | None:
+    """IQ-F28: machine verdict vs. drawing limits, per piece with a verdict.
+
+    A piece is "out of drawing" when any of its measured characteristics with
+    drawing limits falls outside them; pieces with none of those measured are
+    counted apart. Descriptive only: the official verdict stays the machine's.
+    """
+    if not limited:
+        return None
+    counts = {
+        "machine_ok_drawing_ok": 0,
+        "machine_ok_drawing_out": 0,
+        "machine_nok_drawing_ok": 0,
+        "machine_nok_drawing_out": 0,
+        "not_measured": 0,
+    }
+    for i, nok in zip(idx, machine_nok, strict=True):
+        measured = [(v, ds.values[v.key][i]) for v in limited if ds.values[v.key][i] is not None]
+        if not measured:
+            counts["not_measured"] += 1
+            continue
+        out = any(v.is_nok(x) for v, x in measured)
+        counts[f"machine_{'nok' if nok else 'ok'}_drawing_{'out' if out else 'ok'}"] += 1
+    return counts
 
 
 def _box(values: list[float]) -> dict[str, Any]:
