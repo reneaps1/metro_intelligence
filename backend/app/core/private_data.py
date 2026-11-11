@@ -70,9 +70,21 @@ def hosted_platform_detected(environ: os._Environ[str] | dict[str, str] | None =
     return any(marker in env for marker in HOSTED_PLATFORM_MARKERS)
 
 
-def private_data_allowed(settings: Settings | None = None) -> bool:
-    """The three runtime barriers of D15. All must hold to offer any private dataset."""
+MIN_AUTHORIZATION_REFERENCE = 8
+
+
+def authorized_private_host(settings: Settings | None = None) -> bool:
+    """IQ-F30 (D29): this host was authorized in writing by the customer to hold its data."""
     s = settings or get_settings()
+    reference = (s.demo_private_host_authorization or "").strip()
+    return s.app_env != "production" and len(reference) >= MIN_AUTHORIZATION_REFERENCE
+
+
+def private_data_allowed(settings: Settings | None = None) -> bool:
+    """The three runtime barriers of D15, or an explicitly authorized private host (D29)."""
+    s = settings or get_settings()
+    if authorized_private_host(s):
+        return True
     return (
         s.app_env != "production" and only_loopback_origins(s.cors_origins) and not hosted_platform_detected()
     )

@@ -126,7 +126,11 @@ inside the backend container and checks the running edition.
   variable (e.g. `RENDER`) is present (`backend/app/core/private_data.py`).
   A server therefore never offers them even if a copied `.env` sets the
   paths; the hosted demo shows synthetic and fictitious data only. Serving
-  real data from an authorized private host is plan phase F30 (blocked until
-  the customer authorizes it in writing).
+  real data from an authorized private host is plan phase F30: a SEPARATE
+  service (never the public demo) with `DEMO_PRIVATE_HOST_AUTHORIZATION` set to
+  a reference of the customer's written authorization, its own database and
+  admin credentials, and parts uploaded by an administrator over HTTPS
+  (`PUT /api/v1/private-datasets/<slug>`, never through git). Withdrawal:
+  `DELETE` each part, unset the variable, and delete the service.
 - `.env*` files and `~/metro-private` stay on the VPS, mode 600/700.
 - Secrets differ between editions.

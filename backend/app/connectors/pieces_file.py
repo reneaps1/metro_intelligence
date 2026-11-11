@@ -95,7 +95,8 @@ class ViewsIn(BaseModel):
 class Manifest(BaseModel):
     format: Literal["pieces-v1", "pieces-v2"]
     converter_version: str = Field(max_length=64)
-    pieces_file: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    # A plain file name next to the manifest: no leading dot (so never ".." or a hidden file).
+    pieces_file: str = Field(pattern=r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$")
     pieces_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     pieces: int = Field(ge=1)
     utc_offset_minutes: int = Field(ge=-14 * 60, le=14 * 60)

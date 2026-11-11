@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     # platform). Each entry uses the same size caps as the legacy dataset.
     demo_real_datasets_dir: str | None = None
     demo_real_datasets_max_loaded: int = Field(default=2, ge=1, le=8)
+    # IQ-F30 (plan decision D29): a PRIVATE host the customer authorized in writing
+    # to hold its converted datasets. Set to a short reference of that written
+    # authorization (no personal data); unset everywhere else. Only it lifts the
+    # loopback / hosted-platform barriers of `core/private_data.py`
+    # (production still never serves private data).
+    demo_private_host_authorization: str | None = None
+    # IQ-F30: admin-only HTTPS upload of converted datasets into DEMO_REAL_DATASETS_DIR.
+    # Off by default; only honoured on an authorized private host.
+    private_datasets_upload_enabled: bool = False
 
     # --- Database (PostgreSQL 16) ---
     postgres_host: str
