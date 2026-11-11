@@ -5,6 +5,7 @@ import { App } from "./App";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import { AuthProvider } from "./lib/auth/AuthProvider";
 import { DemoDataProvider } from "./lib/mock/DataProvider";
+import { DemoBrand } from "./lib/brand/DemoBrand";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!).render(
         <DemoDataProvider>
           <BrowserRouter>
             <App />
+            <DemoBrand />
           </BrowserRouter>
         </DemoDataProvider>
       </AuthProvider>

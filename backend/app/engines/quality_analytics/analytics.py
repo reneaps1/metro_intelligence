@@ -40,7 +40,7 @@ REPORTED_NOK_DEFINITION = (
     "puede usar criterios que la plataforma no conoce."
 )
 REPORTED_BASIS_DEFINITION = (
-    "Pieza NOK = veredicto total reportado por la máquina (sin tolerancias en la fuente). "
+    "Pieza NOK = veredicto total reportado por la máquina (no se recalcula con tolerancias). "
     "Cada pieza NOK se atribuye a la primera estación que falla en el orden del proceso."
 )
 STATION_BASIS_DEFINITION = (
