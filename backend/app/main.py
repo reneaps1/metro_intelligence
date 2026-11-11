@@ -45,9 +45,9 @@ def health() -> dict[str, str]:
 
 @app.on_event("startup")
 def warm_up_real_dataset() -> None:
-    # IQ-F10: parse the private REAL dataset once, off the request path.
+    # IQ-F10/F21: parse the dataset the part selector opens with, off the request path.
     if settings.app_edition == "industrial":
-        from app.services.real_dataset_service import warm_up_in_background
+        from app.services.dataset_registry import warm_up_in_background
 
         warm_up_in_background()
 

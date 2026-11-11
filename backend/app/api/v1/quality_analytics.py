@@ -15,15 +15,26 @@ position tolerance (`engines/quality_analytics/position.py`).
 IQ-F13: `/process-join` ("Vista A") joins the REAL pieces by time with the
 SIMULATED process of the `real_calendar` scenario
 (`services/process_join_service.py`); REAL dataset only, 404 without it.
+
+IQ-F21: datasets are resolved in one place (`services/dataset_registry.py`):
+synthetic, the legacy REAL dataset, one private dataset per part, or the
+user's own import. `/catalog` lists them from manifests only (no loading) for
+the part selector; `/datasets/{id}` describes one (loading it). `/datasets`
+keeps its F10 shape for the current UI.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Path as PathParam
+from pydantic import ValidationError
 
+from app.connectors.pieces_file import read_manifest
+from app.core.config import get_settings
 from app.core.edition import require_industrial_edition
 from app.core.security import require_permission
 from app.engines.process_simulation.generator import GENERATOR_VERSION
@@ -36,8 +47,11 @@ from app.engines.quality_analytics import (
     variable_detail,
 )
 from app.engines.quality_analytics.position import xy_detail
+from app.engines.quality_analytics.twins import build_twin, twin_ids, twin_spec
 from app.models.security import User
 from app.schemas.quality_analytics import (
+    CatalogEntryOut,
+    CatalogResponse,
     DatasetListResponse,
     DatasetOut,
     OverviewResponse,
@@ -52,6 +66,8 @@ from app.schemas.quality_analytics import (
     VariableDetailResponse,
     XYDetailResponse,
 )
+from app.services import dataset_registry, real_dataset_service
+from app.services.dataset_registry import DatasetNotFoundError
 from app.services.imported_dataset_store import get_imported_dataset_store
 from app.services.process_join_service import (
     DEFAULT_BUCKET_MINUTES,
@@ -59,8 +75,9 @@ from app.services.process_join_service import (
     process_join,
     validate_window,
 )
-from app.services.real_dataset_service import REAL_DATASET_ID, cached_overview, load_real_dataset
+from app.services.real_dataset_service import REAL_DATASET_ID, cached_overview
 from app.services.real_predictive_service import TOTAL_TARGET, target_label, validate_target
+from app.services.report_summary_service import PLACEHOLDER as REPORT_PLACEHOLDER
 from app.services.report_summary_service import load_report_summary
 
 router = APIRouter(
@@ -72,18 +89,15 @@ router = APIRouter(
 _read = require_permission("measurement.measurement_result", "read")
 
 
+def _not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+
+
 def _dataset_or_404(dataset_id: str, user: User) -> DimensionalDataset:
-    if dataset_id == SYNTHETIC_DATASET_ID:
-        return synthetic_dataset()
-    if dataset_id == REAL_DATASET_ID:
-        real = load_real_dataset()
-        if real is not None:
-            return real
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
-    stored = get_imported_dataset_store().get(dataset_id, user.id)
-    if stored is not None:
-        return stored.dataset
-    raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+    try:
+        return dataset_registry.resolve(dataset_id, user.id)
+    except DatasetNotFoundError:
+        raise _not_found() from None
 
 
 def _csv(value: str | None) -> list[str] | None:
@@ -149,6 +163,7 @@ def _int_set(value: str | None, message: str) -> frozenset[int] | None:
 
 
 def dataset_out(ds: DimensionalDataset) -> DatasetOut:
+    meta = dataset_registry.meta(ds)
     return DatasetOut(
         id=ds.id,
         name=ds.name,
@@ -187,15 +202,96 @@ def dataset_out(ds: DimensionalDataset) -> DatasetOut:
         mechanisms=ds.mechanisms,
         has_reported_verdict=ds.reported_nok is not None,
         pin_pairs=[PinPairOut(key=p.key, label=p.label) for p in ds.pin_pairs],
+        line=meta.line,
+        group_labels=meta.group_labels,
+        assumptions=list(meta.assumptions),
+        process_join=meta.process_join,
     )
+
+
+def _legacy_catalog_entry() -> CatalogEntryOut | None:
+    """The F10 dataset described from its manifest only (no loading)."""
+    if not real_dataset_service.real_dataset_configured():
+        return None
+    path_value = get_settings().demo_real_dataset_path
+    try:
+        manifest = read_manifest(Path(path_value or ""))
+    except (OSError, ValueError, ValidationError):
+        return None
+    label = get_settings().demo_client_label
+    window = manifest.window
+    return CatalogEntryOut(
+        id=REAL_DATASET_ID,
+        label=f"Datos reales · {label}",
+        line=None,
+        description="Período cerrado del cliente, convertido fuera de línea y cargado localmente.",
+        source_type="REAL",
+        pieces=manifest.pieces,
+        period_start=datetime.fromtimestamp(window.from_ms / 1000, tz=UTC) if window else None,
+        period_end=datetime.fromtimestamp(window.to_ms / 1000, tz=UTC) if window else None,
+        loaded=real_dataset_service.is_loaded(),
+    )
+
+
+def _described(ds: DimensionalDataset, *, loaded: bool = True) -> CatalogEntryOut:
+    return CatalogEntryOut(
+        id=ds.id,
+        label=ds.name,
+        line=dataset_registry.meta(ds).line,
+        description=ds.description,
+        source_type=ds.source_type,
+        pieces=len(ds),
+        period_start=datetime.fromtimestamp(ds.timestamps[0], tz=UTC) if len(ds) else None,
+        period_end=datetime.fromtimestamp(ds.timestamps[-1], tz=UTC) if len(ds) else None,
+        loaded=loaded,
+    )
+
+
+@router.get("/catalog", response_model=CatalogResponse)
+def read_catalog(user: User = Depends(_read)) -> CatalogResponse:
+    """Every selectable dataset, described without loading the private ones (IQ-F21)."""
+    catalog = dataset_registry.scan()
+    items: list[CatalogEntryOut] = []
+    legacy = _legacy_catalog_entry()
+    omitted = catalog.omitted
+    if legacy is not None:
+        items.append(legacy)
+    elif real_dataset_service.real_dataset_configured():
+        omitted += 1
+    items += [
+        CatalogEntryOut(
+            id=e.id,
+            label=e.label,
+            line=e.line,
+            description=e.description,
+            source_type="REAL",
+            pieces=e.pieces,
+            period_start=e.period_start,
+            period_end=e.period_end,
+            loaded=dataset_registry.is_loaded(e.id),
+        )
+        for e in catalog.entries
+    ]
+    items.append(_described(synthetic_dataset()))
+    items += [_described(build_twin(twin_spec(i).slug)) for i in twin_ids()]  # type: ignore[union-attr]
+    items += [_described(item.dataset) for item in get_imported_dataset_store().list_for(user.id)]
+    initial = next((i.id for i in items if i.source_type == "REAL"), SYNTHETIC_DATASET_ID)
+    return CatalogResponse(items=items, omitted=omitted, initial_id=initial)
+
+
+@router.get("/datasets/{dataset_id}", response_model=DatasetOut)
+def read_dataset(dataset_id: str = PathParam(..., max_length=128), user: User = Depends(_read)) -> DatasetOut:
+    """One dataset in full; loads a private one on first use (IQ-F21)."""
+    return dataset_out(_dataset_or_404(dataset_id, user))
 
 
 @router.get("/datasets", response_model=DatasetListResponse)
 def list_datasets(user: User = Depends(_read)) -> DatasetListResponse:
     imported = [dataset_out(item.dataset) for item in get_imported_dataset_store().list_for(user.id)]
-    real = load_real_dataset()
+    real = real_dataset_service.load_real_dataset()
     leading = [dataset_out(real)] if real is not None else []
-    return DatasetListResponse(items=[*leading, dataset_out(synthetic_dataset()), *imported])
+    twins = [dataset_out(build_twin(twin_spec(i).slug)) for i in twin_ids()]  # type: ignore[union-attr]
+    return DatasetListResponse(items=[*leading, dataset_out(synthetic_dataset()), *twins, *imported])
 
 
 @router.get("/overview", response_model=OverviewResponse)
@@ -277,8 +373,21 @@ def read_xy(
 
 
 @router.get("/report-summary", response_model=ReportSummary)
-def read_report_summary(_user: User = Depends(_read)) -> ReportSummary:
-    return load_report_summary()
+def read_report_summary(
+    dataset: str | None = Query(None, max_length=128), _user: User = Depends(_read)
+) -> ReportSummary:
+    """IQ-F21 (D20): without `dataset`, the deployment's block (F5 behaviour); with a part,
+    that part's private `report-summary.json`, 404 when it has none, so another customer's
+    figures are never shown next to it. The synthetic dataset keeps the illustrative example."""
+    if dataset is None or dataset == REAL_DATASET_ID:
+        return load_report_summary()
+    if dataset == SYNTHETIC_DATASET_ID:
+        return REPORT_PLACEHOLDER
+    path = dataset_registry.extra_path(dataset, "report-summary.json")
+    summary = load_report_summary(str(path)) if path is not None else None
+    if summary is None or summary.illustrative:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Report summary not found.")
+    return summary
 
 
 def _unprocessable(detail: str) -> HTTPException:
@@ -299,9 +408,12 @@ def read_process_join(
     ``lag_minutes`` > 0 pairs each bucket with the cycles that started that
     long before it (the process precedes the inspection).
     """
-    real = load_real_dataset() if dataset == REAL_DATASET_ID else None
-    if real is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+    try:
+        real = dataset_registry.resolve(dataset, allow_imports=False)
+    except DatasetNotFoundError:
+        raise _not_found() from None
+    if not dataset_registry.process_join_enabled(real):
+        raise _not_found()
     try:
         join_signal(signal)
     except ValueError:

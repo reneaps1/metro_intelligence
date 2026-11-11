@@ -12,6 +12,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.quality_analytics import router as quality_router
 from app.api.v1.quality_imports import router as imports_router
 from app.core.config import get_settings
+from app.engines.quality_analytics.twins import twin_ids
 from app.services.imported_dataset_store import get_imported_dataset_store
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -196,7 +197,7 @@ def test_import_long_creates_a_private_dataset_that_changes_the_analytics(
     assert ds["has_reported_verdict"] is True
 
     listed = [d["id"] for d in client.get(f"{BASE}/datasets", headers=h).json()["items"]]
-    assert listed == ["demo-synthetic-dimensional", ds["id"]]
+    assert listed == ["demo-synthetic-dimensional", *twin_ids(), ds["id"]]
 
     demo = client.get(f"{BASE}/overview", headers=h).json()["summary"]
     imported = client.get(f"{BASE}/overview", params={"dataset": ds["id"]}, headers=h).json()
@@ -215,7 +216,7 @@ def test_import_long_creates_a_private_dataset_that_changes_the_analytics(
     # other users cannot see it
     other = as_role("admin")
     assert client.get(f"{BASE}/overview", params={"dataset": ds["id"]}, headers=other).status_code == 404
-    assert len(client.get(f"{BASE}/datasets", headers=other).json()["items"]) == 1
+    assert len(client.get(f"{BASE}/datasets", headers=other).json()["items"]) == 1 + len(twin_ids())
 
     # audit trail: who imported what, and that nothing was persisted
     engine = sa.create_engine(AUTH_DB_URL)
@@ -297,5 +298,6 @@ def test_mapping_that_rejects_every_row_returns_the_report_without_dataset(
 def test_store_keeps_at_most_three_datasets_per_user(client: TestClient, as_role) -> None:
     h = as_role("metrologist")
     ids = [_upload(client, h, WIDE, WIDE_MAPPING).json()["dataset"]["id"] for _ in range(4)]
-    listed = [d["id"] for d in client.get(f"{BASE}/datasets", headers=h).json()["items"][1:]]
+    items = client.get(f"{BASE}/datasets", headers=h).json()["items"]
+    listed = [d["id"] for d in items if d["source_type"] == "IMPORTED"]
     assert listed == list(reversed(ids[1:]))

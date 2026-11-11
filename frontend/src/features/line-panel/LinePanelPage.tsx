@@ -22,6 +22,7 @@ import { ActionDialog, type PanelView } from "./parts";
 import { AndonView } from "./views/AndonView";
 import { GuidedResponseView } from "./views/GuidedResponseView";
 import { ProcessMapView } from "./views/ProcessMapView";
+import { storedPartId } from "../../lib/demo/part";
 import "./linePanel.css";
 
 // IQ-F15: full-screen line quality panel (docs/design/line-quality-panel.md).
@@ -63,10 +64,15 @@ export function LinePanelPage() {
   const [session, dispatch] = useReducer(sessionReducer, undefined, emptySession);
   const hideTimer = useRef<number>();
 
-  // Dataset: the local REAL one when the backend has it, otherwise the synthetic one.
+  // Dataset (IQ-F22): the part chosen in the demo's "Pieza" control when it is still offered
+  // (not a CSV import), else the local REAL one when the backend has it, else the synthetic one.
   useEffect(() => {
+    const stored = storedPartId();
     fetchDatasets()
-      .then(({ items }) => setDataset(items.some((d) => d.id === REAL_ID) ? REAL_ID : SYNTHETIC_ID))
+      .then(({ items }) => {
+        const chosen = items.find((d) => d.id === stored && d.source_type !== "IMPORTED");
+        setDataset(chosen ? chosen.id : items.some((d) => d.id === REAL_ID) ? REAL_ID : SYNTHETIC_ID);
+      })
       .catch(() => setDataset(SYNTHETIC_ID));
   }, []);
 

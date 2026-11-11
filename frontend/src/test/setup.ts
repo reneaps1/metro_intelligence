@@ -32,6 +32,7 @@ afterEach(() => {
   cleanup();
   localStorage.removeItem("metro-intelligence.theme");
   localStorage.removeItem("metro-intelligence.demo.panes");
+  localStorage.removeItem("mi-demo-part");
   document.documentElement.removeAttribute("data-theme");
 });
 afterAll(() => server.close());

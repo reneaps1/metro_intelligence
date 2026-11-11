@@ -60,6 +60,13 @@ ficticios rotulados «Ejemplo ilustrativo».
 Los formatos de ambos JSON están en `backend/app/schemas/quality_analytics.py` (`ReportSummary`) y
 `backend/app/schemas/predictive.py` (`ModelLabIn`).
 
+**Piezas reales (IQ-F21, solo en el equipo del presentador).** `DEMO_REAL_DATASETS_DIR` apunta a una carpeta privada
+con una subcarpeta por pieza ya convertida (formato en `backend/app/connectors/README.md`, «Private part registry»).
+Cada una aparece como `real-<carpeta>` en `GET /api/v1/quality-analytics/catalog`. Por diseño **no funciona en un
+servidor**: el backend las ignora si `APP_ENV=production`, si algún origen de `CORS_ORIGINS` no es local
+(`localhost`, `127.0.0.1`, `::1`) o si detecta variables de una plataforma de alojamiento. El sitio público solo
+muestra datos sintéticos y ficticios.
+
 ## 3. Guion (7–10 minutos)
 
 Entrada: menú **Demo industrial** → «Iniciar demo». El selector de pasos de arriba permite saltar; «Restaurar

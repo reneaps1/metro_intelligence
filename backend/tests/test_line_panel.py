@@ -6,12 +6,12 @@ from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 
 import pytest
-from app.api.v1 import line_panel as line_panel_api
 from app.api.v1.auth import router as auth_router
 from app.api.v1.line_panel import router as line_panel_router
 from app.core.config import get_settings
 from app.engines.quality_analytics.dataset import DimensionalDataset, Station, Variable
 from app.services import line_panel_service as svc
+from app.services import real_dataset_service
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -278,7 +278,7 @@ def industrial(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
             monkeypatch.setattr(settings, key, value)
 
     _set(app_edition="industrial")
-    monkeypatch.setattr(line_panel_api, "load_real_dataset", lambda: None)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: None)
     return _set
 
 
@@ -355,7 +355,7 @@ def test_real_dataset_replay(
     client: TestClient, as_role, industrial, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ds = _fake_real()
-    monkeypatch.setattr(line_panel_api, "load_real_dataset", lambda: ds)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: ds)
     headers = as_role("auditor")
     params = {"dataset": "real-dimensional", "machine": "INY-01"}  # machine ignored without machines
     moments = client.get(f"{BASE}/moments", params=params, headers=headers).json()

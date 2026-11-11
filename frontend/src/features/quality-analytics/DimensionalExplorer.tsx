@@ -1,4 +1,5 @@
 import { Card, CardHeader } from "../../components/ui/Card";
+import { groupWords } from "../../lib/demo/part";
 import { Kpi } from "../../components/workbench/Kpi";
 import { useAsync } from "../../lib/catalog/hooks";
 import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
@@ -34,6 +35,8 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
   );
   const d = detail.data;
   const available = dataset.available_filters;
+  const words = groupWords(dataset);
+  const groupName = (g: GroupBy) => (g === "cavity" ? words.primary : g === "mold_cavity" ? words.secondary : GROUP_LABEL[g]);
   const groupOptions = (Object.keys(GROUP_LABEL) as GroupBy[]).filter((g) => Boolean(available[g]));
   const groupLabel = (g: string) =>
     f.groupBy === "cavity" ? `N${g}` : f.groupBy === "mold_cavity" ? `C${g}` : f.groupBy === "shift" ? `T. ${g}` : g;
@@ -69,7 +72,7 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
           >
             {groupOptions.map((g) => (
               <option key={g} value={g}>
-                {GROUP_LABEL[g]}
+                {groupName(g)}
               </option>
             ))}
           </select>
@@ -113,7 +116,7 @@ export function DimensionalExplorer({ dataset }: { dataset: QualityDataset }) {
               <HistogramChart detail={d} />
             </Card>
             <Card>
-              <CardHeader title={`Comparativo por ${GROUP_LABEL[f.groupBy].toLowerCase()}`} />
+              <CardHeader title={`Comparativo por ${groupName(f.groupBy).toLowerCase()}`} />
               <BoxplotChart groups={d.groups} spec={d.spec} label={groupLabel} />
               <p className="text-xs text-text-secondary">
                 Caja = Q1–Q3, línea = mediana, bigotes = 1.5 × IQR; puntos = extremos atípicos. Resaltado, el grupo con la

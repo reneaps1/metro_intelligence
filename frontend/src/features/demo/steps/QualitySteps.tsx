@@ -5,6 +5,7 @@ import { Card } from "../../../components/ui/Card";
 import { Notice } from "../../../components/workbench/Notice";
 import { useAsync } from "../../../lib/catalog/hooks";
 import { useDemoSession } from "../../../lib/demo/DemoSessionProvider";
+import { storedPartId, storePartId } from "../../../lib/demo/part";
 import { fetchDatasets } from "../../../lib/quality-analytics/api";
 import { DEFAULT_QUALITY_FILTERS, DEMO_DATASET_ID } from "../../../lib/quality-analytics/filters";
 import { deleteImportedDataset } from "../../../lib/quality-analytics/imports";
@@ -140,16 +141,22 @@ function DatasetStep({ children }: { children: (dataset: QualityDataset) => Reac
   const fetched = datasets.data?.items ?? [];
   const items = [...fetched, ...added.filter((a) => !fetched.some((d) => d.id === a.id))];
   const dataset = items.find((d) => d.id === qualityFilters.datasetId) ?? null;
-  const select = (ds: QualityDataset) => setQualityFilters(() => filtersFor(ds, true));
-  const real = fetched.find((d) => d.source_type === "REAL") ?? null;
-
-  // IQ-F10: when the customer's REAL dataset is configured it is the default,
-  // until the presenter explicitly picks another dataset.
+  const select = (ds: QualityDataset) => {
+    setQualityFilters(() => filtersFor(ds, true));
+    storePartId(ds.id);
+  };
+  // IQ-F22: the part remembered in this browser, else (IQ-F10) the REAL dataset when configured,
+  // is the default until the presenter explicitly picks another one in the "Pieza" control.
+  const stored = storedPartId();
+  const initial =
+    fetched.find((d) => d.id === stored && d.source_type !== "IMPORTED") ??
+    fetched.find((d) => d.source_type === "REAL") ??
+    null;
   useEffect(() => {
-    if (real && !qualityFilters.datasetChosen && qualityFilters.datasetId !== real.id && !requested) {
-      setQualityFilters(() => filtersFor(real, false));
+    if (initial && !qualityFilters.datasetChosen && qualityFilters.datasetId !== initial.id && !requested) {
+      setQualityFilters(() => filtersFor(initial, false));
     }
-  }, [real, qualityFilters.datasetChosen, qualityFilters.datasetId, requested, setQualityFilters]);
+  }, [initial, qualityFilters.datasetChosen, qualityFilters.datasetId, requested, setQualityFilters]);
 
   // Deep link from the import page: /demo/industrial-quality/quality?dataset=<id>
   useEffect(() => {

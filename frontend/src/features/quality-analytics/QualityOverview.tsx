@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { groupWords } from "../../lib/demo/part";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, FlaskConical } from "lucide-react";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { OriginBadge } from "../../components/ui/OriginBadge";
@@ -34,6 +35,7 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
   const showReport = dataset.source_type !== "IMPORTED";
   const data = overview.data;
   const s = data?.summary;
+  const words = groupWords(dataset);
   const varName = (key: string) => dataset.variables.find((v) => v.key === key)?.name ?? key;
   const stationName = (key: string) => dataset.stations?.find((st) => st.key === key)?.name ?? key;
   const reported = (s?.nok_basis ?? dataset.nok_basis) === "reported";
@@ -71,18 +73,18 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
               tone="nok"
             />
             <Kpi
-              label="Nido de mayor riesgo"
-              value={s.worst_cavity ? `Nido ${s.worst_cavity.cavity}` : "—"}
+              label={`${words.primary} de mayor riesgo`}
+              value={s.worst_cavity ? `${words.primary} ${s.worst_cavity.cavity}` : "—"}
               hint={
                 s.worst_cavity
                   ? `${formatPct(s.worst_cavity.rate)} · RR ${s.worst_cavity.relative_risk?.toFixed(1) ?? "—"}× vs. resto`
                   : undefined
               }
             />
-            {s.worst_mold_cavity !== undefined && (
+            {s.worst_mold_cavity !== undefined && (dataset.mold_cavities?.length ?? 0) > 0 && (
               <Kpi
-                label="Cavidad de molde de mayor riesgo"
-                value={s.worst_mold_cavity ? `Cav. ${s.worst_mold_cavity.cavity}` : "—"}
+                label={`${words.secondary} de mayor riesgo`}
+                value={s.worst_mold_cavity ? `${words.secondary === "Cavidad de molde" ? "Cav." : words.secondary} ${s.worst_mold_cavity.cavity}` : "—"}
                 hint={
                   s.worst_mold_cavity
                     ? `${formatPct(s.worst_mold_cavity.rate)} · RR ${s.worst_mold_cavity.relative_risk?.toFixed(1) ?? "—"}× vs. resto`
@@ -134,7 +136,7 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
             </Card>
             <Card>
               <CardHeader
-                title="NOK por nido · IC 95 %"
+                title={`NOK por ${words.primary.toLowerCase()} · IC 95 %`}
                 action={
                   <button
                     type="button"
@@ -155,7 +157,7 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
             {moldRows.length > 0 && (
               <Card className="lg:col-span-2">
                 <CardHeader
-                  title="NOK por cavidad de molde · IC 95 %"
+                  title={`NOK por ${words.secondary.toLowerCase()} · IC 95 %`}
                   action={
                     <button
                       type="button"
@@ -189,7 +191,7 @@ export function QualityOverview({ dataset }: { dataset: QualityDataset }) {
             {nestMold.length > 0 && (
               <Card className="lg:col-span-2 xl:col-span-3">
                 <CardHeader
-                  title="NOK por nido × cavidad de molde"
+                  title={`NOK por ${words.primary.toLowerCase()} × ${words.secondary.toLowerCase()}`}
                   action={
                     <button
                       type="button"

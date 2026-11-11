@@ -60,9 +60,11 @@ from app.schemas.predictive import (
     WaveSummary,
     WhatIfResponse,
 )
+from app.services import dataset_registry
+from app.services.dataset_registry import DatasetNotFoundError
 from app.services.model_lab_service import load_model_lab
 from app.services.predictive_service import NOK_RATE_SERIES, CusumStudy, WaveStudy, cusum_study, wave_study
-from app.services.real_dataset_service import REAL_DATASET_ID, load_real_dataset
+from app.services.real_dataset_service import REAL_DATASET_ID
 from app.services.real_predictive_service import (
     STATION_PREFIX,
     TOTAL_TARGET,
@@ -92,14 +94,14 @@ SYNTHETIC_LIMITS = {"window": 50, "threshold": 100, "horizon": 60}
 
 
 def _real(dataset: str) -> DimensionalDataset | None:
-    """None for the synthetic dataset, the REAL dataset when configured, 404 otherwise."""
+    """None for the synthetic dataset, a private REAL dataset when offered (IQ-F21: the legacy one or
+    any part of the registry), 404 otherwise. In-memory imports are not offered here."""
     if dataset == SYNTHETIC_DATASET_ID:
         return None
-    if dataset == REAL_DATASET_ID:
-        real = load_real_dataset()
-        if real is not None:
-            return real
-    raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+    try:
+        return dataset_registry.resolve(dataset, allow_imports=False)
+    except DatasetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.") from None
 
 
 def _real_only(dataset: str) -> DimensionalDataset:
@@ -123,8 +125,20 @@ def _mean(values: list[float]) -> float | None:
 
 
 @router.get("/model-lab", response_model=ModelLab)
-def read_model_lab(_user: User = Depends(_read_quality)) -> ModelLab:
-    return load_model_lab()
+def read_model_lab(
+    dataset: str | None = Query(None, max_length=128), _user: User = Depends(_read_quality)
+) -> ModelLab:
+    """IQ-F21 (D20): without `dataset`, the deployment's study (F7 behaviour); with a part, that
+    part's private `model-lab.json` or 404; the synthetic dataset keeps the illustrative example."""
+    if dataset is None or dataset == REAL_DATASET_ID:
+        return load_model_lab()
+    if dataset == SYNTHETIC_DATASET_ID:
+        return load_model_lab("")
+    path = dataset_registry.extra_path(dataset, "model-lab.json")
+    lab = load_model_lab(str(path)) if path is not None else None
+    if lab is None or lab.illustrative:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Model lab not found.")
+    return lab
 
 
 @router.get("/nok-waves", response_model=WaveStudyResponse)

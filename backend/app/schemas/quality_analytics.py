@@ -80,10 +80,41 @@ class DatasetOut(BaseModel):
     data_quality: dict[str, int] = Field(default_factory=dict)
     # IQ-F19: X/Y pairs with a position tolerance (empty = no position view).
     pin_pairs: list[PinPairOut] = Field(default_factory=list)
+    # --- IQ-F21 (part selector) ---
+    line: str | None = None
+    # Vocabulary of the grouping slots: {"primary": "Cavidad", "secondary": "Lado"}; empty = defaults.
+    group_labels: dict[str, str] = Field(default_factory=dict)
+    # Plant assumptions the converter declared (time basis, shifts...), shown as such.
+    assumptions: list[str] = Field(default_factory=list)
+    # D27: Vista A (process join) is offered for this dataset.
+    process_join: bool = False
 
 
 class DatasetListResponse(BaseModel):
     items: list[DatasetOut]
+
+
+class CatalogEntryOut(BaseModel):
+    """IQ-F21: one entry of the part selector, described without loading its pieces."""
+
+    id: str
+    label: str
+    line: str | None = None
+    description: str = ""
+    source_type: SourceType
+    pieces: int
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    # Already in memory: selecting it is instant.
+    loaded: bool = False
+
+
+class CatalogResponse(BaseModel):
+    items: list[CatalogEntryOut]
+    # Private folders skipped as invalid (counted, never named).
+    omitted: int = 0
+    # The entry the selector opens with: the first REAL one, else the synthetic dataset.
+    initial_id: str
 
 
 class CavityRate(BaseModel):

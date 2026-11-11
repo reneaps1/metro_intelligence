@@ -48,6 +48,50 @@ class _PresetIn(BaseModel):
     group_by: Literal["nest", "mold_cavity"] = "nest"
 
 
+class DisplayIn(BaseModel):
+    """IQ-F21: how a dataset is named in the part selector (labels written by the operator)."""
+
+    label: str = Field(min_length=1, max_length=64)
+    line: str | None = Field(default=None, max_length=64)
+    description: str | None = Field(default=None, max_length=280)
+    order: int = Field(default=100, ge=0, le=10_000)
+
+
+class GroupLabelIn(BaseModel):
+    label: str = Field(min_length=1, max_length=32)
+    prefix: str = Field(default="", max_length=4)
+    values: dict[str, str] = Field(default_factory=dict, max_length=64)
+
+
+class GroupsIn(BaseModel):
+    """IQ-F21: vocabulary of the two grouping slots (`nest` = primary, `mold_cavity` = secondary)."""
+
+    primary: GroupLabelIn | None = None
+    secondary: GroupLabelIn | None = None
+
+
+class WindowIn(BaseModel):
+    """IQ-F21: which part of the source the converter kept (epoch ms; counts only)."""
+
+    from_ms: int = Field(ge=0)
+    to_ms: int = Field(ge=0)
+    source_pieces: int = Field(ge=0)
+
+
+class HistoryIn(BaseModel):
+    """IQ-F21: aggregated daily history of the whole source, next to the loaded window."""
+
+    granularity: Literal["day"] = "day"
+    columns: list[Literal["day", "pieces", "nok"]] = Field(default_factory=lambda: ["day", "pieces", "nok"])
+    rows: list[list[str | int]] = Field(default_factory=list, max_length=2_000)
+
+
+class ViewsIn(BaseModel):
+    """IQ-F21 (D27): opt-in views. Vista A joins simulated injection signals, so it is off by default."""
+
+    process_join: bool = False
+
+
 class Manifest(BaseModel):
     format: Literal["pieces-v1", "pieces-v2"]
     converter_version: str = Field(max_length=64)
@@ -60,6 +104,24 @@ class Manifest(BaseModel):
     variables: list[_VariableIn] = Field(min_length=1, max_length=200)
     presets: list[_PresetIn] = Field(default_factory=list, max_length=8)
     report: dict[str, object] = Field(default_factory=dict)
+    # --- IQ-F21: optional blocks, backwards compatible (older manifests omit them) ---
+    display: DisplayIn | None = None
+    groups: GroupsIn | None = None
+    time_basis: Literal["utc", "plant_wall_clock"] | None = None
+    window: WindowIn | None = None
+    history: HistoryIn | None = None
+    views: ViewsIn = Field(default_factory=ViewsIn)
+    assumptions: list[str] = Field(default_factory=list, max_length=12)
+
+
+def read_manifest(manifest_path: Path) -> Manifest:
+    """Validate a manifest without touching the pieces file (cheap: used to list datasets)."""
+    if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
+        raise ValueError("manifest too large")
+    manifest = Manifest.model_validate(json.loads(manifest_path.read_text(encoding="utf-8")))
+    if any(len(a) > 280 for a in manifest.assumptions):
+        raise ValueError("assumption text too long")
+    return manifest
 
 
 def _sha256(path: Path) -> str:
@@ -114,11 +176,15 @@ def read_pieces(
     description: str,
     max_bytes: int,
     max_pieces: int,
+    source_type: Literal["REAL", "SIMULATED"] = "REAL",
 ) -> DimensionalDataset:
-    """Load a converted dataset. Raises ValueError / OSError / ValidationError when unusable."""
-    if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
-        raise ValueError("manifest too large")
-    manifest = Manifest.model_validate(json.loads(manifest_path.read_text(encoding="utf-8")))
+    """Load a converted dataset. Raises ValueError / OSError / ValidationError when unusable.
+
+    ``source_type`` is decided by the caller from WHERE the folder lives (the
+    private root = REAL, files shipped with the app = SIMULATED), never by the
+    manifest itself (IQ-F21, D23).
+    """
+    manifest = read_manifest(manifest_path)
     if manifest.pieces > max_pieces:
         raise ValueError("dataset exceeds the configured piece cap")
     pieces_path = manifest_path.parent / manifest.pieces_file
@@ -201,7 +267,7 @@ def read_pieces(
         id=dataset_id,
         name=name,
         description=description,
-        source_type="REAL",
+        source_type=source_type,
         variables=tuple(
             Variable(v.key, v.name, v.unit, 0.0, None, None, nominal_given=False, station=v.station)
             for v in manifest.variables
@@ -214,7 +280,9 @@ def read_pieces(
         batches=absent,
         values=dict(zip(var_keys, var_cols, strict=True)),
         reported_nok=reported,
-        mold_cavities=molds,
+        # IQ-F21: a line without a secondary grouping has none at all (not a column of blanks),
+        # so the views that need it are hidden instead of drawn empty.
+        mold_cavities=molds if any(m is not None for m in molds) else None,
         nests_raw=nests_raw if v2 else None,
         mold_cavities_raw=molds_raw if v2 else None,
         stations=stations,

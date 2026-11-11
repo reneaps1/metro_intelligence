@@ -48,6 +48,7 @@ from app.engines.quality_analytics.process_join import (
     lag_scan,
     piece_counts,
 )
+from app.services import dataset_cache
 from app.services.real_predictive_service import TOTAL_TARGET, target_flags, validate_target
 
 # Process signals offered by the join (all with one value per cycle). The
@@ -104,6 +105,17 @@ def reset_cache() -> None:
     global _current
     with _lock:
         _current = None
+
+
+def _forget(dataset_id: str) -> None:
+    """IQ-F21: the calendar holds its dataset; drop it when that dataset is evicted or reloaded."""
+    global _current
+    with _lock:
+        if _current is not None and _current.dataset.id == dataset_id:
+            _current = None
+
+
+dataset_cache.register(_forget)
 
 
 def _calendar(ds: DimensionalDataset) -> _Calendar:

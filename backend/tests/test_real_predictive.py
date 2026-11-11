@@ -8,7 +8,6 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
-from app.api.v1 import predictive as predictive_api
 from app.api.v1.auth import router as auth_router
 from app.api.v1.predictive import router as predictive_router
 from app.core.config import get_settings
@@ -16,7 +15,7 @@ from app.engines.experimental_ml.group_alarms import evaluate_group_alarms, long
 from app.engines.experimental_ml.nok_waves import GroupPoint, retrospective_episodes
 from app.engines.experimental_ml.piece_risk import past_features, roc_auc, run_risk_study, top_k
 from app.engines.quality_analytics.dataset import DimensionalDataset, Station, Variable
-from app.services import real_predictive_service
+from app.services import real_dataset_service, real_predictive_service
 from app.services.model_lab_service import load_model_lab
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -201,7 +200,7 @@ def headers(client: TestClient) -> dict[str, str]:
 @pytest.fixture
 def with_real(settings_patch, monkeypatch: pytest.MonkeyPatch) -> DimensionalDataset:
     ds = _fake_real()
-    monkeypatch.setattr(predictive_api, "load_real_dataset", lambda: ds)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: ds)
     return ds
 
 
@@ -236,7 +235,7 @@ def test_group_alarms_and_piece_risk(client: TestClient, headers, with_real) -> 
 def test_validation_and_absence(
     client: TestClient, headers, settings_patch, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(predictive_api, "load_real_dataset", lambda: None)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: None)
     assert client.get(f"{BASE}/group-alarms", headers=headers).status_code == 404
     assert (
         client.get(f"{BASE}/nok-waves", params={"dataset": "real-dimensional"}, headers=headers).status_code
@@ -249,7 +248,7 @@ def test_validation_and_absence(
     )
     assert synthetic.status_code == 422
     ds = _fake_real()
-    monkeypatch.setattr(predictive_api, "load_real_dataset", lambda: ds)
+    monkeypatch.setattr(real_dataset_service, "load_real_dataset", lambda: ds)
     assert (
         client.get(f"{BASE}/piece-risk", params={"target": "station:zz"}, headers=headers).status_code == 422
     )

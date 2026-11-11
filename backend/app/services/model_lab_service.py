@@ -146,8 +146,13 @@ def _studies(data: object) -> list[ModelLabIn]:
     return [_validated(ModelLabIn.model_validate(data))]
 
 
-def load_model_lab() -> ModelLab:
-    path_value = get_settings().demo_model_lab_path
+def load_model_lab(path_value: str | None = None) -> ModelLab:
+    """The private study at ``path_value`` (default: `DEMO_MODEL_LAB_PATH`), else the placeholder.
+
+    IQ-F21: the registry passes a part's own ``model-lab.json``.
+    """
+    if path_value is None:
+        path_value = get_settings().demo_model_lab_path
     if not path_value:
         return build_model_lab(PLACEHOLDER, source="placeholder")
     path = Path(path_value)

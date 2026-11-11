@@ -3,7 +3,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { useAsync } from "../../lib/catalog/hooks";
 import { WB, gridProps, limitLine, lineLabel, refLine, secondaryLine } from "../../lib/demo/chartTheme";
 import { fetchCusum } from "../../lib/predictive/api";
-import { SYNTHETIC_SOURCE, plantLabel, type PredictiveSource } from "../../lib/predictive/source";
+import { SYNTHETIC_SOURCE, plantLabel, sourceOrigin, type PredictiveSource } from "../../lib/predictive/source";
 import { Callout, LoadState, PanelHeader, axisTick, n, tooltipStyle } from "./shared";
 
 // IQ-F7: shadow-mode CUSUM (app/engines/experimental_ml/drift_cusum.py) over an
@@ -56,7 +56,7 @@ export function CusumPanel({ source = SYNTHETIC_SOURCE }: { source?: PredictiveS
     <section className="space-y-4" aria-label="CUSUM experimental">
       <PanelHeader
         title="CUSUM experimental sobre una serie"
-        origins={source.real ? ["REAL", "EXPERIMENTAL"] : ["SIMULATED", "EXPERIMENTAL"]}
+        origins={[sourceOrigin(source), "EXPERIMENTAL"]}
       >
         Suma acumulada de desviaciones respecto de la media de la propia serie (auto-referenciado). Señala un cambio
         sostenido; no dice por qué ocurrió.

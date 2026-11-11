@@ -7,6 +7,7 @@ import { topPriority } from "../../../lib/demo/alarms";
 import { Key } from "../../../components/workbench/Key";
 import { AlarmIcon } from "./AlarmIcon";
 import { usePopover } from "./usePopover";
+import { PartControl } from "./PartControl";
 
 // Toolbar of the demo workbench: the single home of location, scenario,
 // alarms and the walkthrough position (design-system.md §4.1). Navigation
@@ -76,6 +77,7 @@ export function Toolbar(props: ToolbarProps) {
         })}
       </nav>
       <span className="flex-1" />
+      <PartControl />
       <ScenarioControl {...props} />
       <AlarmsControl {...props} />
       <div role="group" aria-label="Recorrido" className="flex items-center gap-0.5 rounded-md border border-border bg-surface px-1">

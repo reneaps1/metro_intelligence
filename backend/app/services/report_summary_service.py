@@ -40,8 +40,13 @@ PLACEHOLDER = ReportSummary(
 )
 
 
-def load_report_summary() -> ReportSummary:
-    path_value = get_settings().demo_report_summary_path
+def load_report_summary(path_value: str | None = None) -> ReportSummary:
+    """The private block at ``path_value`` (default: `DEMO_REPORT_SUMMARY_PATH`), else the placeholder.
+
+    IQ-F21: the registry passes a part's own ``report-summary.json``.
+    """
+    if path_value is None:
+        path_value = get_settings().demo_report_summary_path
     if not path_value:
         return PLACEHOLDER
     path = Path(path_value)

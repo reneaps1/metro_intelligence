@@ -16,7 +16,7 @@ import { WB } from "../../lib/demo/chartTheme";
 import { fetchNokWaves, type WaveParams } from "../../lib/predictive/api";
 import type { EpisodeStatus, WaveStudy } from "../../lib/predictive/types";
 import { formatPct } from "../../lib/quality-analytics/filters";
-import { SYNTHETIC_SOURCE, plantLabel, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
+import { SYNTHETIC_SOURCE, plantLabel, sourceOrigin, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
 import { Callout, LoadState, Metric, PanelHeader, axisTick, fieldControl, n, tooltipStyle } from "./shared";
 
 // IQ-F7: NOK waves. A persistence rule (past NOK only) evaluated per
@@ -131,10 +131,10 @@ export function NokWaves({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSou
     <section className="space-y-4" aria-label="Oleadas NOK">
       <PanelHeader
         title="Oleadas NOK: detección por persistencia"
-        origins={real ? ["REAL", "EXPERIMENTAL"] : ["SIMULATED", "EXPERIMENTAL"]}
+        origins={[sourceOrigin(source), "EXPERIMENTAL"]}
       >
         {real
-          ? "Serie real pieza por pieza, toda la línea. Sin verdad conocida: los episodios se etiquetan a posteriori. La regla solo mira NOK ya medidos."
+          ? `${sourceOrigin(source) === "REAL" ? "Serie real" : "Serie simulada (gemelo ficticio)"} pieza por pieza, toda la línea. Sin verdad conocida: los episodios se etiquetan a posteriori. La regla solo mira NOK ya medidos.`
           : "Oleadas inyectadas en el dataset dimensional sintético (verdad conocida). La regla solo mira NOK ya medidos."}
       </PanelHeader>
       <div className="flex flex-wrap items-center gap-4">

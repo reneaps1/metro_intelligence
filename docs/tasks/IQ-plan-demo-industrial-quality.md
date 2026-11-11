@@ -43,6 +43,16 @@ Se trabaja **una fase por sesión de chat**. Este archivo es la fuente de verdad
 | F18 | Matriz nido × cavidad de molde + filtro por hora | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct |
 | F19 | Dispersión X/Y de posición de pines contra tolerancia | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct; especificación privada (D13) |
 | F20 | Dataset sintético con cavidades de molde (patrón real, valores ficticios) | ✅ Hecho | `claude/gifted-cannon-5rrp1j` | Pedido por el usuario el 29/oct: que la matriz nido × cavidad se vea también sin datos reales |
+| F21 | Barandales de confidencialidad + registro privado + resolvedor único + manifest extendido (backend) | ✅ Hecho | `claude/affectionate-meitner-30c3ud` → PR a `feat/industrial-quality-demo` | Sin datos reales; comportamiento público idéntico. Tipos y MSW del frontend movidos a F22 |
+| F22 | Selector global «Pieza» y propagación (frontend) | ✅ Hecho (versión rápida) | ídem | Paralelizable con F23 tras F21 |
+| F23 | Perfil declarativo + lector CSV ancho + unión por serie + ventana e histórico (Línea B) | ⬜ Pendiente | ídem | Incluye verificación local con datos reales, fuera de CI |
+| F24 | Lector de flujo de tokens + unión por posición/lado/vuelta (Línea A) | ⬜ Pendiente | ídem | Mayor incertidumbre técnica; no bloquea F23 |
+| F25 | Vocabulario, capacidades y bloques privados por dataset (pasos 2, 3, 6 y panel de línea) | ⬜ Pendiente | ídem | Barrido de etiquetas |
+| F26 | Gemelos ficticios en el demo público (mismo pipeline) | ✅ Hecho (generados en memoria) | ídem | El merge cambia el sitio público: OK del dueño |
+| F27 | Fiabilidad del día de la demo: preflight, precarga, e2e y guía de alta | ⬜ Pendiente | ídem | Cierra DoD |
+| F28 | (Opcional) Especificación privada con origen y vigencia | ⬜ Pendiente | ídem | Solo si hay límites de plano o se aceptan rotulados |
+| F29 | (Opcional) Pareto por característica sobre veredicto reportado (`pieces-v3`) | ⬜ Pendiente | ídem | Cambio de motor con vectores a mano |
+| F30 | (Condicionada, no programada) Datos reales en un host privado autorizado | ⛔ Bloqueada | — | Única fase que reabre D8; exige autorización escrita del cliente |
 
 Leyenda: ⬜ pendiente · 🟨 en curso · ✅ hecho · ⛔ bloqueado
 
@@ -136,6 +146,8 @@ Otras decisiones técnicas ya tomadas (cambiables con justificación):
 - **Drag & drop**: HTML5 nativo + botón "Agregar" como fallback accesible. Sin librería nueva.
 - **Ruta**: `/demo/industrial-quality/*` (genérica, sin nombre de cliente).
 - **Procedencia**: tipo único `DataOrigin = "REAL" | "HISTORICAL" | "SIMULATED" | "PRECOMPUTED" | "EXPERIMENTAL"` y componente `OriginBadge` usado en cada panel.
+
+**D14–D28 — Selector de pieza sobre datos reales y demo adaptable (F21+): propuestas el 11/nov/2026, ver §8.5.** El usuario confirmó el 11/nov/2026: «pieza» = cada tipo que registra la máquina (D14); empezar por la Línea B (con serie); entrega por rama + PR por fase (D25). Pidió además mostrar datos reales en el sitio alojado: **no se aplica** — choca con CLAUDE.md §7/§16 y con D8 y el sitio se construye desde un repositorio público; queda en F30 (bloqueada) hasta tener autorización **escrita** del cliente. Mientras tanto: datos reales solo en local y gemelos ficticios en el sitio público (D15, D23).
 
 ---
 
@@ -573,6 +585,9 @@ Pruebas: ajustes en `test_line_panel.py`, `test_quality_analytics_api.py`, `test
 | 2026-10-29 | F18 | Hecho. En el análisis del export real (fuera del repo), en un periodo dado cada cavidad de molde pasó solo por 3 de los 12 nidos, y ese trío cambió después de los paros. El salto de rechazo tras el paro del primer día coincide con el cambio de cavidades que recibe el nido crítico. La matriz nido × cavidad y el filtro por hora permiten mostrarlo en la demo. Pruebas: backend 53 passed (convertidor, dataset REAL, analítica y API); frontend 36 passed en quality-analytics; `tsc -b` limpio. |
 | 2026-10-29 | F19 | Hecho. Gráfica X/Y de posición de pines pedida por el cliente tras la presentación, para ver hacia dónde se desvía la posición dentro del rango de tolerancia. Nominales y tolerancias del plano y de fin de línea solo en la especificación privada (D13). Durante el trabajo el usuario pidió respetar el diseño industrial: marcas neutras, un solo acento NOK y límites rotulados (D12). Pruebas: backend 1271 passed / 4 skipped (suite completa); frontend 213 passed (29 archivos), `tsc -b` y build limpios; confidencialidad y deploy 21 passed / 16 skipped. Pendiente local: crear `pin-spec.json` en `demo-private/` con los nominales del plano y re-convertir con la regla de F17. |
 | 2026-10-29 | F20 | Hecho. El usuario pidió que la agrupación nido × cavidad se basara en los datos reales; como esos datos no pueden ir a un servidor ni al repo (D8), se acordó copiar el patrón real con valores ficticios. Pie del login cambiado a «Powered by OnKaizen» y prueba de CI que impide el nombre de marca anterior (PR #45, mergeado). |
+| 2026-11-11 | F21+ (plan) | El usuario entregó exports reales de dos líneas (fuera del repo, analizados solo en el contenedor de la sesión) y pidió un desplegable para elegir la pieza, con datos reales y un demo adaptable. Plan F21–F30 y decisiones D14–D28 en §8 (diseño por un flujo de 3 propuestas + síntesis; las rutas y afirmaciones de código se verificaron a mano). Cifras y correspondencias reales solo en notas privadas, no versionadas. Datos reales en el sitio alojado: rechazado hasta autorización escrita del cliente (F30). F21 en curso. |
+| 2026-11-11 | F21 | Hecho (backend). `core/private_data.py`: triple barrera en ejecución (no producción, todos los orígenes CORS loopback, sin variable de plataforma alojada), aplicada también al dataset heredado. `services/dataset_registry.py`: una carpeta privada por pieza (`real-<slug>`), catálogo solo con manifests, carga perezosa con LRU, carpetas inválidas omitidas y contadas, resolvedor único usado por `quality-analytics`, `predictive` y `line-panel`. `services/dataset_cache.py`: las cachés derivadas (overview, panel, estudios, Vista A) olvidan un dataset al expulsarlo o recargarlo (antes, claves por `id()` podían servir resultados de otro objeto). Manifest con bloques opcionales (`display`, `groups`, `time_basis`, `window`, `history`, `views`, `assumptions`), compatibles hacia atrás; `read_pieces` recibe la procedencia del llamador y deja `mold_cavities=None` sin agrupación secundaria. Endpoints nuevos `GET /quality-analytics/catalog` y `/datasets/{id}`; `report-summary` y `model-lab` aceptan `dataset` y sirven solo el bloque propio de la pieza (404 si no tiene); Vista A opt-in por pieza (D27). `.gitignore` + `tests/seed_validation/test_no_data_files.py` (sin `.zip`, `.csv.gz`, `.bmp`, `.parquet` versionados); prueba de despliegue explícita para la variable nueva. Pruebas: backend 1295 passed (24 nuevas en `test_dataset_registry.py`; las 4 de migraciones se corren aparte en este entorno), `tests/deploy` + `tests/seed_validation` (sin BD) 24 passed / 1 skipped; ruff limpio en archivos tocados. **Movido a F22:** tipos `fetchCatalog`/`fetchDataset` y manejadores MSW del frontend (F21 quedó solo backend). Sin datos reales en esta fase. Siguiente: **F22** (selector) y **F23** (lector de la Línea B). |
+| 2026-11-11 | F26 + F22 | Adelantadas a petición del usuario: presenta solo desde el sitio alojado y los datos reales no pueden ir ahí sin autorización escrita del cliente (F30). **F26:** cinco gemelos ficticios `demo-<slug>` (`engines/quality_analytics/twins.py`; dos líneas: pruebas de fin de línea con serie y mesa indexada sin serie) generados en memoria de forma determinista en vez de archivos versionados (enmienda a 8.3-j: nada que commitear, ~15 000 piezas cada uno); siempre SIMULADO y rotulados como gemelos; precarga al arrancar. **F22 (versión rápida):** control «Pieza» en la barra, agrupado por línea; fija el dataset de los pasos 2, 3, 6 y del panel de línea (recordado en el navegador); el paso 6 pierde su conmutador y corre los estudios por pieza en cualquier dataset con veredicto de máquina; procedencia de los paneles derivada del dataset (un gemelo nunca dice REAL); vocabulario de agrupación en KPIs, títulos, filtros, agrupación y alarmas. **Pendiente:** el resto del barrido de etiquetas (F25), el endpoint `/catalog` aún no lo usa el frontend (usa `/datasets`), y las pruebas de componente de `PartControl`. Pruebas: backend 1301 passed; frontend 216 passed, `tsc -b` y `npm run build` limpios; recorrido en navegador (Chromium) sin errores de consola sobre sintético, MI-DEMO-B1 y MI-DEMO-A1. |
 
 ## 7. Pendientes / ideas fuera de fase
 
@@ -590,3 +605,289 @@ Pruebas: ajustes en `test_line_panel.py`, `test_quality_analytics_api.py`, `test
 - Vitest con todos los workers en paralelo da timeouts intermitentes en tests de UI (distintos en cada corrida, también en tests previos a F10) cuando la máquina está cargada; con `npx vitest run --maxWorkers=4` pasa todo. Valorar fijar `maxWorkers` en `vite.config.ts` o subir el timeout de `findBy*`.
 - Verificación en navegador reutilizable: no hay skill de proyecto para levantar la app. Receta usada (F3/F4): BD desechable migrada + usuario metrólogo ficticio, `uvicorn` con `APP_EDITION=industrial POSTGRES_DB=<desechable>`, `npx vite`, `playwright-core` con `channel: "msedge"`; la sesión vive en memoria, así que se navega dentro de la SPA sin recargar. Considerar `/run-skill-generator` para guardarla como skill del proyecto.
 - `.pyc` antiguos muestran rutas `C:\Users\renea\Proyectos\...` en tracebacks; es cosmético (borrar `__pycache__` si molesta).
+
+---
+
+## 8. Actualización F21+: selector de pieza sobre datos reales y demo adaptable
+
+> Bloque para anexar a este plan (11/nov/2026). Las filas del tablero van a «Tablero de estado», las decisiones a §2 y las fases a §3. Solo planificación: nada de esto está implementado. Alias usados en todo texto versionado (código, pruebas, docs, commits, este plan): **Línea A** = logger por estaciones en flujo de tokens, sin número de serie (mesa indexada, dos lados por ciclo); **Línea B** = pruebas de fin de línea con número de serie (un CSV ancho por estación y día). Los nombres reales de líneas, estaciones, carpetas, códigos de tipo, cadenas de marcado y cualquier cifra de producción viven solo en archivos privados (D1, D8, D13).
+
+### 8.1 Objetivo y alcance
+
+**Objetivo.** En la edición industrial, el presentador elige la **pieza** en un único desplegable de la barra del banco de trabajo y los pasos 2, 3, 5 (Vista A), 6 y el panel de línea trabajan sobre esa pieza. Las piezas reales salen de un **registro privado** en disco, alimentado por un convertidor offline guiado por un **perfil declarativo**: dar de alta otra pieza, máquina o cliente = escribir un perfil privado + ejecutar un comando + dejar una carpeta; sin tocar código.
+
+**Dentro de alcance.** Registro de N datasets reales (solo local), barandales de confidencialidad reforzados, resolvedor único de dataset, dos lectores de origen (CSV ancho por estación unido por serie; flujo de tokens unido por posición+lado+vuelta), selector global, etiquetas y capacidades por dataset, gemelos ficticios para el demo público, verificación previa a la demo, guía de alta.
+
+**Fuera de alcance.** Dimensión «pieza» dentro del motor (no hay comparación entre piezas en una misma pantalla); tablas o migraciones (D2, D3, D6 intactas); permisos nuevos (D4); datos reales en cualquier servidor (D8 no se reabre; solo la fase condicionada F30 lo haría); paso 4 (laboratorio IIoT), Vista B, what-if y estudio de falla de máquina siguen SIMULADOS y genéricos; imágenes de cámara, registros de prueba eléctrica por excepción, estudios de repetibilidad y carpetas de archivo de los orígenes no se convierten; numpy/Parquet; perfiles editables en la UI.
+
+### 8.2 Qué existe hoy y qué falta
+
+| Hoy | Evidencia | Falta |
+|---|---|---|
+| Un solo dataset REAL: una variable, un id constante, una caché de un hueco; nombre fijo a partir de `DEMO_CLIENT_LABEL` | `backend/app/services/real_dataset_service.py:32-83`, `backend/app/core/config.py:52-58` | Registro de N entradas con carga perezosa |
+| Resolución de dataset repetida en 3 routers + 1 comprobación en línea, por igualdad de id | `backend/app/api/v1/quality_analytics.py:75-86, 302-304`, `line_panel.py:65-72`, `predictive.py:94-112` | Un resolvedor |
+| `GET /quality-analytics/datasets` necesita cada dataset cargado para describirlo | `quality_analytics.py:151-198` | Catálogo ligero leído solo de manifests |
+| Manifest sin nombre de pieza/línea, sin etiquetas de agrupación, sin ventana; `read_pieces` fija REAL / `reported` / sin tolerancias y `mold_cavities` nunca es `None` | `backend/app/connectors/pieces_file.py:51-62, 199-228` | Bloques opcionales en el manifest |
+| Convertidor solo para export largo `id,address,timestamp,value` (coma, UTF-8) | `backend/app/connectors/long_signal_batch.py:301-366, 432-452, 615-765` | Lectores para los dos orígenes nuevos; escritor compartido |
+| Guardas D8: `APP_ENV == "production"`, prueba que busca el literal `DEMO_REAL_DATASET` en compose/script/workflow, `_guard_output` | `real_dataset_service.py:56-58`, `tests/deploy/test_vps_compose.py:137-140`, `long_signal_batch.py:602-612` | Los hosts de demo corren con `APP_ENV` distinto de producción (`backend/app/main.py:63`): la guarda en ejecución es inerte allí. `.gitignore:33-40` no ignora `*.zip`, `*.csv.gz`, `*.bmp` |
+| Cuatro mecanismos sueltos para elegir datos: select en pasos 2-3, `?datos=sintetico` en paso 6, id fijo en Vista A y en el panel de línea | `frontend/src/features/demo/steps/QualitySteps.tsx:51-161`, `AiStep.tsx:39-67, 95-114`, `frontend/src/lib/quality-analytics/processJoin.ts:7`, `frontend/src/features/line-panel/LinePanelPage.tsx:35-36, 66-71` | Un selector global; el panel de línea está fuera de `DemoSessionProvider` (`frontend/src/App.tsx:53-71`) |
+| Informe privado y laboratorio de modelos: un JSON por despliegue, sin `dataset` | `quality_analytics.py:279-281`, `predictive.py:125-127` | Por dataset, ocultos si faltan |
+| Cachés con clave `id(ds)`; unión proceso-calidad con un solo calendario | `real_dataset_service.py:110-123`, `backend/app/services/real_predictive_service.py:41-55`, `process_join_service.py:98-120` | Claves por id de dataset + generación de carga |
+| Vocabulario fijo «Nido» / «Cavidad de molde»; tope de 400 días en el filtro de fechas | ~90 apariciones en 22 archivos; `frontend/src/lib/quality-analytics/filters.ts:108` | Etiquetas por dataset |
+
+Lo que **no** cambia: `DimensionalDataset` y los motores ya son agnósticos del origen (estaciones en orden de proceso, dos agrupaciones, banderas, base NOK); el contrato `manifest.json` + `pieces.csv.gz` es la frontera estable.
+
+### 8.3 Diseño
+
+**a) Qué es una «pieza».** Una entrada del desplegable = **un dataset convertido por (línea, valor de pieza)**. La llave de pieza es el tipo que la propia máquina registra, declarado en el perfil privado: en Línea B, el número de programa del registro de verificación de tipo unido por serie; en Línea A, el token de tipo de una estación de visión. Las estaciones que no registran el tipo lo heredan (por la unión; si la pieza fue rechazada antes, por el registro de tipo más cercano en el tiempo dentro de la misma agrupación primaria). El perfil decide la granularidad (`part.datasets[].values` agrupa varios valores en una entrada), así que «variantes» frente a «familias» es configuración. El dataset real anterior sigue como entrada heredada `real-dimensional`.
+
+**b) Perfil privado `station-logs-v1`** (JSON, nunca versionado salvo ejemplos ficticios). Ejemplo ficticio:
+
+```json
+{
+  "format": "station-logs-v1",
+  "line": {"slug": "linea-demo-b", "label": "Línea demo B"},
+  "time": {"format": "%Y%m%d-%H:%M:%S", "basis": "plant_wall_clock", "utc_offset_minutes": 0},
+  "source": {"exclude": ["**/archivo/**", "**/*estudio*"], "skip_identical_members": true},
+  "groupings": {
+    "primary": {"label": "Cavidad", "prefix": "C", "valid": [1, 12], "ignore": [0]},
+    "secondary": null
+  },
+  "join": {"kind": "key", "ignore_keys": ["0"], "keep": "last"},
+  "stations": [
+    {"key": "altura_a", "name": "Altura lado A", "reader": "wide_csv",
+     "files": "altura_a/registro_*.csv", "encoding": "cp1252", "delimiter": ";",
+     "decimal": "auto", "expect_columns": 9,
+     "columns": {"ts": 0, "key": 1, "primary": 2, "verdict": 3},
+     "verdict": {"ok": ["true"], "nok": ["false"]}},
+    {"key": "tipo", "name": "Verificación de tipo", "reader": "wide_csv",
+     "files": "tipo/registro_*.csv", "encoding": "cp1252", "delimiter": ";",
+     "expect_columns": 5, "columns": {"ts": 0, "key": 1, "primary": 2, "part": 3, "verdict": 4}}
+  ],
+  "variables": [
+    {"key": "altura_a_1", "name": "Altura A · pin 1", "unit": "mm", "station": "altura_a",
+     "at": 5, "missing_if": {"eq": 0}},
+    {"key": "giro_b_1", "name": "Giro B · pin 1", "unit": "mm", "station": "giro_b",
+     "at": 6, "missing_if": {"abs_ge": 5}}
+  ],
+  "part": {
+    "from": {"station": "tipo"},
+    "inherit": {"nearest_in_time": true, "max_gap_minutes": 30, "restrict_by_primary": true},
+    "datasets": [
+      {"slug": "mi-demo-b1", "label": "MI-DEMO-B1", "values": ["1"], "primary_valid": [7, 12]},
+      {"slug": "mi-demo-b2", "label": "MI-DEMO-B2", "values": ["2", "3"], "primary_valid": [1, 6],
+       "exclude_variables": ["altura_a_9"]}
+    ]
+  },
+  "window": {"max_pieces": 250000, "align": "production_day"},
+  "history": {"daily": true},
+  "views": {"process_join": false},
+  "assumptions": ["Hora según el reloj de la máquina; la fuente no trae zona horaria."]
+}
+```
+
+Para un logger en flujo de tokens cambian solo el lector y la unión:
+
+```json
+{
+  "groupings": {
+    "primary": {"label": "Nido", "prefix": "N", "valid": [1, 10]},
+    "secondary": {"label": "Lado", "prefix": "L", "values": {"1": "Izq", "2": "Der"}}
+  },
+  "join": {"kind": "carrier_window", "anchor": "longitud", "keys": ["primary", "secondary"],
+           "lead_s": 3, "min_match_rate": 0.98},
+  "stations": [
+    {"key": "vision_b", "name": "Visión lado B", "reader": "token_stream",
+     "files": "vision_b_*.csv", "encoding": "cp1252", "delimiter": ";", "grain": "side",
+     "fields": {"ts": {"index": 0}, "primary": {"after": ["Pos:", "Pos Nr.:"]},
+                "secondary": {"labels": {"Izq:": 1, "Der:": 2}}, "part": {"after": "Tipo:"},
+                "verdict": {"after": "Pieza:", "ok": ["OK"], "nok": ["NOK"]}},
+     "skip_texts": ["Rechazada en estación previa"], "invalid_texts": ["Imagen no plausible"]}
+  ],
+  "variables": [
+    {"key": "giro_1", "name": "Giro 1", "station": "vision_b", "after": "Giro1:", "missing_if": {"eq": 999}},
+    {"key": "long_1", "name": "Longitud pin 1", "station": "longitud", "side_offset": 1}
+  ]
+}
+```
+
+Reglas del perfil: columnas por **índice** + `expect_columns` (los encabezados del cliente, sus erratas y diéresis son irrelevantes; un cambio de layout da error explícito, no lecturas falsas); estaciones en **orden de proceso** (D10); toda regla de limpieza se **cuenta** en el informe del manifest (D13). Exactamente dos lectores y dos uniones, porque las dos líneas prueban exactamente esos; un tercer formato necesitará un lector nuevo cuando exista (CLAUDE.md §4).
+
+**c) Contrato de ejecución.** Se mantiene `pieces-v2` (las columnas del CSV no cambian) y el manifest gana bloques **opcionales**, compatibles hacia atrás:
+
+```json
+{
+  "display": {"label": "MI-DEMO-B1", "line": "Línea demo B", "description": "…", "order": 10},
+  "groups": {"primary": {"label": "Cavidad", "prefix": "C"},
+             "secondary": {"label": "Lado", "prefix": "L", "values": {"1": "Izq", "2": "Der"}}},
+  "time_basis": "plant_wall_clock",
+  "window": {"from_ms": 0, "to_ms": 0, "source_pieces": 0},
+  "history": {"granularity": "day", "columns": ["day", "pieces", "nok"], "rows": []},
+  "views": {"process_join": false},
+  "assumptions": ["…"]
+}
+```
+
+El backend **nunca lee el perfil**; solo manifests. `pieces-v3` queda reservado para cuando cambien columnas (F29).
+
+**d) Registro de datasets** (`backend/app/services/dataset_registry.py`). Raíz privada `DEMO_REAL_DATASETS_DIR`; cada subcarpeta `^[a-z0-9][a-z0-9-]{0,39}$` con `manifest.json` es una entrada `real-<slug>` (prefijo que el frontend ya reconoce; `dimensional` reservado a la entrada heredada de `DEMO_REAL_DATASET_PATH`). Junto al manifest pueden vivir, opcionales, `report-summary.json`, `model-lab.json`, `spec.json`, `panel-rules.json`. Catálogo **ligero** construido solo con manifests (sin cargar piezas); carga **perezosa** con LRU (`DEMO_REAL_DATASETS_MAX_LOADED`, por defecto 2); clave por entrada (ruta, mtime, tamaño, stat de extras); entradas inválidas se omiten y se cuentan, nunca se listan; jamás se registran rutas ni contenidos. La procedencia la decide **la raíz**, no el manifest: raíz privada ⇒ REAL; piezas ficticias empaquetadas ⇒ SIMULATED.
+
+**e) Lectores y ensamblador** (`backend/app/connectors/station_logs/`). `wide_csv` (cabecera, delimitador, codificación, marca decimal por archivo) y `token_stream` (sin cabecera; grano por ciclo o por lado; campos por `after: <etiqueta>` o `side_offset: n`; textos de salto ⇒ estación no probada; textos inválidos ⇒ NOK sin valores). Unión `key` (última fila por llave y estación, llaves ignoradas, partición por hash con memoria acotada) y `carrier_window` (sin serial: el registro de una estación posterior pertenece al registro ancla de la misma posición+lado cuya ventana lo contiene; cero o varios candidatos ⇒ estación no probada + bandera 16 «unión incierta», contados; por debajo de `min_match_rate` la conversión termina con error). Escritor, manifest, `_guard_output` y checksum se extraen a `backend/app/connectors/pieces_writer.py` y los usan ambos convertidores. Entrada = carpeta **o .zip** leído con `zipfile` sin extraer; miembros idénticos por (CRC, tamaño, nombre base) se leen una vez. CLI: `python -m app.connectors.station_logs inventory | convert | check` (salida solo con conteos; nunca valores, llaves ni nombres de archivo de origen).
+
+**f) Selector y propagación.** Un único control «Pieza» en `frontend/src/features/demo/workbench/Toolbar.tsx:78-80` (antes de `ScenarioControl`, mismo patrón popover + radiogroup + Aplicar) con su entrada en la barra de menús (`DemoShell.tsx:143-181`); entradas agrupadas por línea con prefijo Real / Demo / Importado. El estado vive en un `DatasetCatalogProvider` montado en `frontend/src/layouts/WorkbenchLayout.tsx` para que el recorrido y el panel de línea lo compartan; el `Outlet` se re-monta con clave `${resetCount}:${datasetId}` (`DemoShell.tsx:287`); «Restaurar escenario» conserva la pieza. El select de los pasos 2-3 y el conmutador Reales/Sintéticos del paso 6 pasan a resumen de solo lectura («cada hecho vive en un solo lugar»). Regla de selección inicial: primera entrada REAL si existe; si no, el dataset sintético.
+
+| Sigue la pieza | Genérico (no cambia) |
+|---|---|
+| Paso 2 Diagnóstico, paso 3 Exploración dimensional, paso 5 Vista A (solo si el dataset declara `views.process_join`), paso 6 oleadas NOK / CUSUM / alarma por grupo / riesgo por pieza (si hay agrupación secundaria), panel de línea, inspector «Sesión», árbol «Activos» | Paso 1 (añade una tira de solo lectura con las estaciones de la pieza), paso 4 Laboratorio IIoT (siempre SIMULADO), paso 5 Vista B, what-if, estudio de falla de máquina, paso 7 |
+
+**g) Procedencia y etiquetas.** Las insignias salen de `source_type`, no del prefijo del id. `DatasetOut` gana `display`, `groups`, `window`, `assumptions` y un bloque `capabilities` **derivado en ejecución** (xy, índices de capacidad, agrupación secundaria, riesgo por pieza, Vista A, informe privado, estudio de modelos). Lo que una pieza no soporta se oculta o se sustituye por una tarjeta con el motivo, nunca por un panel vacío. Un helper `groupLabel(dataset, 'primary' | 'secondary')` reemplaza «Nido» / «Cavidad de molde» fijos. El informe y el estudio de modelos del primer cliente no se muestran junto a otra pieza.
+
+**h) Límites de especificación.** La base NOK sigue siendo el veredicto de la máquina (D10) con atribución a la primera estación que falla. Los límites entran solo por un `spec.json` privado por dataset (`dataset-spec-v1`, generaliza `pin-spec-v1`) con **origen** (`drawing` | `source` | `empirical`) y **vigencia** (`valid_from`), porque en ambas líneas los límites cambiaron durante el período. `empirical` solo dibuja líneas de referencia rotuladas «inferido de los datos, no es especificación»; nunca Cp/Cpk ni veredictos recalculados.
+
+**i) Volumen y memoria.** El modelo actual (listas de Python) cuesta del orden de 0,4 KB por pieza con ~15 variables y 0,9 KB con ~50; cargar ≈17 µs por pieza y un resumen sin caché ≈10 µs por pieza. Por eso: un dataset por pieza; **ventana** por pieza resuelta en el convertidor (por defecto las 250 000 piezas más recientes en días de producción completos, o un rango de fechas; una campaña concreta puede registrarse como otra entrada); el convertidor imprime la memoria estimada y se niega a superar el presupuesto sin `--allow-large`; el manifest lleva el **histórico diario agregado de toda la fuente** para mostrar la tendencia completa junto a la ventana cargada; LRU de 2 datasets cargados; solo se precarga la entrada inicial. La conversión es offline y no afecta al proceso web.
+
+**j) Qué muestra el demo público.** Nunca datos reales. El mismo desplegable ofrece el dataset sintético actual más **piezas ficticias «gemelas»** (precedente F20): misma forma que las líneas reales, valores inventados, etiquetas `MI-DEMO-*`, insignia SIMULADO y aviso «gemelo sintético: estructura de una línea real, valores ficticios». Se generan con un script determinista **a través de los mismos lectores y perfiles** (perfiles de ejemplo versionados) y se empaquetan en la imagen (`backend/app/demo_parts/`), de modo que el arranque en el plan gratuito no paga conversión.
+
+### 8.4 Fases
+
+| Fase | Nombre | Estado | Rama / PR | Notas |
+|---|---|---|---|---|
+| F21 | Barandales de confidencialidad + registro privado + resolvedor único + manifest extendido (backend) | ✅ Hecho | `claude/affectionate-meitner-30c3ud` → PR a `feat/industrial-quality-demo` | Sin datos reales; comportamiento público idéntico. Tipos y MSW del frontend movidos a F22 |
+| F22 | Selector global «Pieza» y propagación (frontend) | ✅ Hecho (versión rápida) | ídem | Paralelizable con F23 tras F21 |
+| F23 | Perfil declarativo + lector CSV ancho + unión por serie + ventana e histórico (Línea B) | ⬜ Pendiente | ídem | Incluye verificación local con datos reales, fuera de CI |
+| F24 | Lector de flujo de tokens + unión por posición/lado/vuelta (Línea A) | ⬜ Pendiente | ídem | Mayor incertidumbre técnica; no bloquea F23 |
+| F25 | Vocabulario, capacidades y bloques privados por dataset (pasos 2, 3, 6 y panel de línea) | ⬜ Pendiente | ídem | Barrido de etiquetas |
+| F26 | Gemelos ficticios en el demo público (mismo pipeline) | ✅ Hecho (generados en memoria) | ídem | El merge cambia el sitio público: OK del dueño |
+| F27 | Fiabilidad del día de la demo: preflight, precarga, e2e y guía de alta | ⬜ Pendiente | ídem | Cierra DoD |
+| F28 | (Opcional) Especificación privada con origen y vigencia | ⬜ Pendiente | ídem | Solo si hay límites de plano o se aceptan rotulados |
+| F29 | (Opcional) Pareto por característica sobre veredicto reportado (`pieces-v3`) | ⬜ Pendiente | ídem | Cambio de motor con vectores a mano |
+| F30 | (Condicionada, no programada) Datos reales en un host privado autorizado | ⛔ Bloqueada | — | Única fase que reabre D8; exige autorización escrita del cliente |
+
+#### F21 — Barandales, registro privado, resolvedor único y manifest extendido (backend)
+
+- **Objetivo.** Retirar antes de cualquier lector los dos riesgos irreversibles (datos reales ofrecidos en un host o colados en git) y permitir N datasets reales sin entradas muertas. Probable hoy con datos ficticios convertidos con el convertidor existente.
+- **Archivos.** Nuevos: `backend/app/services/dataset_registry.py`, `backend/tests/test_dataset_registry.py`, `tests/seed_validation/test_no_data_files.py`. Tocados: `backend/app/core/config.py`, `backend/app/services/real_dataset_service.py`, `real_predictive_service.py`, `process_join_service.py`, `report_summary_service.py`, `model_lab_service.py`, `backend/app/connectors/pieces_file.py`, `backend/app/api/v1/quality_analytics.py`, `predictive.py`, `line_panel.py`, `backend/app/schemas/quality_analytics.py`, `backend/app/main.py`, `.gitignore`, `.env.example`, `backend/.env.example`, `docker-compose.override.yml.example`, `tests/deploy/test_vps_compose.py`, docs (`docs/deployment-editions.md` §6, `docs/demo-industrial-quality.md`, `docs/security/rbac.md`, `backend/app/connectors/README.md`).
+- **Backend.** (1) Ajustes `demo_real_datasets_dir` y `demo_real_datasets_max_loaded` (1..8, por defecto 2); el nombre contiene el literal que la prueba de despliegue ya prohíbe. (2) `private_data_allowed()` = `APP_ENV != production` **y** todos los orígenes de `CORS_ORIGINS` son loopback **y** no hay marcador de plataforma alojada en el entorno (lista constante; confirmar en la fase el nombre exacto de la variable del proveedor); se aplica también a la ruta heredada. (3) Registro según 8.3-d; `real_dataset_service` queda como adaptador de la entrada heredada conservando `REAL_DATASET_ID`, `load_real_dataset` y `cached_overview` para las pruebas existentes. (4) `resolve_dataset(dataset_id, user, *, allow_imports)` = sintético → registro → importación del usuario → 404; sustituye las cuatro resoluciones; los estudios «solo real» pasan a comprobar capacidad/`source_type`, no igualdad de id. (5) Cachés por `(ds.id, generación de carga)` con purga al expulsar del LRU; `process_join_service._current` pasa a diccionario pequeño por dataset. (6) `Manifest` acepta los bloques opcionales de 8.3-c; `read_pieces` recibe `source_type` del llamador y deja `mold_cavities=None` cuando ninguna fila trae agrupación secundaria. (7) `GET /quality-analytics/catalog` (ligero: id, etiqueta, línea, procedencia, piezas, período, ventana, cargado, `omitted`) y `GET /quality-analytics/datasets/{id}` (completo; dispara la carga); mismo permiso `measurement.measurement_result:read` y compuerta de edición; `/datasets` conserva su forma actual. (8) `/quality-analytics/report-summary` y `/predictive/model-lab` aceptan `dataset`: entrada del registro ⇒ su JSON vecino o 404; rutas heredadas por variable solo para `real-dimensional`; sintético ⇒ el marcador ilustrativo actual. (9) Precarga solo de la entrada inicial.
+- **Frontend.** Solo tipos, `fetchCatalog` / `fetchDataset` y manejadores MSW por defecto para los dos endpoints nuevos (`onUnhandledRequest: 'error'`).
+- **Datos.** Ninguno real. `.gitignore`: `*.zip`, `*.csv.gz`, `*.bmp`. Variables documentadas como «SOLO USO LOCAL» con marcadores. Limpiar la entrada obsoleta «Vista A pendiente» de §7.
+- **Pruebas.** pytest: dos datasets ficticios (fixtures de `backend/tests/test_long_signal_batch.py:48-101`) ⇒ el catálogo lista ambos sin cargar piezas; carga perezosa; expulsión LRU y nueva petición devuelven el dataset correcto (regresión de claves `id()`); recarga por mtime; producción ⇒ ninguno; origen CORS no loopback ⇒ ninguno; marcador de host ⇒ ninguno; checksum malo / manifest inválido / nombre de carpeta inválido ⇒ omitido y contado; nunca se sigue una ruta de la petición; la ruta heredada sigue dando `real-dimensional`; informe y estudio por dataset (presente, ausente, heredado, marcador). Actualizar `test_real_dataset_service.py`, `test_line_panel.py`, `test_real_predictive.py`, `test_process_join.py` con una fixture de registro. `tests/deploy`: prohibir explícitamente la variable nueva. `tests/seed_validation/test_no_data_files.py`: falla si `git ls-files` contiene `.zip`, `.bmp`, `.csv.gz`. Vitest completo en verde con `--maxWorkers=4`.
+- **Aceptación.** Sin la variable, en producción, con origen no loopback o con marcador de host no se lista ni resuelve ningún dataset privado (cuatro pruebas independientes). Dos datasets ficticios responden por id en todos los endpoints con `dataset`; cambiar de id nunca devuelve la caché del otro. Ninguna ruta, nombre de archivo ni contenido de manifest en logs o errores. Edición metrology sin cambios; sin tabla ni migración. Tablero, bitácora y D14, D15, D20, D22, D25, D26 registradas.
+- **Riesgos.** Refactor de tres módulos de prueba que parchean el cargador por router (deben seguir siendo significativos, no solo verdes). La barrera loopback bloquea una demo servida a otro equipo de la red: documentado y decisión del usuario. Un operador siempre puede configurar un servidor a mano: lo impide la norma D8, no el código.
+
+#### F22 — Selector global «Pieza» y propagación (frontend)
+
+- **Objetivo.** Entregar el desplegable pedido, en un solo lugar, sin opciones muertas ni paneles muertos.
+- **Archivos.** Nuevos: `frontend/src/lib/demo/DatasetCatalogProvider.tsx`, `frontend/src/features/demo/workbench/PartControl.tsx` (+ prueba), `frontend/src/lib/quality-analytics/labels.ts`. Tocados: `layouts/WorkbenchLayout.tsx`, `features/demo/workbench/Toolbar.tsx`, `features/demo/DemoShell.tsx`, `lib/demo/DemoSessionProvider.tsx`, `features/demo/steps/QualitySteps.tsx`, `AiStep.tsx`, `lib/demo/aiViews.ts`, `lib/quality-analytics/processJoin.ts`, `features/industrial-analytics/QualityJoinPanel.tsx`, `features/line-panel/LinePanelPage.tsx`, `lib/demo/stepOrigins.ts`, `lib/quality-analytics/filters.ts`, `features/quality-analytics/QualityOverview.tsx`, `features/predictive/ModelLab.tsx`, `features/demo/workbench/ProjectTree.tsx`, `test/server.ts`, `test/predictiveFixtures.ts`, `test/linePanelFixtures.ts`, `docs/design/design-system.md` §4.1, `docs/design/decisions.md`.
+- **Frontend.** Proveedor: pide el catálogo una vez, guarda `selectedId`, pide el dataset completo de la selección, expone carga/error; ante id desconocido o error de carga vuelve al sintético con aviso neutro y marca la entrada como no disponible en la sesión. `PartControl` según 8.3-f (objetivos ≥ 32 px, se envuelve con la barra, accesible desde el menú). `reset()` conserva la pieza; se eliminan `datasetChosen` y `aiDatasetId`. Pasos 2-3: resumen de solo lectura + «Importar CSV» (la importación aparece como entrada «Importado» y queda seleccionada); el enlace `?dataset=` fija la selección global. Paso 6: fuente = dataset activo; desaparecen el conmutador y `?datos=sintetico`; pestañas según `capabilities`. Vista A y panel de línea: dataset del proveedor; el panel muestra la pieza en su barra. Insignias por `source_type`. `ReportCard` y `ModelLab` ocultos con una línea de motivo cuando el endpoint responde 404. `groupLabel` aplicado ya a cabecera, KPI y barra de filtros de los pasos 2-3 (el resto en F25). Tope de 400 días sustituido por los días con producción del dataset. Estado de carga visible al cambiar de pieza.
+- **Backend.** Ninguno, salvo decidir si `/datasets` queda como alias del catálogo o se elimina al perder su último consumidor (anotar en bitácora).
+- **Datos.** Fixtures ficticias: segunda entrada REAL (solo estaciones, una agrupación) y los manejadores honran `dataset`.
+- **Pruebas.** Vitest nuevo: `PartControl` (lista por línea, Aplicar cambia el dataset del paso 2, teclado/ARIA, degrada a una sola entrada), proveedor (restaurar conserva la pieza; id guardado desconocido ⇒ sintético), re-montaje al cambiar. Reescribir, no borrar: `RealDataset.test.tsx`, `RealPredictive.test.tsx`, `QualityJoinPanel.test.tsx`, pruebas de `LinePanelPage`, `DemoShell.test.tsx`. Con dos fixtures REAL, elegir la segunda dirige overview, variable, xy, oleadas, cusum, alarmas, riesgo y panel de línea a ese id (aserciones sobre peticiones MSW). `npm run build`. Comprobación en navegador con la receta de §7 sobre dos datasets ficticios convertidos, claro y oscuro; sin capturas en el repo.
+- **Aceptación.** Exactamente un control editable de pieza (barra + menú). Cambiar la pieza cambia pasos 2, 3, 5-Vista A (o su tarjeta explicativa), 6 y panel de línea; pasos 1, 4, 7 y vistas simuladas no cambian. Con catálogo privado vacío (demo público) el control muestra la entrada sintética y todo funciona como hoy. Insignias de procedencia en cada panel (DoD 11). Edición metrology intacta.
+- **Riesgos.** Mayor reescritura de pruebas del plan. Densidad de la barra por debajo de 1280 px. El merge cambia la UI pública: requiere OK del dueño.
+
+#### F23 — Perfil declarativo, lector CSV ancho y unión por serie (Línea B)
+
+- **Objetivo.** Convertidor genérico para «un CSV con cabecera por estación y día, unido por una columna de serie», que emite una carpeta por pieza con el contrato de 8.3-c, con ventana e histórico.
+- **Archivos.** Nuevos: `backend/app/connectors/station_logs/{__init__,profile,sources,wide_csv,assemble,__main__}.py`, `backend/app/connectors/pieces_writer.py`, `backend/tests/station_logs_fixtures.py`, `backend/tests/test_station_logs_wide.py`, perfil de ejemplo ficticio en `seed/sample_files/station_logs/`. Tocados: `backend/app/connectors/long_signal_batch.py` (usa el escritor compartido; salida byte a byte idéntica), `backend/app/connectors/README.md`.
+- **Backend.** Esquema pydantic del perfil; `sources` (carpeta o zip, globs de inclusión/exclusión, miembros idénticos una sola vez, zips anidados ignorados y contados); `WideStationCsvConnector(ImportConnector)` (validación de codificación, delimitador, número de columnas, marca decimal por archivo; endurecimiento compartido con `dimensional_csv`); ensamblador `key` (ignora llaves declaradas, última fila por llave y estación, hora de la pieza = primera estación, estación `None` si la pieza no llegó, bandera 16 para cadenas incompletas sin NOK registrado); asignación de pieza + herencia; variables excluidas por pieza; reglas `missing_if`; filas de referencia fallida ⇒ valores ausentes con veredicto NOK; ventana (`max_pieces` en días de producción completos o `from`/`to`) con estimación de memoria y negativa sobre presupuesto; `history` diario de toda la fuente; CLI `inventory` (conteos + esqueleto de perfil a una ruta privada), `convert`, `check`.
+- **Frontend.** Ninguno.
+- **Datos.** Ninguno versionado salvo el perfil de ejemplo ficticio. El perfil real se redacta fuera del repo y se entrega como archivo privado; la conversión real se ejecuta en el equipo del presentador hacia la raíz privada.
+- **Pruebas.** Generador ficticio en `tmp_path` (cp1252, `;`, CRLF, cabecera con diéresis y una columna con errata, 5 estaciones, 2 piezas, llave 0, llave duplicada, carpeta duplicada, archivo de estudio, carpeta de archivo, un archivo con coma decimal, canal inactivo en una pieza, valor de detección fuera de rango, pieza rechazada antes de la estación de tipo, pieza que cruza la medianoche): una carpeta por pieza; mapeo por índice independiente del texto de cabecera; atribución a la primera estación que falla = verdad del generador; herencia de pieza; ventana conserva días completos y lo más reciente; `history` cubre toda la fuente; sin llaves, rutas ni nombres de origen en la salida; negativa dentro de un checkout; bytes idénticos para cualquier número de particiones y para zip frente a carpeta; errores de perfil específicos y sin valores. `test_long_signal_batch.py` sin cambios y en verde. Integración: la salida carga por el registro de F21 y sirve resumen, variable y panel de línea.
+- **Aceptación.** Cambiar solo el perfil (reordenar estaciones, renombrar, reagrupar valores de pieza, cambiar la ventana) cambia la salida sin tocar código. Verificación local (fuera de CI, se anota como pendiente en el tablero si la sesión no tiene los datos): la conversión real termina en minutos con memoria acotada y sus conteos concilian con los agregados privados; el desplegable lista las piezas reales de Línea B. Ningún identificador real en archivos versionados, pruebas ni logs.
+- **Riesgos.** Fase grande: si no cabe, `inventory` y `history` pasan a F24 explícitamente. La semántica «fila ausente = no llegó» es del perfil; una línea con huecos de registro aleatorios parecería tener rechazos (lo delatan la bandera 16 y el conteo). Los rechazos anteriores a la primera estación unida son invisibles en estos datasets: debe decirse en «Calidad del dato».
+
+#### F24 — Lector de flujo de tokens y unión por posición/lado/vuelta (Línea A)
+
+- **Objetivo.** Segundo lector genérico y unión para máquinas sin serial, con exactitud medida y exigida.
+- **Archivos.** Nuevos: `backend/app/connectors/station_logs/token_stream.py`, `backend/tests/test_station_logs_tokens.py`, perfil de ejemplo ficticio. Tocados: `assemble.py`, `profile.py`, `__main__.py`.
+- **Backend.** `TokenStreamConnector(ImportConnector)` según 8.3-e (coincidencia tolerante de etiquetas con o sin dos puntos y con espacio inicial; variantes de fila de salto con rellenos distintos); unión `carrier_window`; autocomprobación en el informe y como compuerta (tasa de coincidencia uno-a-uno por estación y coherencia de la propagación de rechazos); pieza leída en la estación que la registra y heredada; las cadenas de marcado no se mapean ni se escriben jamás; estaciones sin veredicto no son estaciones; estación eléctrica multi-par aporta solo su veredicto; cero-como-no-medido y topes de saturación como ausentes; cortes de registro de una estación ⇒ estación no probada, no NOK; `side_swap` por estación disponible y **desactivado**; las tolerancias que la fuente trae por fila se vuelcan a un borrador de `spec.json` (origen `source`) para F28. Agrupación: posición ⇒ primaria; lado ⇒ secundaria con etiquetas.
+- **Frontend.** Ninguno obligatorio; «Calidad del dato» muestra el conteo de unión incierta por `data_quality`.
+- **Datos.** Perfil real fuera del repo; conversión local por el usuario. Las imágenes del archivo no se leen ni se referencian.
+- **Pruebas.** Generador ficticio de mesa indexada (posiciones, dos lados, estaciones con desfase de índice, paro de horas, corte de registro del ancla, filas de salto con ambos estilos de relleno, estación por lado, cambio de tipo, estación con lados cruzados): cadenas recuperadas = verdad del generador por encima del umbral; inciertas con bit 16; la conversión falla si los desfases del perfil son erróneos; sin cadenas de identidad en la salida; el lado llega a la ranura secundaria con etiquetas. La salida funciona con la matriz primaria × secundaria, alarmas por ambos grupos y el panel de línea. Una sola diferencia entre convertir una línea u otra: el perfil.
+- **Aceptación.** La fixture se convierte solo con perfil; la calidad de unión se imprime y se exige. Verificación local: la conversión real pasa la compuerta y concilia en privado. Ningún código de tipo, etiqueta ni nombre de estación del cliente en código, pruebas o docs.
+- **Riesgos.** Gramática irregular: las primitivas deben seguir siendo pocas; lo no expresable va a §7, no a casos especiales del cliente. La unión es identidad estadística: el residuo se cuenta, no se oculta. Una atribución de lado aparentemente cruzada en una estación no se corrige por código: se reporta y se consulta a planta.
+
+#### F25 — Vocabulario, capacidades y bloques privados por dataset
+
+- **Objetivo.** Que las pantallas hablen el vocabulario de cada pieza y muestren solo lo que sus datos soportan.
+- **Archivos.** Backend: `api/v1/line_panel.py`, `services/line_panel_service.py`, `api/v1/predictive.py`, `services/real_predictive_service.py`, `schemas/*`. Frontend: `QualityOverview.tsx`, `QualityCharts.tsx`, `QualityFilterBar.tsx`, `DimensionalExplorer.tsx`, `CavityAlarms.tsx`, `PieceRisk.tsx`, `NokWaves.tsx`, `CusumPanel.tsx`, `lib/line-panel/model.ts`, `features/line-panel/views/*`, `lib/quality-analytics/export.ts`, `ContextStep.tsx`.
+- **Backend.** Textos de reglas y acciones construidos con las etiquetas del dataset (redacción neutra y de sugerencia cuando no es el sintético de inyección); agrupación por defecto de alarmas = secundaria si existe, si no primaria; riesgo por pieza con motivo tipado (sin agrupación secundaria / menos de dos días de planta); validación de `machine` solo en la ruta sintética; `history` expuesto en el detalle. **Condicional:** si en la verificación local la frecuencia de alarmas de prioridad 2 queda fuera de una banda razonable, leer `panel-rules.json` por dataset hacia `evaluate_line(config=…)` (ya lo admite), eco de la configuración efectiva e inclusión en la clave de caché; si no, queda en §7.
+- **Frontend.** Barrido completo de `groupLabel` (el sintético conserva sus textos byte a byte); mapa de proceso con los ids secundarios observados en vez de 1..N en 8 columnas fijas; compuertas por capacidad con explicación; sin código de máquina sintético ni preajustes sintéticos para datasets no sintéticos; tira «Historia completa (agregada)» en el paso 2 con la ventana cargada resaltada y los huecos de campaña visibles; tarjeta «Calidad del dato» con `assumptions` y los conteos nuevos; tira de estaciones de la pieza en el paso 1.
+- **Pruebas.** pytest: agrupación por defecto por capacidad, motivos tipados, textos desde etiquetas, eco de reglas. Vitest: fixture con primaria «Cavidad» sin secundaria no renderiza «Nido» y oculta riesgo por pieza con su motivo; fixture con secundaria «Lado» renderiza la matriz y sus etiquetas; sintético sin cambios; mapa con ids no contiguos; tira de historia.
+- **Aceptación.** Ningún vocabulario fijo de agrupación en pantallas cuya pieza declara otro. Lenguaje D12 intacto. Los textos siguen siendo sugerencias para decisión humana (CLAUDE.md §2, §24).
+- **Riesgos.** Fase de mayor cambio de texto; riesgo de regresión visual en el sintético.
+
+#### F26 — Gemelos ficticios en el demo público
+
+- **Objetivo.** Que el sitio alojado también «se adapte», sin datos del cliente y por el mismo pipeline.
+- **Archivos.** Nuevos: `seed/scripts/generate_demo_parts.py`, `seed/tests/test_demo_parts.py`, perfiles ficticios en `seed/sample_files/station_logs/`, `backend/app/demo_parts/<slug>/{manifest.json,pieces.csv.gz}`. Tocados: `dataset_registry.py`, `predictive.py`, `quality_analytics.py`, `line_panel_service.py`, `.gitignore` (excepción exacta), guarda de binarios (lista blanca exacta), `frontend/src/lib/predictive/source.ts`, `PartControl`.
+- **Cambios.** Generador determinista de logs ficticios en ambos formatos (estaciones inventadas, olas NOK localizadas por grupo, un grupo persistentemente malo, paros, un cambio de tipo) ⇒ `station_logs convert` ⇒ copia a `backend/app/demo_parts/` (≤ 25 000 piezas, ≤ ~20 variables y ≤ ~1 MB por pieza). Registro: raíz empaquetada siempre activa en edición industrial, ids `demo-<slug>`, `source_type='SIMULATED'`. Estudios de secuencia de piezas habilitados por capacidad (`nok_basis == 'reported'`), no por REAL; umbrales del panel por número de piezas. Ningún valor se calcula a partir de estadísticas reales.
+- **Pruebas.** Regenerar reproduce los archivos versionados byte a byte; etiquetas pasan `check_identifier`; tamaño acotado; gemelos listados como SIMULATED en todo `APP_ENV`; el registro privado sigue apagado en producción; todos los endpoints responden para un gemelo; Vitest: ningún panel de gemelo lleva insignia REAL. Receta de navegador sobre una pila sin datos privados. (No verificado: que el job de CI que corre `seed/tests` tenga las dependencias del backend; ajustarlo en la fase.)
+- **Aceptación.** Despliegue sin ruta privada ⇒ el desplegable ofrece el sintético original más los gemelos y pasos 2, 3, 6 y panel de línea se adaptan a cada uno. Memoria del proceso con todo cargado holgada en una instancia de 512 MB (medida en la fase).
+- **Riesgos.** Versionar gzip generados es nuevo en el repo (pequeños, ficticios, deterministas; alternativa: generarlos en el build de la imagen). La forma de la línea podría considerarse confidencial: fallo del dueño (D23).
+
+#### F27 — Fiabilidad del día de la demo
+
+- **Objetivo.** Arranque, memoria y cada entrada del desplegable comprobados antes de presentar.
+- **Cambios.** `python -m app.demo_preflight`: recorre el catálogo como la app, carga cada entrada una vez y muestra una tabla (slug, estado, piezas, segundos de carga, memoria estimada, capacidades, omitidas con motivo); sale con error si la entrada inicial no está lista; sin rutas ni valores. Precarga del resumen y del panel de la entrada inicial. Ajuste para desactivar la importación CSV exploratoria en instancias públicas + aviso en el diálogo. Spec e2e del recorrido con selector solo sobre gemelos (`@playwright/test` como devDependency si `npm audit` queda limpio; si no, la receta manual). `docs/demo-industrial-quality.md`: «Alta de una pieza o línea nueva» (inventario → borrador de perfil → editar → convertir → aparece) y guía del presentador (modo local con datos reales / modo público con gemelos); `docs/deployment-editions.md` §6: qué sale de la red del cliente = nada.
+- **Pruebas.** pytest del preflight (tabla, códigos de salida, sin fugas); la precarga no bloquea el arranque y sobrevive a una entrada rota; e2e por cada entrada de un catálogo ficticio y el caso de catálogo vacío; regresión completa.
+- **Aceptación.** Corromper una carpeta antes del arranque quita exactamente esa entrada. Un tercero da de alta una pieza solo con perfil siguiendo la guía. DoD 1, 11, 12, 13 y 14 re-verificados.
+- **Riesgos.** Suspensión/arranque en frío del plan gratuito fuera de nuestro control: paso de guion «abrir y esperar `/health`».
+
+#### F28 — (Opcional) Especificación privada con origen y vigencia
+
+`backend/app/connectors/dataset_spec.py` (`dataset-spec-v1` = `pin_pairs` actuales + `variables[{key, nominal?, lsl?, usl?, unit?, origin, valid_from?, note?}]`); spec inválida solo oculta vistas con límites; `Variable` gana períodos de límite; líneas de referencia rotuladas por origen y vigencia; Cp/Cpk solo para `drawing`/`source`, unilateral cuando solo hay un lado, sobre las piezas del período vigente; conteo de concordancia veredicto de máquina vs límite aparte. Pruebas: vectores Cp/Cpk calculados a mano con un cambio de límite (CLAUDE.md §11); los conteos NOK de un dataset REAL son idénticos con y sin spec.
+
+#### F29 — (Opcional) Pareto por característica sobre veredicto reportado
+
+`pieces-v3` con familia de columnas `r_<var>` (códigos de resultado por característica mapeados a ok/nok/no evaluado en el perfil); `value_nok` opcional en el dataset; con filtro de estación el Pareto pasa de estaciones a características, rotulado «veredicto reportado por la máquina». Vectores entrada→salida a mano; datasets sin `r_` no cambian. Prescindible sin afectar a F21-F27.
+
+#### F30 — (Condicionada, no programada) Datos reales en un host privado autorizado
+
+Solo con autorización **escrita** del cliente y autorización del dueño para cada paso de VPS/secretos/DNS: servir los datasets **convertidos** (nunca los orígenes ni imágenes) desde el montaje privado de solo lectura de la instancia industrial del VPS, con opt-in explícito y auditado, restricción de acceso delante de la instancia, aviso persistente en pantalla, enmienda registrada de D8 y procedimiento de retirada. El servicio público de demo no recibe datos reales bajo ninguna opción.
+
+### 8.5 Decisiones nuevas (con valor por defecto)
+
+| # | Decisión | Por defecto |
+|---|---|---|
+| D14 | «Pieza» = un dataset convertido por (línea, valor de pieza) declarado en el perfil privado; sin dimensión de pieza en el motor | Una entrada por tipo que la máquina identifica, agrupadas por línea; reagrupar es editar el perfil |
+| D15 | (Extiende D8) Registro privado de N datasets, **solo local**; triple barrera en ejecución (no producción, orígenes loopback, sin marcador de host) + guarda de despliegue + guarda de binarios versionados | Activas; D8 no se reabre |
+| D16 | (Extiende D13) Familia `station-logs` con perfil privado; todo vocabulario del cliente vive en el perfil; texto versionado solo con nombres neutros | Solo neutros |
+| D17 | (Extiende D9) Fuentes sin zona: hora = reloj de la máquina, declarada como supuesto; cambio de horario no modelado | Reloj de máquina, offset 0, turnos de 8 h desde las 06:00 rotulados «supuesto de la demo» |
+| D18 | (Extiende D10) Base NOK = veredicto de la máquina; límites solo por spec privada con origen y vigencia; `empirical` nunca da Cp/Cpk ni veredicto | Sin límites hasta F28 |
+| D19 | Roles de agrupación primaria/secundaria con etiquetas por dataset | Línea B: cavidad ⇒ primaria; Línea A: posición ⇒ primaria, lado ⇒ secundaria; lados tal como se registran |
+| D20 | Bloques privados por dataset junto al manifest (informe, estudio de modelos, spec, reglas del panel); se ocultan si faltan | Ocultar |
+| D21 | Un único selector global «Pieza» (barra + menú); los pasos solo lo muestran | Sí |
+| D22 | Ventana por pieza + histórico diario agregado; carga perezosa con LRU | 250 000 piezas más recientes; 2 cargados |
+| D23 | Demo público = gemelos ficticios por el mismo pipeline; procedencia por raíz | Misma forma que las líneas reales, cardinalidades no necesariamente iguales, valores inventados |
+| D24 | Identidad sintetizada (ancla, posición, lado) para líneas sin serial, con compuerta de calidad y bandera | Umbral 0,98 |
+| D25 | Entrega: rama por fase + PR a `feat/industrial-quality-demo`; el dueño fusiona (cada push a esa rama redepliega el sitio público y la CI solo corre en PR y en `main`) | Rama + PR |
+| D26 | Contrato: `pieces-v2` + bloques opcionales de manifest; `pieces-v3` solo si cambian columnas | v2 |
+| D27 | Vista A es opt-in por dataset | Apagada para las líneas nuevas (las señales simuladas son de inyección); encendida para el dataset anterior |
+| D28 | El dataset real anterior sigue seleccionable como entrada heredada con su id y sus archivos privados | Sí |
+
+### 8.6 Riesgos y mitigaciones
+
+| Riesgo | Mitigación |
+|---|---|
+| Fuga de datos o vocabulario del cliente al repo público (el lint de identificadores no marca nombres de línea, estación, tipo ni cadenas de marcado; el escaneo privado se omite en CI y en sesiones en la nube) | D16; `.gitignore` + guarda de binarios; lectores por índice y etiquetas del perfil; fixtures generadas en `tmp_path`; el dueño añade los términos nuevos a su lista privada antes de F23; revisión de `git diff --staged` |
+| Datos reales ofrecidos en un host | Triple barrera D15 + la carpeta no existe allí + prueba de despliegue; F30 bloqueada |
+| Memoria y latencia con historiales largos | Ventana en el convertidor, presupuesto de memoria, LRU, catálogo ligero, cachés, preflight |
+| Opción muerta en plena demo | Solo se listan entradas validadas; el frontend valida la selección y cae al sintético |
+| Límites ausentes o que cambiaron | Veredicto de máquina como base; spec con origen y vigencia; nada inferido se presenta como especificación |
+| Unión sin serial mal emparejada | Compuerta, bandera 16, conteos en «Calidad del dato», prueba que falla con desfases erróneos |
+| Reglas R1–R4 afinadas con el dataset anterior | Medición local; `panel-rules.json` condicional; nunca reajuste silencioso |
+| Etiqueta «Nido» sobre una cavidad entre F23 y F25 | `groupLabel` en cabeceras ya en F22; descripción del dataset |
+| Informe/estudio del primer cliente junto a otra pieza | Compuerta en F21 (backend) y F22 (frontend), antes de que exista la primera pieza nueva |
+| Capturas o grabaciones con datos reales | Fuera del repo, docs y PRs |
+| Fases demasiado grandes para una sesión | Cada fase declara qué se mueve y adónde |
+| Pendientes heredados no resueltos aquí | DoD 14 (nombre del cliente en el historial de un commit antiguo), ejecución de F9, lint/pruebas de backend y frontend ausentes en CI |
+
+### 8.7 Orden recomendado y mínimo presentable
+
+1. **F21** (backend, sin datos reales).
+2. **F22** y **F23** en paralelo (frontend / conectores, CLAUDE.md §15).
+3. **F24**, **F25**, **F26**, **F27**.
+4. Opcionales **F28**, **F29** cuando haya límites de plano o se pida el detalle por característica. **F30** solo con autorización escrita.
+
+**Mínimo presentable (local): F21 + F22 + F23** — desplegable global con las piezas reales de Línea B, el dataset real anterior y el sintético; el sitio público muestra el mismo control con la entrada sintética. **Demo público adaptable: + F26.** **Segunda línea: + F24.** F25 y F27 mejoran honestidad y fiabilidad y son recortables si el tiempo aprieta, con una excepción: no presentar Línea A sin F25 (el lado necesita su etiqueta).

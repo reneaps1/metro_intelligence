@@ -24,7 +24,7 @@ from app.core.edition import require_industrial_edition
 from app.core.security import require_permission
 from app.engines.line_alarms.rules import ENGINE_NAME, ENGINE_VERSION, LineAlarm
 from app.engines.quality_analytics.dataset import DimensionalDataset
-from app.engines.quality_analytics.synthetic import SYNTHETIC_DATASET_ID, synthetic_dataset
+from app.engines.quality_analytics.synthetic import SYNTHETIC_DATASET_ID
 from app.models.security import User
 from app.schemas.line_panel import (
     AlarmOut,
@@ -41,6 +41,8 @@ from app.schemas.line_panel import (
     StationOut,
     WindowOut,
 )
+from app.services import dataset_registry
+from app.services.dataset_registry import DatasetNotFoundError
 from app.services.line_panel_service import (
     LinePanel,
     StartOutsideDataError,
@@ -48,7 +50,6 @@ from app.services.line_panel_service import (
     line_panel,
     replay_window,
 )
-from app.services.real_dataset_service import REAL_DATASET_ID, load_real_dataset
 
 router = APIRouter(
     prefix="/line-panel",
@@ -63,13 +64,11 @@ MachineCode = Query(None, max_length=32)
 
 
 def _dataset(dataset: str) -> DimensionalDataset:
-    if dataset == SYNTHETIC_DATASET_ID:
-        return synthetic_dataset()
-    if dataset == REAL_DATASET_ID:
-        real = load_real_dataset()
-        if real is not None:
-            return real
-    raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+    """IQ-F21: synthetic, the legacy REAL dataset or any part of the private registry; imports excluded."""
+    try:
+        return dataset_registry.resolve(dataset, allow_imports=False)
+    except DatasetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dataset not found.") from None
 
 
 def _panel(dataset: str, machine: str | None) -> LinePanel:

@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { groupWords } from "../../lib/demo/part";
 import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAsync } from "../../lib/catalog/hooks";
 import { WB } from "../../lib/demo/chartTheme";
 import { fetchGroupAlarms, type GroupAlarmParams } from "../../lib/predictive/api";
-import { plantLabel, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
+import { plantLabel, sourceOrigin, targetOptions, type PredictiveSource } from "../../lib/predictive/source";
 import { formatPct } from "../../lib/quality-analytics/filters";
 import { Callout, LoadState, Metric, PanelHeader, axisTick, fieldControl, legendText, n, tooltipStyle } from "./shared";
 
@@ -36,6 +37,7 @@ function NumberInput({ label, value, min, max, onChange }: { label: string; valu
 
 export function CavityAlarms({ source }: { source: PredictiveSource }) {
   const real = source.real;
+  const words = groupWords(real);
   const [p, setP] = useState<GroupAlarmParams>({
     dataset: source.datasetId,
     grouping: "mold_cavity",
@@ -49,7 +51,7 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
   if (!real) return <p className="text-sm text-text-secondary">Disponible solo con los datos reales del cliente.</p>;
   const offset = d?.utc_offset_minutes ?? 0;
   const prefix = p.grouping === "mold_cavity" ? "C" : "N";
-  const groupWord = p.grouping === "mold_cavity" ? "cavidad" : "nido";
+  const groupWord = (p.grouping === "mold_cavity" ? words.secondary : words.primary).toLowerCase();
   const chart = (d?.groups ?? []).slice(0, TOP_GROUPS).map((g) => ({
     label: `${prefix}${g.group}`,
     before: g.nok - g.nok_after_first_alarm,
@@ -60,8 +62,8 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
 
   return (
     <section className="space-y-4" aria-label="Alarma por cavidad">
-      <PanelHeader title="Alarma por cavidad: ¿habría avisado a tiempo?" origins={["REAL", "EXPERIMENTAL"]}>
-        Evaluación retrospectiva sobre el período real: la regla solo usa piezas ya inspeccionadas de cada {groupWord}.
+      <PanelHeader title="Alarma por cavidad: ¿habría avisado a tiempo?" origins={[sourceOrigin(source), "EXPERIMENTAL"]}>
+        Evaluación retrospectiva sobre el período {sourceOrigin(source) === "REAL" ? "real" : "simulado (gemelo ficticio)"}: la regla solo usa piezas ya inspeccionadas de cada {groupWord}.
       </PanelHeader>
       <div className="flex flex-wrap items-center gap-4">
         <label className="wb-label">
@@ -72,8 +74,8 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
             onChange={(e) => setP({ ...p, grouping: e.target.value as GroupAlarmParams["grouping"] })}
             aria-label="Agrupar por"
           >
-            <option value="mold_cavity">Cavidad de molde</option>
-            <option value="nest">Nido</option>
+            <option value="mold_cavity">{words.secondary}</option>
+            <option value="nest">{words.primary}</option>
           </select>
         </label>
         <label className="wb-label">
@@ -152,7 +154,7 @@ export function CavityAlarms({ source }: { source: PredictiveSource }) {
           <table className="w-full text-left text-sm" aria-label="Alarma por grupo">
             <thead className="text-xs text-text-secondary">
               <tr className="border-b border-border">
-                <th className="p-2 font-medium">{p.grouping === "mold_cavity" ? "Cavidad" : "Nido"}</th>
+                <th className="p-2 font-medium">{p.grouping === "mold_cavity" ? words.secondary : words.primary}</th>
                 <th className="p-2 font-medium">Primera alarma</th>
                 <th className="p-2 font-medium">NOK</th>
                 <th className="p-2 font-medium">Después de la alarma</th>
