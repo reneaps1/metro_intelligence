@@ -70,6 +70,11 @@ def create_demo_admin():
             select(User).where(User.email == "luis.torres@demo.local")
         )
         if existing:
+            # IQ-F30: explicit, audited operator recovery (see app/services/demo_admin.py).
+            if os.getenv("SEED_DEMO_USER_RESET", "").lower() == "true":
+                from app.services.demo_admin import reset_demo_admin
+
+                reset_demo_admin(session, existing.email, password)
             return
 
         role = session.scalar(
