@@ -131,6 +131,7 @@ describe("ProcessOverviewPage", () => {
 const SUMMARY: OperationSummary = {
   operation: OPERATIONS[0],
   range: RANGE,
+  recipes: OVERVIEW.recipes,
   pieces: 1000,
   machine_nok: 0,
   spec_nok: 25,
@@ -213,6 +214,41 @@ describe("OperationDetailPage", () => {
     // The first characteristic with a specification opens by default.
     expect(await screen.findByRole("heading", { name: "Pin 1 length · LEN-CON-P1" })).toBeInTheDocument();
     expect(await screen.findByText(/3 above the shown range/)).toBeInTheDocument();
+  });
+});
+
+describe("OperationDetailPage recipe filter", () => {
+  it("shows the recipe chosen on the overview and lets the user change it on the step page", async () => {
+    const seen: string[] = [];
+    server.use(
+      http.get(`${API}/process/operations/op-LEN-CON/summary`, ({ request }) => {
+        seen.push(new URL(request.url).searchParams.getAll("recipe_id").join(","));
+        return HttpResponse.json(SUMMARY);
+      }),
+      http.get(`${API}/process/operations/op-LEN-CON/characteristics/:cid`, () =>
+        HttpResponse.json({ detail: "none" }, { status: 404 }),
+      ),
+    );
+    renderAuthed(
+      <Routes>
+        <Route path="/process/operations/:operationId" element={<OperationDetailPage />} />
+      </Routes>,
+      { email: VALID_EMAIL, password: VALID_PASSWORD, route: "/process/operations/op-LEN-CON?recipe=rec-3" },
+    );
+
+    const select = (await screen.findByLabelText("Recipe")) as HTMLSelectElement;
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "All recipes",
+      "Recipe 2 (variant pending)",
+      "MI-DEMO-2001-A",
+    ]);
+    expect(select.value).toBe("rec-3");
+    expect(seen).toContain("rec-3");
+
+    await userEvent.selectOptions(select, "rec-2");
+    await waitFor(() => expect(seen).toContain("rec-2"));
+    await userEvent.selectOptions(screen.getByLabelText("Recipe"), "");
+    await waitFor(() => expect(seen[seen.length - 1]).toBe(""));
   });
 });
 

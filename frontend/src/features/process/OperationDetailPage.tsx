@@ -65,7 +65,7 @@ export function OperationDetailPage() {
         <StatusChip status={data.status} label={STATUS_LABEL[data.status]} />
       </div>
 
-      <ProcessFilterBar filters={filters} onChange={setFilters} range={data.range} recipes={[]} />
+      <ProcessFilterBar filters={filters} onChange={setFilters} range={data.range} recipes={data.recipes} busy={summary.loading} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Pieces (first attempt)" value={formatCount(data.pieces)} />

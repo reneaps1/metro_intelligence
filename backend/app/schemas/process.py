@@ -117,6 +117,8 @@ class BreakdownRow(BaseModel):
 class OperationSummary(BaseModel):
     operation: OperationRead
     range: DateRange
+    # Recipes of the line, so the step page can offer the same filter as the overview.
+    recipes: list[RecipeRead] = []
     pieces: int
     machine_nok: int
     spec_nok: int

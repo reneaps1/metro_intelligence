@@ -10,11 +10,14 @@ export function ProcessFilterBar({
   onChange,
   range,
   recipes,
+  busy = false,
 }: {
   filters: ProcessFilters;
   onChange: (next: ProcessFilters) => void;
   range: DateRange | null;
   recipes: Recipe[];
+  /** True while results for the current filters are still loading. */
+  busy?: boolean;
 }) {
   const recipeValue = filters.recipeIds[0] ?? "";
 
@@ -60,6 +63,9 @@ export function ProcessFilterBar({
           ))}
         </select>
       </label>
+      <p className="pb-3 text-xs font-medium text-brand-primary" role="status" aria-live="polite">
+        {busy ? "Updating…" : ""}
+      </p>
       {range?.first_available && range.last_available && (
         <p className="pb-3 text-xs text-text-secondary">
           Data available {range.first_available} → {range.last_available}

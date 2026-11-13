@@ -70,7 +70,13 @@ export function ProcessOverviewPage() {
         </Link>
       </div>
 
-      <ProcessFilterBar filters={filters} onChange={setFilters} range={data?.range ?? null} recipes={data?.recipes ?? []} />
+      <ProcessFilterBar
+        filters={filters}
+        onChange={setFilters}
+        range={data?.range ?? null}
+        recipes={data?.recipes ?? []}
+        busy={overview.loading && data !== null}
+      />
 
       {overview.error && <p className="text-sm text-status-nok">{overview.error}</p>}
       {overview.loading && !data && <p className="text-sm text-text-secondary">Loading results…</p>}
