@@ -1,25 +1,19 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Bell, UserCircle } from "lucide-react";
+import { UserCircle } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "../../lib/auth/AuthProvider";
-import { useDemoData } from "../../lib/mock/DataProvider";
 
 const SECTION_LABELS: Record<string, string> = {
   process: "Process",
-  dashboard: "Dashboard",
   imports: "Import File",
   catalog: "Parts & Catalog",
-  measurements: "Measurements",
-  risk: "Risk & Recommendations",
 };
 
 export function Topbar() {
   const location = useLocation();
   const { user, logout } = useAuth();
-  const { recommendations } = useDemoData();
   const [menuOpen, setMenuOpen] = useState(false);
-  const pendingCount = recommendations.filter((r) => r.state === "pending").length;
 
   const section = location.pathname.split("/")[1] || "process";
   const label = SECTION_LABELS[section] ?? "Metro Intelligence";
@@ -31,19 +25,6 @@ export function Topbar() {
       </nav>
       <div className="flex items-center gap-1">
         <ThemeToggle />
-        <button
-          type="button"
-          aria-label={`Notifications, ${pendingCount} pending`}
-          title={`${pendingCount} pending recommendations`}
-          className="relative flex h-11 w-11 items-center justify-center rounded text-text-secondary hover:bg-surface-app hover:text-text-primary"
-        >
-          <Bell size={20} />
-          {pendingCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-nok px-1 text-[10px] font-semibold text-white">
-              {pendingCount}
-            </span>
-          )}
-        </button>
         <div className="relative">
           <button
             type="button"
