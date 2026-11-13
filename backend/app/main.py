@@ -42,6 +42,7 @@ app.include_router(api_router)
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
 @app.on_event("startup")
 def create_demo_admin():
     import os
@@ -69,9 +70,7 @@ def create_demo_admin():
         if any_admin is not None:
             return
 
-        role = session.scalar(
-            select(Role).where(Role.name == "admin")
-        )
+        role = session.scalar(select(Role).where(Role.name == "admin"))
         if role is None:
             raise RuntimeError("Admin role not found")
 
@@ -84,3 +83,11 @@ def create_demo_admin():
         user.roles.append(UserRole(role=role))
         session.add(user)
         session.commit()
+
+
+@app.on_event("startup")
+def start_line_bundle_load() -> None:
+    """ADR-004 opt-in load next to the API (app/services/line_bundle_job.py)."""
+    from app.services.line_bundle_job import start_if_configured
+
+    start_if_configured()
