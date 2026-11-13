@@ -135,7 +135,7 @@ export function IntegrationStep() {
       </div>
 
       <blockquote className="wb-notice !text-text-primary">
-        Metro Intelligence conecta mediciones dimensionales y contexto de proceso en un mismo lugar para pasar de
+        PartView conecta mediciones dimensionales y contexto de proceso en un mismo lugar para pasar de
         visualizar los NOK a investigar sus patrones, generar hipótesis y evaluar anticipadamente riesgos. La capa IIoT
         mostrada aquí es simulada: para validar causalidad y predicción necesitamos capturar señales reales de máquina,
         vincularlas a cada ciclo/pieza y evaluar modelos prospectivamente.

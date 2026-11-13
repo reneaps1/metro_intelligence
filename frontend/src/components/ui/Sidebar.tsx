@@ -11,6 +11,7 @@ import {
 import clsx from "clsx";
 import { useEdition } from "../../lib/edition/EditionProvider";
 import type { Edition } from "../../lib/edition/api";
+import { PRODUCT_NAME, PartViewIcon, PartViewWordmark } from "../brand/PartViewLogo";
 import { DEMO_BASE_PATH } from "../../lib/demo/steps";
 
 // IQ-F1: items with an `edition` only render in that edition.
@@ -37,7 +38,10 @@ export function Sidebar() {
       )}
     >
       <div className="flex h-14 items-center px-4">
-        {!collapsed && <span className="text-sm font-semibold text-text-on-sidebar">Metro Intelligence</span>}
+        <span className="pv-on-dark flex items-center gap-2 text-base" aria-label={PRODUCT_NAME} role="img">
+          <PartViewIcon size={26} />
+          {!collapsed && <PartViewWordmark />}
+        </span>
       </div>
       <nav className="flex-1 space-y-1 px-2">
         {items.map(({ to, label, icon: Icon }) => (

@@ -3,18 +3,19 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { ApiError } from "../../lib/api";
 import { Card } from "../../components/ui/Card";
+import { PartViewLogo } from "../../components/brand/PartViewLogo";
 import { Button } from "../../components/ui/Button";
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function validateEmail(value: string): string | null {
-  if (!value.trim()) return "Email is required.";
-  if (!EMAIL_SHAPE.test(value)) return "Enter a valid email address.";
+  if (!value.trim()) return "Falta el correo.";
+  if (!EMAIL_SHAPE.test(value)) return "El correo no tiene un formato válido.";
   return null;
 }
 
 function validatePassword(value: string): string | null {
-  if (!value) return "Password is required.";
+  if (!value) return "Falta la contraseña.";
   return null;
 }
 
@@ -48,7 +49,9 @@ export function LoginPage() {
       const redirectTo = (location.state as LocationState | null)?.from ?? "/process";
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Unable to sign in. Please try again.");
+      if (err instanceof ApiError && err.status === 401) setFormError("Correo o contraseña incorrectos.");
+      else if (err instanceof ApiError && err.status === 429) setFormError("Demasiados intentos. Esperar un minuto y reintentar.");
+      else setFormError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor. Reintentar en unos segundos.");
     } finally {
       setSubmitting(false);
     }
@@ -59,16 +62,16 @@ export function LoginPage() {
       <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
         Powered by OnKaizen
       </span>
-      <span className="text-[11px] text-text-secondary">Deploy test: 2026-07-18</span>
       <Card raised className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-semibold text-text-primary">Metro Intelligence</h1>
-          <p className="mt-1 text-sm text-text-secondary">Sign in with your Metro Intelligence account.</p>
+        <div className="mb-6 flex justify-center">
+          <h1 className="flex justify-center text-2xl">
+            <PartViewLogo size={36} />
+          </h1>
         </div>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-text-primary">
-              Email
+              Correo
             </label>
             <input
               id="email"
@@ -90,7 +93,7 @@ export function LoginPage() {
           </div>
           <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-text-primary">
-              Password
+              Contraseña
             </label>
             <input
               id="password"
@@ -116,7 +119,7 @@ export function LoginPage() {
             </p>
           )}
           <Button type="submit" className="w-full" loading={submitting} disabled={submitting}>
-            {submitting ? "Signing in…" : "Sign in"}
+            {submitting ? "Entrando…" : "Entrar"}
           </Button>
         </form>
       </Card>

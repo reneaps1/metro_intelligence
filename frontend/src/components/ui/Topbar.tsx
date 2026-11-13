@@ -16,7 +16,7 @@ export function Topbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const section = location.pathname.split("/")[1] || "process";
-  const label = SECTION_LABELS[section] ?? "Metro Intelligence";
+  const label = SECTION_LABELS[section] ?? "PartView";
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4">

@@ -156,7 +156,7 @@ function DemoLayout() {
     <div className="wb-root flex h-full min-h-0 flex-col bg-surface-app text-text-primary">
       <MenuBar
         menus={menus}
-        trailing={`Metro Intelligence · Demo industrial · ${clientLabel}${user ? ` · ${user.displayName}` : ""}`}
+        trailing={`PartView · Demo industrial · ${clientLabel}${user ? ` · ${user.displayName}` : ""}`}
       />
       <Toolbar
         treeVisible={visible.tree}

@@ -1,6 +1,7 @@
 import { useCallback, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import clsx from "clsx";
+import { PartViewIcon } from "../../../components/brand/PartViewLogo";
 import { usePopover } from "./usePopover";
 
 // Menu bar of the demo workbench (design-system.md §4.1). It is the index of
@@ -38,12 +39,7 @@ export function MenuBar({ menus, trailing }: { menus: Menu[]; trailing?: ReactNo
       onKeyDown={onKeyDown}
       className="flex min-h-[32px] flex-none flex-wrap items-center gap-0.5 border-b border-border bg-wb-chrome px-2 text-[13px] text-wb-chrome-text"
     >
-      <span
-        aria-hidden="true"
-        className="mr-2 flex h-5 w-5 items-center justify-center rounded-sm bg-brand-accent font-mono text-[11px] font-semibold text-text-on-brand"
-      >
-        M
-      </span>
+      <PartViewIcon size={20} className="mr-2" />
       {menus.map((menu) => {
         const open = menu.id === openId;
         return (
