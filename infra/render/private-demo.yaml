@@ -10,9 +10,12 @@
 # ADR-004: the line's station exports are loaded into metro-private-db from the API
 # service shell with the ingest CLIs (backend/app/ingest/README.md). About 13 GB per
 # million pieces with indexes, hence 30 GB of disk (Render disks grow, never shrink).
+# Plans are the cheapest that keep the loaded data: the API is on the free plan (it sleeps
+# when idle) and the database on basic-256mb. Raise the database plan before another large
+# load (basic-256mb has 0.1 CPU), and the API plan if cold starts get in the way.
 databases:
   - name: metro-private-db
-    plan: basic-1gb
+    plan: basic-256mb
     region: oregon
     postgresMajorVersion: "16"
     diskSizeGB: 30
@@ -22,7 +25,7 @@ services:
   - type: web
     name: metro-private-api
     runtime: docker
-    plan: starter
+    plan: free
     region: oregon
     branch: claude/affectionate-meitner-30c3ud
     autoDeploy: true
