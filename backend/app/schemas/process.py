@@ -63,6 +63,9 @@ class StepOverview(BaseModel):
     worst_cpk: float | None
     disagreements: int
     coverage: float | None
+    # Under half of the reference pieces recorded: rates describe a sample,
+    # so the step is left out of the line's status, worst step and yield.
+    partial_logging: bool = False
     status: StepStatus
     trend: list[DailyCount]
     # Last day with data for this step in any range: tells "no data in this
@@ -76,6 +79,10 @@ class LineOverview(BaseModel):
     recipes: list[RecipeRead]
     selected_recipe_ids: list[uuid.UUID]
     reference_pieces: int
+    # Product of the pass rates of the fully recorded steps (drawing verdict
+    # where a specification exists, station verdict otherwise).
+    rolled_yield: float | None = None
+    rolled_yield_steps: int = 0
     steps: list[StepOverview]
 
 
@@ -100,6 +107,9 @@ class CharacteristicSummary(BaseModel):
     machine_nok: int
     spec_nok: int
     machine_ok_spec_nok: int
+    # Gross readings left out of mean, std_dev and capability (still in n,
+    # the NOK counts, min and max).
+    gross: int = 0
     specification: SpecLimits | None
     cp: float | None
     cpk: float | None
@@ -124,6 +134,10 @@ class OperationSummary(BaseModel):
     spec_nok: int
     repeat_attempts: int
     disagreements: int
+    # Share of the line's reference pieces (type check) this step recorded in
+    # the range; under half is a partial record and carries no status.
+    coverage: float | None = None
+    partial_logging: bool = False
     status: StepStatus
     characteristics: list[CharacteristicSummary]
     by_recipe: list[BreakdownRow]

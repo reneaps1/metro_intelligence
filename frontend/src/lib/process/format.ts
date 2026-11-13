@@ -8,6 +8,14 @@ export const STATUS_LABEL: Record<StepStatus, string> = {
   neutral: "No data",
 };
 
+/** Chip text for a step: a partial record or an empty range is said as such,
+ * not as a quality status. */
+export function stepStatusLabel(step: { status: StepStatus; pieces: number; partial_logging: boolean }): string {
+  if (step.pieces === 0) return "No data";
+  if (step.partial_logging) return "Partial log";
+  return STATUS_LABEL[step.status];
+}
+
 export function stepChipStatus(status: StepStatus): ChipStatus {
   return status;
 }

@@ -196,6 +196,9 @@ class CharacteristicDaily(Base):
     n_evaluated: Mapped[int] = mapped_column(Integer, nullable=False)
     n_spec_nok: Mapped[int] = mapped_column(Integer, nullable=False)
     n_machine_ok_spec_nok: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Gross readings (measurement failures): in `n`, the NOK counts, min and
+    # max, but left out of sum_value / sum_sq_value.
+    n_gross: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     sum_value: Mapped[float] = mapped_column(Double, nullable=False)
     sum_sq_value: Mapped[float] = mapped_column(Double, nullable=False)
     min_value: Mapped[float] = mapped_column(Double, nullable=False)

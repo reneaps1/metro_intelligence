@@ -101,6 +101,16 @@ def test_overview_counts_and_recipe_filter(client: TestClient, viewer, line) -> 
     assert steps["TYPE"]["pieces"] == 2 and steps["TYPE"]["has_specification"] is False
     assert steps["TYPE"]["last_day"] == DAY
 
+    # Every station logs both pieces here, so none is partial and all count
+    # in the rolled yield: the product of each step's pass rate.
+    assert not any(step["partial_logging"] for step in body["steps"])
+    expected = 1.0
+    for step in body["steps"]:
+        rate = step["spec_nok_rate"] if step["has_specification"] else step["machine_nok_rate"]
+        expected *= 1 - rate
+    assert body["rolled_yield_steps"] == len(body["steps"])
+    assert body["rolled_yield"] == pytest.approx(expected) and body["rolled_yield"] < 1
+
     # A range without data still says when the step last had data.
     empty = client.get(
         f"/api/v1/process/lines/{line.line_id}/overview",
@@ -136,6 +146,7 @@ def test_operation_summary_and_characteristic_detail(client: TestClient, viewer,
     assert p1x["specification"]["upper_limit"] == "0.300000"
     assert p1x["capability_kind"] == "Cpu" and p1x["machine_ok_spec_nok"] == 1
     assert sum(row["pieces"] for row in summary["by_nest"]) == summary["pieces"] == 2
+    assert summary["coverage"] == 1.0 and summary["partial_logging"] is False
     # The step page offers the line's recipes and filters by the chosen one.
     assert [r["code"] for r in summary["recipes"]] == [2, 3]
     recipe_3 = next(r["id"] for r in summary["recipes"] if r["code"] == 3)

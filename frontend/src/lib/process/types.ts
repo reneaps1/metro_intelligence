@@ -55,6 +55,8 @@ export interface StepOverview {
   worst_cpk: number | null;
   disagreements: number;
   coverage: number | null;
+  /** Under half of the reference pieces recorded: rates describe a sample. */
+  partial_logging: boolean;
   status: StepStatus;
   trend: DailyCount[];
   /** Last day with data for this step, in any range. */
@@ -67,6 +69,9 @@ export interface LineOverview {
   recipes: Recipe[];
   selected_recipe_ids: string[];
   reference_pieces: number;
+  /** Product of the pass rates of the fully recorded steps. */
+  rolled_yield: number | null;
+  rolled_yield_steps: number;
   steps: StepOverview[];
 }
 
@@ -91,6 +96,8 @@ export interface CharacteristicSummary {
   machine_nok: number;
   spec_nok: number;
   machine_ok_spec_nok: number;
+  /** Gross readings left out of mean, std dev and capability. */
+  gross: number;
   specification: SpecLimits | null;
   cp: number | null;
   cpk: number | null;
@@ -114,6 +121,8 @@ export interface OperationSummary {
   spec_nok: number;
   repeat_attempts: number;
   disagreements: number;
+  coverage: number | null;
+  partial_logging: boolean;
   status: StepStatus;
   characteristics: CharacteristicSummary[];
   by_recipe: BreakdownRow[];

@@ -6,12 +6,12 @@ import { StatusChip } from "../../components/ui/StatusChip";
 import { useAsync } from "../../lib/catalog/hooks";
 import { getLineOverview, getLines } from "../../lib/process/api";
 import {
-  STATUS_LABEL,
   formatCount,
   formatNumber,
   formatPercent,
   formatRange,
   operationKindLabel,
+  stepStatusLabel,
 } from "../../lib/process/format";
 import { filtersSearch, useProcessFilters } from "../../lib/process/useProcessFilters";
 import type { StepOverview } from "../../lib/process/types";
@@ -47,11 +47,12 @@ export function ProcessOverviewPage() {
     );
   }
 
-  const attention = data?.steps.filter((s) => s.status === "critical" || s.status === "warning").length ?? 0;
-  const disagreements = data?.steps.reduce((sum, s) => sum + s.disagreements, 0) ?? 0;
-  const worst = data?.steps
-    .filter((s) => nokRate(s) !== null)
-    .sort((a, b) => (nokRate(b) ?? 0) - (nokRate(a) ?? 0))[0];
+  // Steps with a partial record describe a sample of the pieces, so they stay
+  // out of the line-level numbers (worst step, out-of-drawing count).
+  const full = data?.steps.filter((s) => s.pieces > 0 && !s.partial_logging) ?? [];
+  const worst = full.filter((s) => nokRate(s) !== null).sort((a, b) => (nokRate(b) ?? 0) - (nokRate(a) ?? 0))[0];
+  const outOfDrawing = full.filter((s) => s.has_specification).reduce((sum, s) => sum + s.spec_nok, 0);
+  const partialNames = data?.steps.filter((s) => s.pieces > 0 && s.partial_logging).map((s) => s.operation.name) ?? [];
 
   return (
     <div className="space-y-4">
@@ -85,12 +86,15 @@ export function ProcessOverviewPage() {
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatTile label="Pieces at type check" value={formatCount(data.reference_pieces)} />
-            <StatTile label="Steps needing attention" value={`${attention} of ${data.steps.length}`} />
             <StatTile
-              label={worst ? `Highest NOK · ${worst.operation.name}` : "Highest NOK"}
-              value={formatPercent(worst ? nokRate(worst) : null)}
+              label={`Rolled yield · ${data.rolled_yield_steps} fully logged steps`}
+              value={formatPercent(data.rolled_yield)}
             />
-            <StatTile label="Station OK, out of drawing" value={formatCount(disagreements)} />
+            <StatTile
+              label={worst ? `Worst step · ${worst.operation.name}` : "Worst step"}
+              value={worst ? `${formatPercent(nokRate(worst))} NOK` : "—"}
+            />
+            <StatTile label="Out-of-drawing step results" value={formatCount(outOfDrawing)} />
           </div>
 
           <Card>
@@ -123,7 +127,10 @@ export function ProcessOverviewPage() {
                         <Link to={`/process/operations/${step.operation.id}${search}`} className="font-medium text-brand-primary hover:underline">
                           {step.operation.name}
                         </Link>
-                        <p className="text-xs text-text-secondary">{operationKindLabel(step.operation)}</p>
+                        <p className="text-xs text-text-secondary">
+                          {operationKindLabel(step.operation)}
+                          {step.pieces > 0 && step.partial_logging && ` · logs ${formatPercent(step.coverage, 1)} of pieces`}
+                        </p>
                       </td>
                       <td className="p-3 text-right font-mono">{formatCount(step.pieces)}</td>
                       <td className="p-3 text-right font-mono">{formatPercent(step.machine_nok_rate)}</td>
@@ -131,7 +138,7 @@ export function ProcessOverviewPage() {
                       <td className="p-3 text-right font-mono">{formatPercent(step.first_pass_yield, 1)}</td>
                       <td className="p-3 text-right font-mono">{formatNumber(step.worst_cpk, 2)}</td>
                       <td className="p-3">
-                        <StatusChip status={step.status} label={STATUS_LABEL[step.status]} />
+                        <StatusChip status={step.status} label={stepStatusLabel(step)} />
                       </td>
                     </tr>
                   ))}
@@ -141,9 +148,11 @@ export function ProcessOverviewPage() {
 
           <Card>
             <CardHeader title="NOK rate per day, by step" />
-            <StepNokTrendChart steps={data.steps} />
+            <StepNokTrendChart steps={full} />
             <p className="mt-2 text-xs text-text-secondary">
-              Steps with a drawing tolerance use the drawing verdict; electrical tests and type check use the station's own verdict.
+              Steps with a drawing tolerance use the drawing verdict; type check uses the station's own verdict.
+              {partialNames.length > 0 &&
+                ` Not drawn, because they log only part of the pieces: ${partialNames.join(", ")}.`}
             </p>
           </Card>
         </>
