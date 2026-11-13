@@ -3,9 +3,10 @@
   --pv-ink: #1e2329;
   --pv-green: #357a2b;
   --pv-gray: #5b636d;
-  --brand-primary: #1e4e8c;
-  --brand-primary-hover: #173f73;
-  --brand-accent: #0e7c86;
+  /* OnKaizen green as the PartView brand color (2026-11-12). */
+  --brand-primary: #357a2b;
+  --brand-primary-hover: #2b6423;
+  --brand-accent: #4a9b3a;
 
   --bg-app: #f4f6f8;
   --bg-surface: #ffffff;
@@ -54,9 +55,9 @@
   --pv-ink: #eef1f4;
   --pv-green: #6abf56;
   --pv-gray: #a3a8ae;
-  --brand-primary: #5b8dd9;
-  --brand-primary-hover: #7aa5e3;
-  --brand-accent: #3fb0ba;
+  --brand-primary: #6abf56;
+  --brand-primary-hover: #82cc70;
+  --brand-accent: #6abf56;
 
   --bg-app: #0f1419;
   --bg-surface: #1a2129;

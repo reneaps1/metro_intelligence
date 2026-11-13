@@ -45,9 +45,9 @@ describe("RequireRole", () => {
     // /admin requires auth first -- no session yet, so we land on /login.
     expect(screen.getByRole("heading", { name: /partview/i })).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/email/i), VALID_EMAIL);
-    await user.type(screen.getByLabelText(/password/i), VALID_PASSWORD);
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), VALID_PASSWORD);
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
 
     // Signed in as quality_engineer, redirected back to /admin, which they don't have.
     expect(await screen.findByText("You don't have access to this page")).toBeInTheDocument();
@@ -74,9 +74,9 @@ describe("RequireRole", () => {
       </AuthProvider>,
     );
 
-    await user.type(screen.getByLabelText(/email/i), VALID_EMAIL);
-    await user.type(screen.getByLabelText(/password/i), VALID_PASSWORD);
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), VALID_PASSWORD);
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(await screen.findByText("QE Content")).toBeInTheDocument();
   });

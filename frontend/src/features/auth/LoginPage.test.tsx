@@ -32,9 +32,9 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.type(screen.getByLabelText(/email/i), VALID_EMAIL);
-    await user.type(screen.getByLabelText(/password/i), VALID_PASSWORD);
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), VALID_PASSWORD);
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(await screen.findByText("Dashboard Home")).toBeInTheDocument();
   });
@@ -43,11 +43,11 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.type(screen.getByLabelText(/email/i), VALID_EMAIL);
-    await user.type(screen.getByLabelText(/password/i), "wrong-password");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), "wrong-password");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid email or password.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Correo o contraseña incorrectos.");
     expect(screen.queryByText("Dashboard Home")).not.toBeInTheDocument();
   });
 
@@ -55,10 +55,10 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.click(screen.getByLabelText(/email/i));
+    await user.click(screen.getByLabelText(/correo/i));
     await user.tab();
 
-    expect(await screen.findByText(/email is required/i)).toBeInTheDocument();
+    expect(await screen.findByText(/falta el correo/i)).toBeInTheDocument();
     expect(screen.queryByText("Dashboard Home")).not.toBeInTheDocument();
   });
 
@@ -67,9 +67,9 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.type(screen.getByLabelText(/email/i), VALID_EMAIL);
-    await user.type(screen.getByLabelText(/password/i), VALID_PASSWORD);
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), VALID_PASSWORD);
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
     await screen.findByText("Dashboard Home");
 
     expect(setItemSpy).not.toHaveBeenCalled();
