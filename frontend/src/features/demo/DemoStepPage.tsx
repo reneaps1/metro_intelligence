@@ -4,25 +4,17 @@ import { OriginBadge } from "../../components/ui/OriginBadge";
 import { useDemoSession } from "../../lib/demo/DemoSessionProvider";
 import { stepOrigins } from "../../lib/demo/stepOrigins";
 import { DEMO_BASE_PATH, DEMO_STEPS, type DemoStep } from "../../lib/demo/steps";
-import { ContextStep } from "./steps/ContextStep";
-import { IntegrationStep } from "./steps/IntegrationStep";
 
 // IQ-F8: chart-heavy steps load on demand, so the metrology edition (which
 // never opens the demo) does not download them.
 const QualityStep = lazy(() => import("./steps/QualitySteps").then((m) => ({ default: m.QualityStep })));
 const DimensionalStep = lazy(() => import("./steps/QualitySteps").then((m) => ({ default: m.DimensionalStep })));
-const IiotLabStep = lazy(() => import("./steps/IiotLabStep").then((m) => ({ default: m.IiotLabStep })));
-const CorrelationStep = lazy(() => import("./steps/CorrelationStep").then((m) => ({ default: m.CorrelationStep })));
 const AiStep = lazy(() => import("./steps/AiStep").then((m) => ({ default: m.AiStep })));
 
 const STEP_CONTENT: Record<string, ComponentType> = {
-  context: ContextStep,
   quality: QualityStep,
   dimensional: DimensionalStep,
-  iiot: IiotLabStep,
-  correlation: CorrelationStep,
   ai: AiStep,
-  integration: IntegrationStep,
 };
 
 function StepContent({ step }: { step: DemoStep }) {
@@ -35,7 +27,7 @@ function StepContent({ step }: { step: DemoStep }) {
 }
 
 // The step header is the only place that titles the view; the workbench
-// toolbar shows where it sits in the walkthrough (n / 7).
+// toolbar shows where it sits in the walkthrough (n / total).
 export function DemoStepPage() {
   const { stepId } = useParams();
   const { qualityFilters, aiDatasetId } = useDemoSession();

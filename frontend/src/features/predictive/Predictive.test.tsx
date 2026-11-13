@@ -83,27 +83,5 @@ describe("AiStep (IQ-F7)", () => {
     expect(await screen.findByText(/falso positivo del método/)).toBeInTheDocument();
   });
 
-  it("labels the what-if as hypothetical and recomputes when the mold temperature moves", async () => {
-    await openTab("What-if");
-    expect(await screen.findByText("HIPOTÉTICO — mecanismo sintético.")).toBeInTheDocument();
-    expect(await screen.findAllByText("0.6 ppm")).toHaveLength(2);
-    fireEvent.change(screen.getByLabelText("Temperatura de molde"), { target: { value: "10" } });
-    expect(await screen.findByText("43.00 %", {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(screen.getByText(/El tiempo de ciclo no interviene/)).toBeInTheDocument();
-  });
 
-  it("compares the failure model with baselines on the same test period and follows the threshold", async () => {
-    await openTab("Fallas de máquina");
-    const kpis = await screen.findByLabelText("Métricas al umbral");
-    expect(within(kpis).getByText("15 de 21")).toBeInTheDocument();
-    const table = screen.getByLabelText("Comparación con líneas base");
-    expect(within(table).getByText(/Alertar si hubo falla en la última hora/)).toBeInTheDocument();
-    expect(within(table).getByText("0.399")).toBeInTheDocument();
-    expect(screen.getByText("14 de 14")).toBeInTheDocument();
-    expect(screen.getByText("1 de 7")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Umbral de alerta"), { target: { value: "0.7" } });
-    expect(within(screen.getByLabelText("Métricas al umbral")).getByText("9 de 21")).toBeInTheDocument();
-    expect(screen.getByText(/Requiere validación prospectiva/)).toBeInTheDocument();
-  });
 });

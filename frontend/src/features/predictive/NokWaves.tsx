@@ -245,7 +245,7 @@ export function NokWaves({ source = SYNTHETIC_SOURCE }: { source?: PredictiveSou
           )}
           <Callout tone="warning">
             <strong>Detectar una racha iniciada no es predecir su inicio.</strong> La regla anticipó {s.anticipated} de{" "}
-            {s.episodes} oleadas: sin señales previas (proceso, máquina) no hay información para adelantarse. Lo que sí
+            {s.episodes} oleadas: con solo el historial de las piezas no hay información para adelantarse. Lo que sí
             aporta es contener la racha a tiempo{s.mean_remaining_share !== null && `: alerta con ~${formatPct(s.mean_remaining_share, 0)} de la oleada aún por delante`}.
           </Callout>
           <p className="text-xs text-text-secondary">{study.data.episode_definition}</p>
