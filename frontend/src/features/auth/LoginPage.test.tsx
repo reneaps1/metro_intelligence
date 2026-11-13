@@ -5,7 +5,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "../../lib/auth/AuthProvider";
 import { RequireAuth } from "../../lib/auth/guards";
 import { LoginPage } from "./LoginPage";
-import { VALID_EMAIL, VALID_PASSWORD } from "../../test/server";
+import { http, HttpResponse } from "msw";
+import { server, VALID_EMAIL, VALID_PASSWORD } from "../../test/server";
 
 function renderApp(initialEntries: string[] = ["/login"]) {
   return render(
@@ -67,6 +68,38 @@ describe("LoginPage", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Cerrar aviso" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("also shows the notice when the account is locked after too many rejected sign-ins", async () => {
+    server.use(
+      http.post("http://localhost:8000/api/v1/auth/login", () =>
+        HttpResponse.json({ detail: "Too many attempts." }, { status: 429 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), "wrong-password");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados intentos. Espera unos minutos y vuelve a intentar.");
+    expect(screen.getByRole("status")).toHaveTextContent("¿Tu acceso demo dejó de funcionar?");
+  });
+
+  it("says in Spanish that the server did not answer, without the expired-access notice", async () => {
+    server.use(http.post("http://localhost:8000/api/v1/auth/login", () => HttpResponse.error()));
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), VALID_PASSWORD);
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se pudo conectar con el servidor. Vuelve a intentar en unos segundos.",
+    );
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 

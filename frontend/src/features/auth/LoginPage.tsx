@@ -56,11 +56,18 @@ export function LoginPage() {
       const redirectTo = (location.state as LocationState | null)?.from ?? "/process";
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
+      const status = err instanceof ApiError ? err.status : null;
+      if (status === 401) {
         setFormError("Correo o contraseña incorrectos.");
         setExpiredNotice(true);
-      } else if (err instanceof ApiError && err.status === 429) setFormError("Demasiados intentos. Esperar un minuto y reintentar.");
-      else setFormError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor. Reintentar en unos segundos.");
+      } else if (status === 429) {
+        // Locked after repeated rejected sign-ins: the same visitor the notice is for.
+        setFormError("Demasiados intentos. Espera unos minutos y vuelve a intentar.");
+        setExpiredNotice(true);
+      } else if (status === 0 || status === null) {
+        // The server did not answer (restart, network): nothing to do with the credentials.
+        setFormError("No se pudo conectar con el servidor. Vuelve a intentar en unos segundos.");
+      } else setFormError((err as ApiError).message);
     } finally {
       setSubmitting(false);
     }
