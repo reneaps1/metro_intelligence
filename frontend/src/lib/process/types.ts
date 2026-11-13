@@ -57,6 +57,8 @@ export interface StepOverview {
   coverage: number | null;
   status: StepStatus;
   trend: DailyCount[];
+  /** Last day with data for this step, in any range. */
+  last_day?: string | null;
 }
 
 export interface LineOverview {
@@ -186,11 +188,19 @@ export interface PositionCell {
   count: number;
 }
 
+export interface PositionPoint {
+  x: number;
+  y: number;
+  nest: number | null;
+}
+
 export interface PositionStats {
   pieces: number;
   out_of_tolerance: number;
   out_x: number;
   out_y: number;
+  /** Radial deviation sqrt(dX² + dY²) beyond the tolerance (the circle). */
+  out_radial: number;
   machine_nok: number;
   median_x: number | null;
   median_y: number | null;
@@ -215,6 +225,8 @@ export interface PositionMap {
   bins: number;
   cells: PositionCell[];
   beyond_extent: number;
+  points: PositionPoint[];
+  sampled_from: number;
   total: PositionStats;
   nests: NestPosition[];
 }

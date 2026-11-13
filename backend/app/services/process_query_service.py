@@ -35,6 +35,7 @@ from app.schemas.process import (
     PieceTrace,
     PositionCell,
     PositionMap,
+    PositionPoint,
     PositionStats,
     RecipeRead,
     SpecLimits,
@@ -264,6 +265,16 @@ def line_overview(
         if cpk is not None:
             worst_cpk[row.operation_id] = min(cpk, worst_cpk.get(row.operation_id, cpk))
 
+    last_days: dict[uuid.UUID, date] = dict(
+        db.execute(  # type: ignore[arg-type]
+            text(
+                "SELECT operation_id, max(day) FROM process_step_daily "
+                "WHERE operation_id = ANY(:ops) GROUP BY operation_id"
+            ),
+            {"ops": op_ids},
+        ).all()
+    )
+
     type_check = next((op for op in line_read.operations if op.kind == "type_check"), None)
     reference = int(totals[type_check.id].pieces) if type_check and type_check.id in totals else 0
 
@@ -293,6 +304,7 @@ def line_overview(
                     pieces, spec_rate if has_spec[op.id] else machine_rate, worst_cpk.get(op.id)
                 ),
                 trend=trends.get(op.id, []),
+                last_day=last_days.get(op.id),
             )
         )
     return LineOverview(
@@ -594,6 +606,7 @@ def _histogram(
 
 
 POSITION_BINS_DEFAULT = 40
+POSITION_SAMPLE_POINTS = 3000
 # Without a specification the map spans this percentile of the larger axis.
 POSITION_EXTENT_PERCENTILE = 0.995
 
@@ -687,6 +700,8 @@ def position_map(
     db.execute(text("DROP TABLE IF EXISTS position_pairs"))
     db.execute(text(f"CREATE TEMP TABLE position_pairs ON COMMIT DROP AS {pairs}"), params)
 
+    # The circle: radial deviation against the tighter axis tolerance.
+    tol_r = min((t for t in (tol_x, tol_y) if t is not None), default=float("inf"))
     if tol_x is not None or tol_y is not None:
         extent = 2 * max(t for t in (tol_x, tol_y) if t is not None)
     else:
@@ -706,6 +721,7 @@ def position_map(
                    count(*) FILTER (WHERE x > :tx OR y > :ty) AS out_tol,
                    count(*) FILTER (WHERE x > :tx) AS out_x,
                    count(*) FILTER (WHERE y > :ty) AS out_y,
+                   count(*) FILTER (WHERE sqrt(x * x + y * y) > :tr) AS out_radial,
                    count(*) FILTER (WHERE machine_ok IS FALSE) AS machine_nok,
                    count(*) FILTER (WHERE x > :ext OR y > :ext) AS beyond,
                    percentile_cont(0.5) WITHIN GROUP (ORDER BY x) AS median_x,
@@ -716,7 +732,7 @@ def position_map(
             FROM position_pairs GROUP BY GROUPING SETS ((nest), ())
             """
         ),
-        {**params, "ext": extent},
+        {**params, "ext": extent, "tr": tol_r},
     ).all()
 
     def stats(row: Any) -> dict[str, Any]:
@@ -725,6 +741,7 @@ def position_map(
             "out_of_tolerance": int(row.out_tol),
             "out_x": int(row.out_x),
             "out_y": int(row.out_y),
+            "out_radial": int(row.out_radial),
             "machine_nok": int(row.machine_nok),
             "median_x": row.median_x,
             "median_y": row.median_y,
@@ -757,6 +774,20 @@ def position_map(
             {**params, "ext": extent, "bins": bins},
         ).all()
     ]
+    inside = db.execute(
+        text("SELECT count(*) FROM position_pairs WHERE x >= 0 AND y >= 0 AND x <= :ext AND y <= :ext"),
+        {"ext": extent},
+    ).scalar_one()
+    points = [
+        PositionPoint(x=x, y=y, nest=nest)
+        for x, y, nest in db.execute(
+            text(
+                "SELECT x, y, nest FROM position_pairs "
+                "WHERE x >= 0 AND y >= 0 AND x <= :ext AND y <= :ext ORDER BY random() LIMIT :n"
+            ),
+            {"ext": extent, "n": POSITION_SAMPLE_POINTS},
+        ).all()
+    ]
     return PositionMap(
         operation=_operation_read(op),
         range=date_range,
@@ -769,6 +800,8 @@ def position_map(
         bins=bins,
         cells=cells,
         beyond_extent=int(total_row.beyond),
+        points=points,
+        sampled_from=int(inside),
         total=PositionStats(**stats(total_row)),
         nests=nests,
     )
