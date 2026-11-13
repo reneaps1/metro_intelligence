@@ -20,81 +20,84 @@ STATION_PINS = 9  # the export always has 9 positions; the test product has 8
 
 
 def make_config(pins: int = 8, in_scope: tuple[int, ...] = (2, 3)) -> IngestConfig:
-    return parse_config(
-        {
-            "plant": {
-                "organization": {"code": "MI-DEMO-ORG", "name": "Demo org"},
-                "site": {"code": "MI-DEMO-SITE", "name": "Demo site"},
-                "area": {"code": "MI-DEMO-AREA", "name": "Demo area"},
-                "line": {"code": "MI-DEMO-LINE-01", "name": "Demo line"},
-                "cell": {"code": "MI-DEMO-CELL", "name": "Demo cell"},
-                "timezone": "America/Mexico_City",
+    return parse_config(config_dict(pins, in_scope))
+
+
+def config_dict(pins: int = 8, in_scope: tuple[int, ...] = (2, 3)) -> dict[str, Any]:
+    """The raw ingest config (as read from YAML) for the synthetic line."""
+    return {
+        "plant": {
+            "organization": {"code": "MI-DEMO-ORG", "name": "Demo org"},
+            "site": {"code": "MI-DEMO-SITE", "name": "Demo site"},
+            "area": {"code": "MI-DEMO-AREA", "name": "Demo area"},
+            "line": {"code": "MI-DEMO-LINE-01", "name": "Demo line"},
+            "cell": {"code": "MI-DEMO-CELL", "name": "Demo cell"},
+            "timezone": "America/Mexico_City",
+        },
+        "product": {
+            "family": {"code": "MI-DEMO-FAM", "name": "Demo family"},
+            "part_number": {"code": "MI-DEMO-2001", "name": "Demo housing"},
+            "pins": pins,
+        },
+        "recipes": {"in_scope": list(in_scope)},
+        "stations": [
+            {
+                "sequence": 1,
+                "code": "ET1",
+                "name": "Electrical test 1",
+                "kind": "electrical",
+                "folder": "01_et1",
+                "file_prefix": "Log_ET1_",
+                "programs": [21],
             },
-            "product": {
-                "family": {"code": "MI-DEMO-FAM", "name": "Demo family"},
-                "part_number": {"code": "MI-DEMO-2001", "name": "Demo housing"},
-                "pins": pins,
+            {
+                "sequence": 2,
+                "code": "LEN-PCB",
+                "name": "Pin length PCB",
+                "kind": "pin_length",
+                "side": "pcb",
+                "folder": "03_len_pcb",
+                "file_prefix": "Log_LEN_PCB_",
             },
-            "recipes": {"in_scope": list(in_scope)},
-            "stations": [
-                {
-                    "sequence": 1,
-                    "code": "ET1",
-                    "name": "Electrical test 1",
-                    "kind": "electrical",
-                    "folder": "01_et1",
-                    "file_prefix": "Log_ET1_",
-                    "programs": [21],
-                },
-                {
-                    "sequence": 2,
-                    "code": "LEN-PCB",
-                    "name": "Pin length PCB",
-                    "kind": "pin_length",
-                    "side": "pcb",
-                    "folder": "03_len_pcb",
-                    "file_prefix": "Log_LEN_PCB_",
-                },
-                {
-                    "sequence": 3,
-                    "code": "LEN-CON",
-                    "name": "Pin length connector",
-                    "kind": "pin_length",
-                    "side": "connector",
-                    "folder": "04_len_con",
-                    "file_prefix": "Log_LEN_CON_",
-                },
-                {
-                    "sequence": 4,
-                    "code": "POS-PCB",
-                    "name": "Pin position PCB",
-                    "kind": "pin_position",
-                    "side": "pcb",
-                    "folder": "05_pos_pcb",
-                    "file_prefix": "Log_POS_PCB_",
-                    "programs": [2],
-                },
-                {
-                    "sequence": 5,
-                    "code": "POS-CON",
-                    "name": "Pin position connector",
-                    "kind": "pin_position",
-                    "side": "connector",
-                    "folder": "06_pos_con",
-                    "file_prefix": "Log_POS_CON_",
-                    "programs": [2],
-                },
-                {
-                    "sequence": 6,
-                    "code": "TYPE",
-                    "name": "Type check",
-                    "kind": "type_check",
-                    "folder": "07_type",
-                    "file_prefix": "Log_TYPE_",
-                },
-            ],
-        }
-    )
+            {
+                "sequence": 3,
+                "code": "LEN-CON",
+                "name": "Pin length connector",
+                "kind": "pin_length",
+                "side": "connector",
+                "folder": "04_len_con",
+                "file_prefix": "Log_LEN_CON_",
+            },
+            {
+                "sequence": 4,
+                "code": "POS-PCB",
+                "name": "Pin position PCB",
+                "kind": "pin_position",
+                "side": "pcb",
+                "folder": "05_pos_pcb",
+                "file_prefix": "Log_POS_PCB_",
+                "programs": [2],
+            },
+            {
+                "sequence": 5,
+                "code": "POS-CON",
+                "name": "Pin position connector",
+                "kind": "pin_position",
+                "side": "connector",
+                "folder": "06_pos_con",
+                "file_prefix": "Log_POS_CON_",
+                "programs": [2],
+            },
+            {
+                "sequence": 6,
+                "code": "TYPE",
+                "name": "Type check",
+                "kind": "type_check",
+                "folder": "07_type",
+                "file_prefix": "Log_TYPE_",
+            },
+        ],
+    }
 
 
 def _stamp(day: str, seconds: int) -> str:
