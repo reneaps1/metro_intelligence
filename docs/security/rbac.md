@@ -117,6 +117,7 @@ Role abbreviations used below:
 | `system` | `SystemConfiguration` | AD, AU | AD | AD | none | AD | Includes preferences defaults, retention, feature flags, and security settings. |
 | `live_monitor` | `Stream` | M, QE, AD, AU | none | none | none | AD | WebSocket replay of already-seeded measurements (`docs/design/live-monitor-panel.md`); read-only, same auth as any REST endpoint, never writes to `measurement_results`. |
 | `live_monitor` | `Control` | none | none | QE, AD | none | AD | Presenter controls (pause/resume/speed/scenario, LM.3) -- distinct from `Stream`: any viewer can watch, only QE/AD can steer the session. Uses the existing `update` action ("modify a mutable current-state resource") rather than inventing a new action verb -- a live replay session is exactly that kind of mutable, ephemeral state. |
+| `process` | `Operation` | V, M, QE, AD, AU | system | system | none | none | Per-step process views, piece trace and daily statistics (ADR-005). Read-only over the API; operations, recipes, pieces and step results are written only by the line ingest CLIs, which record each loaded file in the audit log. |
 
 ## Minimum Demo Permissions
 

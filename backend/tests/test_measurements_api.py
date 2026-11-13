@@ -209,7 +209,8 @@ def test_series_computes_deviation_and_is_ok(
     )
     assert all(p["is_ok"] for p in points[:4])
     assert points[4]["is_ok"] is False, "value 11.5 vs nominal 10 +/-1 is out of tolerance"
-    assert points[4]["deviation"] == "1.500000"
+    # value has 9 decimals since migration 0009; compare numerically, not as text
+    assert Decimal(points[4]["deviation"]) == Decimal("1.5")
 
 
 def test_series_reflects_spec_version_boundary(
