@@ -26,6 +26,7 @@ import time
 import uuid
 from collections import Counter
 from collections.abc import Callable, Iterable
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -49,6 +50,12 @@ logger = logging.getLogger(__name__)
 AUDIT_ACTION = "line_file_ingested"
 AUDIT_ACTOR = "cli:ingest_line"
 NOT_RETAINED_BUCKET = "not-retained"
+# Pieces per COPY flush inside a file's transaction (bounds memory).
+COPY_CHUNK_ROWS = 2000
+STEP_RESULTS_COPY = (
+    "process_step_results (id, part_instance_id, operation_id, measurement_sample_id, "
+    "recorded_at, nest, program_number, machine_ok, error_count, reference_ok, attempt_no)"
+)
 
 
 @dataclass(frozen=True)
@@ -273,15 +280,9 @@ class LineLoader:
         operation_id = ids.operation_id
         recipe_ids = self.catalog.recipes
 
-        new_instances: list[tuple[Any, ...]] = []
-        samples: list[tuple[Any, ...]] = []
-        steps: list[tuple[Any, ...]] = []
-        results: list[tuple[Any, ...]] = []
-        quarantined: list[tuple[Any, ...]] = []
         file_id = uuid7()
         run_id = uuid7()
-        run_at: datetime | None = None
-
+        quarantined: list[tuple[Any, ...]] = []
         kept: list[tuple[StationRow, int | None]] = []
         for item in read_station_file(path, station, self.config.pins, self.config.timezone):
             outcome.rows_read += 1
@@ -299,129 +300,157 @@ class LineLoader:
                 kept.append((item, recipe))
 
         instances, attempts = self._existing(operation_id, {row.serial for row, _ in kept})
-        for sequence, (item, recipe) in enumerate(kept, start=1):
-            serial = item.serial
-            instance_id = instances.get(serial)
-            if instance_id is None:
-                instance_id = uuid7()
-                instances[serial] = instance_id
-                recipe_id = recipe_ids.get(recipe) if recipe is not None else None
-                if recipe_id is None:
-                    outcome.pieces_without_recipe += 1
-                new_instances.append((instance_id, self.catalog.line_id, serial, recipe_id, item.recorded_at))
-
-            attempt = attempts.get(serial, 0) + 1
-            attempts[serial] = attempt
-            if attempt > 1:
-                outcome.repeat_attempts += 1
-
-            sample_id = uuid7()
-            run_at = item.recorded_at if run_at is None else min(run_at, item.recorded_at)
-            samples.append((sample_id, run_id, sequence, serial))
-            steps.append(
-                (
-                    uuid7(),
-                    instance_id,
-                    operation_id,
-                    sample_id,
-                    item.recorded_at,
-                    item.nest,
-                    item.program,
-                    item.machine_ok,
-                    item.error_count,
-                    item.reference_ok,
-                    attempt,
-                )
-            )
-            for value in item.values:
-                characteristic_id = self.catalog.characteristics.get((station.code, value.measure))
-                if characteristic_id is None and dry_run:
-                    # No writes in a dry run: track the new measure in memory only.
-                    characteristic_id = uuid.uuid4()
-                    self.catalog.characteristics[(station.code, value.measure)] = characteristic_id
-                elif characteristic_id is None:
-                    with Session(self.engine) as session:
-                        characteristic_id = ensure_characteristic(
-                            session, self.catalog, station, value.measure
-                        )
-                        session.commit()
-                spec = self._spec_for(characteristic_id, item.recorded_at)
-                deviation: Decimal | None = None
-                is_ok: bool | None = None
-                if spec is not None:
-                    verdict = evaluate(value.value, spec.snapshot)
-                    deviation, is_ok = verdict.deviation, verdict.is_ok
-                results.append(
-                    (
-                        uuid7(),
-                        item.recorded_at,
-                        sample_id,
-                        characteristic_id,
-                        spec.specification_id if spec else None,
-                        value.value,
-                        deviation,
-                        is_ok,
-                        value.machine_ok,
-                        value.machine_code,
-                    )
-                )
-            outcome.rows_loaded += 1
-            outcome.values_loaded += len(item.values)
-
-        if dry_run:
-            return outcome
 
         storage_key = ""
         bucket = NOT_RETAINED_BUCKET
-        if self.storage is not None:
+        if self.storage is not None and not dry_run:
             storage_key = f"line-ingest/{self.config.line.code}/{station.code}/{sha256}.csv"
             self.storage.put_object(self.raw_bucket, storage_key, data, "text/csv")
             bucket = self.raw_bucket
 
-        with psycopg.connect(_psycopg_url(self.engine)) as conn, conn.transaction():
-            conn.execute(
-                "INSERT INTO measurement_imported_files (id, data_source_id, connector_id, "
-                "original_filename, storage_bucket, storage_object_key, sha256, size_bytes, "
-                "content_type, parse_status) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'text/csv', 'parsed')",
-                (
-                    file_id,
-                    self.catalog.data_source_id,
-                    self.catalog.connector_id,
-                    relative,
-                    bucket,
-                    storage_key,
-                    sha256,
-                    len(data),
-                ),
-            )
-            if steps:
+        # One transaction per file, opened before the rows are built: rows go
+        # to COPY in chunks so memory stays flat however large the file is.
+        with ExitStack() as stack:
+            conn: psycopg.Connection[Any] | None = None
+            if not dry_run:
+                conn = stack.enter_context(psycopg.connect(_psycopg_url(self.engine)))
+                stack.enter_context(conn.transaction())
                 conn.execute(
-                    "INSERT INTO measurement_runs "
-                    "(id, measurement_program_id, machine_id, imported_file_id, run_at) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (run_id, ids.program_id, ids.machine_id, file_id, run_at),
+                    "INSERT INTO measurement_imported_files (id, data_source_id, connector_id, "
+                    "original_filename, storage_bucket, storage_object_key, sha256, size_bytes, "
+                    "content_type, parse_status) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'text/csv', 'parsed')",
+                    (
+                        file_id,
+                        self.catalog.data_source_id,
+                        self.catalog.connector_id,
+                        relative,
+                        bucket,
+                        storage_key,
+                        sha256,
+                        len(data),
+                    ),
                 )
-            _copy(
-                conn,
-                "process_part_instances (id, line_id, serial_number, recipe_id, first_seen_at)",
-                new_instances,
-            )
-            _copy(
-                conn, "measurement_samples (id, measurement_run_id, sample_sequence, serial_number)", samples
-            )
-            _copy(
-                conn,
-                "process_step_results (id, part_instance_id, operation_id, measurement_sample_id, "
-                "recorded_at, nest, program_number, machine_ok, error_count, reference_ok, attempt_no)",
-                steps,
-            )
-            _copy(
-                conn,
-                "measurement_results (id, measured_at, measurement_sample_id, characteristic_id, "
-                "specification_id, value, deviation, is_ok, machine_ok, machine_code)",
-                results,
-            )
+                if kept:
+                    conn.execute(
+                        "INSERT INTO measurement_runs "
+                        "(id, measurement_program_id, machine_id, imported_file_id, run_at) "
+                        "VALUES (%s, %s, %s, %s, %s)",
+                        (
+                            run_id,
+                            ids.program_id,
+                            ids.machine_id,
+                            file_id,
+                            min(r.recorded_at for r, _ in kept),
+                        ),
+                    )
+
+            new_instances: list[tuple[Any, ...]] = []
+            samples: list[tuple[Any, ...]] = []
+            steps: list[tuple[Any, ...]] = []
+            results: list[tuple[Any, ...]] = []
+
+            def flush() -> None:
+                if conn is not None:
+                    _copy(
+                        conn,
+                        "process_part_instances (id, line_id, serial_number, recipe_id, first_seen_at)",
+                        new_instances,
+                    )
+                    _copy(
+                        conn,
+                        "measurement_samples (id, measurement_run_id, sample_sequence, serial_number)",
+                        samples,
+                    )
+                    _copy(
+                        conn,
+                        STEP_RESULTS_COPY,
+                        steps,
+                    )
+                    _copy(
+                        conn,
+                        "measurement_results (id, measured_at, measurement_sample_id, characteristic_id, "
+                        "specification_id, value, deviation, is_ok, machine_ok, machine_code)",
+                        results,
+                    )
+                for rows in (new_instances, samples, steps, results):
+                    rows.clear()
+
+            for sequence, (item, recipe) in enumerate(kept, start=1):
+                serial = item.serial
+                instance_id = instances.get(serial)
+                if instance_id is None:
+                    instance_id = uuid7()
+                    instances[serial] = instance_id
+                    recipe_id = recipe_ids.get(recipe) if recipe is not None else None
+                    if recipe_id is None:
+                        outcome.pieces_without_recipe += 1
+                    new_instances.append(
+                        (instance_id, self.catalog.line_id, serial, recipe_id, item.recorded_at)
+                    )
+
+                attempt = attempts.get(serial, 0) + 1
+                attempts[serial] = attempt
+                if attempt > 1:
+                    outcome.repeat_attempts += 1
+
+                sample_id = uuid7()
+                samples.append((sample_id, run_id, sequence, serial))
+                steps.append(
+                    (
+                        uuid7(),
+                        instance_id,
+                        operation_id,
+                        sample_id,
+                        item.recorded_at,
+                        item.nest,
+                        item.program,
+                        item.machine_ok,
+                        item.error_count,
+                        item.reference_ok,
+                        attempt,
+                    )
+                )
+                for value in item.values:
+                    characteristic_id = self.catalog.characteristics.get((station.code, value.measure))
+                    if characteristic_id is None and dry_run:
+                        # No writes in a dry run: track the new measure in memory only.
+                        characteristic_id = uuid.uuid4()
+                        self.catalog.characteristics[(station.code, value.measure)] = characteristic_id
+                    elif characteristic_id is None:
+                        with Session(self.engine) as session:
+                            characteristic_id = ensure_characteristic(
+                                session, self.catalog, station, value.measure
+                            )
+                            session.commit()
+                    spec = self._spec_for(characteristic_id, item.recorded_at)
+                    deviation: Decimal | None = None
+                    is_ok: bool | None = None
+                    if spec is not None:
+                        verdict = evaluate(value.value, spec.snapshot)
+                        deviation, is_ok = verdict.deviation, verdict.is_ok
+                    results.append(
+                        (
+                            uuid7(),
+                            item.recorded_at,
+                            sample_id,
+                            characteristic_id,
+                            spec.specification_id if spec else None,
+                            value.value,
+                            deviation,
+                            is_ok,
+                            value.machine_ok,
+                            value.machine_code,
+                        )
+                    )
+                outcome.rows_loaded += 1
+                outcome.values_loaded += len(item.values)
+                if len(samples) >= COPY_CHUNK_ROWS:
+                    flush()
+            flush()
+
+            if conn is None:
+                return outcome
             _copy(
                 conn,
                 "measurement_quarantined_rows (id, imported_file_id, row_number, raw_row, reason)",

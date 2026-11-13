@@ -244,6 +244,40 @@ def test_failure_mid_file_leaves_nothing(engine, tmp_path, monkeypatch):
     assert _scalar(engine, "SELECT count(*) FROM measurement_imported_files") == 2
 
 
+def test_chunked_copy_loads_the_same_rows_and_rolls_back_whole_files(engine, tmp_path, monkeypatch):
+    config, catalog = _setup(engine)
+    LineFiles(day=DAY, pieces=_pieces()).write(tmp_path)
+    monkeypatch.setattr(loader_module, "COPY_CHUNK_ROWS", 1)
+    original = loader_module._copy
+    flushes = {"results": 0}
+
+    def fail_on_second_results_flush(conn, target, rows):
+        if target.startswith("measurement_results") and rows:
+            flushes["results"] += 1
+            if flushes["results"] == 2:
+                raise RuntimeError("simulated failure")
+        original(conn, target, rows)
+
+    monkeypatch.setattr(loader_module, "_copy", fail_on_second_results_flush)
+    with pytest.raises(RuntimeError):
+        _load(engine, config, catalog, tmp_path, station_codes=["TYPE", "LEN-CON"])
+    # the first chunk of the length file was written, then rolled back with the file
+    assert _scalar(engine, "SELECT count(*) FROM measurement_results") == 0
+
+    monkeypatch.setattr(loader_module, "_copy", original)
+    _load(engine, config, catalog, tmp_path)
+    chunked = _scalar(engine, "SELECT count(*) FROM measurement_results")
+    pieces = _scalar(engine, "SELECT count(*) FROM process_part_instances")
+
+    monkeypatch.setattr(loader_module, "COPY_CHUNK_ROWS", 2000)
+    with engine.begin() as conn:
+        truncate_domain_tables(conn)
+    config, catalog = _setup(engine)
+    _load(engine, config, catalog, tmp_path)
+    assert _scalar(engine, "SELECT count(*) FROM measurement_results") == chunked
+    assert _scalar(engine, "SELECT count(*) FROM process_part_instances") == pieces
+
+
 def test_daily_stats_match_raw_results_and_follow_spec_versions(engine, tmp_path):
     config, catalog = _setup(engine)
     LineFiles(day=DAY, pieces=_pieces()).write(tmp_path)
