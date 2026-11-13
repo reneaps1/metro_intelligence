@@ -13,9 +13,26 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
+// jsdom has no matchMedia either; ThemeProvider reads it for the "system"
+// preference. Tests run as a light-themed OS.
+window.matchMedia ??= ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener() {},
+  removeListener() {},
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent: () => false,
+})) as typeof window.matchMedia;
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   server.resetHandlers();
   cleanup();
+  localStorage.removeItem("metro-intelligence.theme");
+  localStorage.removeItem("metro-intelligence.demo.panes");
+  localStorage.removeItem("mi-demo-part");
+  document.documentElement.removeAttribute("data-theme");
 });
 afterAll(() => server.close());

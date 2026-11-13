@@ -83,6 +83,44 @@ Body ≥14px (16px preferred), line-height 1.5. Measurement values always monosp
 - Density: default comfortable; tables offer a compact toggle (user preference).
 - Breakpoints 768 / 1024 / 1440 — operational dashboards optimized for desktop + shop-floor 1080p displays; sidebar becomes drawer <1024px.
 
+### 4.1 Engineering workbench layout (industrial demo)
+
+The industrial demo module (`/demo/industrial-quality`, `APP_EDITION=industrial` only) opens full-viewport as a desktop engineering workbench (TIA Portal / iba Analyzer family), following ISA-101 high-performance HMI rules. It replaces the platform sidebar and top bar for that module only; the metrology edition and every other screen keep the layout above. Decision notes: `docs/design/decisions.md` (2026-10-26, 2026-10-28).
+
+**Rule: every fact lives in one place.** Location → project tree + toolbar path. Walkthrough position → toolbar `‹ n / 7 ›` only. Scenario and alarms → toolbar only (steps show a read-only summary). Provenance → step header once, explained in the inspector. Connection and activity → status bar only.
+
+- **Menu bar** (32px, `--wb-chrome`): Archivo · Ver · Escenario · Ayuda. It is the command index (every command reachable from a menu); entries that also exist in the toolbar open the same control, never a copy.
+- **Toolbar** (48px, `--wb-pane-header`): tree toggle, path (group › step › view), scenario control (choose + **Aplicar**, two actions; Restaurar), alarm summary (count, priority symbol, Reconocer todas), walkthrough `‹ n / 7 ›` (Re Pág / Av Pág also walk it, for presentation clickers), inspector toggle.
+- **Project tree** (left 232px): two levels only (group › numbered step); steps that show the simulated scenario carry its alarm symbol. Assets (INY-01/INY-02) are status rows, not links.
+- **Document**: notice line (with Deshacer) + the step page. The step header is the only title of the view.
+- **Inspector** (right 288px): technical details of the open view: provenance with its meaning, simulated scenario (description, events, alarms, generator version), session context.
+- **Status bar** (26px, `--wb-status`): simulator connection (failure shown in the alarm color), last action, edition.
+- **ISA-101 color**: neutral gray surfaces scoped to `.wb-root` (light `#DDE1E5` app; dark graphite `#1B1E22` since IQ-F16 -- darker, but never pure black). Red/amber only for alarms; alarm priority also coded by shape (diamond = P1, triangle = P2) and the symbol blinks only while unacknowledged (stopped by reduced motion). Provenance badges are neutral (icon + label; Experimental dashed). Navigation controls are outlined; action buttons (Aplicar, Reconocer, Deshacer) are solid.
+- Simulated alarms come from `lib/demo/alarms.ts` (derived from the scenario, labeled "Simulada"); no engine produces them.
+- Below 1024px the tree hides and below 1280px the inspector hides; the toolbar and the menu keep every command reachable.
+- Density: desktop pointer targets ≥32px in the menu bar and toolbar (documented exception to the 44px touch target; the workbench is not a touch surface).
+### 4.2 Line quality panel (shop-floor display, industrial demo)
+
+`/demo/industrial-quality/panel-linea` opens a full-screen panel for the line, outside the workbench chrome (spec and API contract: `docs/design/line-quality-panel.md`). It is a fixed 1920×1080 canvas scaled to the screen, so a TV at the line shows exactly the composed layout. Three views share one replay: **A Andon** (read from 5–10 m), **B Process map** (line lead / quality technician), **C Guided response** (the alarm becomes the case and its four steps).
+
+- **Color only for action.** Surfaces are the `.wb-root` grays. A single NOK piece is dark neutral (`--lp-piece-nok`); red (`--lp-p1-fill`) appears only on a streak that asked to stop, on a priority-1 band and its KPI. Amber (`--lp-p2-fill`) only for priority 2. Advisories (priority 3) are neutral squares.
+- **Priority by shape** (diamond 1, triangle 2, square advisory) and by color; on a solid band the symbol inverts. Symbols blink only while unacknowledged (`.wb-blink`, stopped by reduced motion). Unacknowledged → solid band + escalation countdown; acknowledged → solid, no blink; line stopped → outlined band ("containment").
+- **Commands:** R acknowledge, A register action (four numbered options, also one-touch buttons in view C), F full screen. Action buttons are solid only while they apply. Targets ≥52px (touch at the line).
+- **Presenter bar** (auto-hides, outside the canvas): views 1/2/3, N/W/S jump to the next real normal / attention / stop moment of the replayed data, pause, speed, theme, back to the workbench.
+- New tokens `--lp-*` in `.wb-root` (light/dark): band fills with fixed on-colors, piece strip, bars and the cavity ramp.
+
+### 4.3 Workbench content in the line panel's language (IQ-F16)
+
+The content of every workbench step follows the line quality panel (§4.2) at desktop size, so the demo reads as one product. Styles live in `features/demo/workbench/workbench.css`, scoped to `.wb-root`; shared components (`Card`, `CardHeader`, `Button`) only carry marker classes, so the metrology edition keeps §5 unchanged. Decision note: `decisions.md` (2026-10-28, unified workbench).
+
+- **Cards:** a `CardHeader` as the first child becomes a pane-header band (42px, `--wb-pane-header`, uppercase 12.5px label, letter-spacing 0.06em, context or actions on the right).
+- **KPIs:** `components/workbench/Kpi` -- uppercase label, monospaced figure (38px; 30px `sm` inside cards), unit set smaller, footer with the basis. Three columns per row so the figure keeps its size.
+- **Color budget:** neutral by default. One muted NOK accent (`--wb-nok`, light `#A64D58` / dark `#D98E97`, about a third of the alarm red's saturation, >= 4.5:1 as text) marks only what has to stand out: NOK pieces and rates, the worst group, outliers and out-of-tolerance points, the busiest heatmap cell. Red/amber (`--lp-p1-fill`, `--lp-p2-fill`) stay for alarms that ask for action. Provenance, source states and banners are neutral.
+- **Charts:** `lib/demo/chartTheme.ts` -- bars `--wb-bar`, neutral emphasis `--wb-mark`, comparison or cumulative series as a dashed line in the text color, references dotted and limits dashed with an uppercase label in the right margin ("MEDIA 10.4%"), heatmaps on the neutral `--wb-ramp`. Bar charts have no grid; line charts a faint horizontal one. Exception: IIoT signal pens keep the categorical `--chart-*` palette (each pen is a different signal).
+- **Controls:** chips (`wb-chip`, 30px, semibold) and segmented controls (`wb-seg`) show selection with the presenter bar's state (`--wb-selected` tint + `--brand-accent` border/underline); filter labels are uppercase (`wb-label`).
+- **Notices:** `components/workbench/Notice` -- neutral surface, icon, 4px left rule; the priority-2 rule only when the user has to act.
+- **Shortcuts:** keycaps (`components/workbench/Key`) next to controls that have one (Re Pág / Av Pág in the toolbar at wide widths).
+
 ## 5. Components (standard behaviors)
 
 - **Buttons:** one primary per view; destructive = danger color + confirmation dialog; loading = spinner + disabled. Radius 6px everywhere.

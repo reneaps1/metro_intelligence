@@ -6,15 +6,21 @@ import {
   CheckSquare,
   ChevronLeft,
   ChevronRight,
+  Factory,
   LayoutDashboard,
   Radio,
   ShieldAlert,
   UploadCloud,
 } from "lucide-react";
 import clsx from "clsx";
+import { useEdition } from "../../lib/edition/EditionProvider";
+import type { Edition } from "../../lib/edition/api";
+import { DEMO_BASE_PATH } from "../../lib/demo/steps";
 
-const NAV_ITEMS = [
+// IQ-F1: items with an `edition` only render in that edition.
+const NAV_ITEMS: { to: string; label: string; icon: typeof Box; edition?: Edition }[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: DEMO_BASE_PATH, label: "Demo industrial", icon: Factory, edition: "industrial" },
   { to: "/imports", label: "Import File", icon: UploadCloud },
   { to: "/catalog", label: "Parts & Catalog", icon: Box },
   { to: "/measurements", label: "Measurements", icon: Activity },
@@ -25,6 +31,8 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const { edition } = useEdition();
+  const items = NAV_ITEMS.filter((item) => !item.edition || item.edition === edition);
 
   return (
     <aside
@@ -37,7 +45,7 @@ export function Sidebar() {
         {!collapsed && <span className="text-sm font-semibold text-text-on-sidebar">Metro Intelligence</span>}
       </div>
       <nav className="flex-1 space-y-1 px-2">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        {items.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}

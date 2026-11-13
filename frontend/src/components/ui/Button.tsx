@@ -19,7 +19,8 @@ export function Button({ variant = "primary", loading = false, className, disabl
   return (
     <button
       className={clsx(
-        "inline-flex min-h-[44px] items-center justify-center gap-2 rounded px-4 text-sm font-medium transition-colors duration-150",
+        "ui-btn inline-flex min-h-[44px] items-center justify-center gap-2 rounded px-4 text-sm font-medium transition-colors duration-150",
+        `ui-btn-${variant}`,
         "disabled:cursor-not-allowed disabled:opacity-50",
         VARIANT_CLASSES[variant],
         className

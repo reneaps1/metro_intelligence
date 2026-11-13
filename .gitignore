@@ -36,6 +36,13 @@ pgdata/
 minio-data/
 data/raw/
 data/imports/
+demo-private/
+# IQ-F21: raw exports, converted pieces files and camera images never enter git
+# (tests/seed_validation/test_no_data_files.py enforces it on tracked files).
+*.zip
+*.csv.gz
+*.bmp
+*.parquet
 *.bak
 
 # IDE / OS

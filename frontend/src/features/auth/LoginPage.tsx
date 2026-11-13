@@ -57,7 +57,7 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-surface-app p-6">
       <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-        Powered by Caliprex
+        Powered by OnKaizen
       </span>
       <span className="text-[11px] text-text-secondary">Deploy test: 2026-07-18</span>
       <Card raised className="w-full max-w-md">

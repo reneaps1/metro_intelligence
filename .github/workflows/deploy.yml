@@ -3,11 +3,27 @@
 # this workflow itself went through that same gate to land here (see the
 # incident on 2026-07-18: a prior version of this file was pushed directly
 # to main, ran as root, and its own CI/deploy run failed).
+#
+# IQ-F9: two editions from the same commit (docs/deployment-editions.md).
+# scripts/deploy_edition.sh deploys each one as its own compose project and
+# skips the industrial edition while .env.industrial does not exist on the VPS.
+# Manual runs (workflow_dispatch) can target one edition, e.g. before a demo.
 name: Deploy Metro Intelligence
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      editions:
+        description: "Editions to deploy"
+        type: choice
+        options: ["metrology industrial", "metrology", "industrial"]
+        default: "metrology industrial"
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -15,24 +31,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runs of 2026-10-13 failed in 0.2 s with "lookup <host>: no such
+      # host": the VPS_HOST secret did not resolve. Fail early with an
+      # actionable message, without printing the secret.
+      - name: Check that VPS_HOST resolves
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          if [ -z "$VPS_HOST" ]; then
+            echo "::error::Secret VPS_HOST is empty."; exit 1
+          fi
+          case "$VPS_HOST" in
+            *://*|*/*|*" "*) echo "::error::VPS_HOST must be a bare hostname or IP (no scheme, path or spaces)."; exit 1 ;;
+          esac
+          if ! getent hosts "$VPS_HOST" >/dev/null; then
+            echo "::error::VPS_HOST does not resolve from the runner (check the secret value and the DNS record)."; exit 1
+          fi
+
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.2.1
+        env:
+          EDITIONS: ${{ github.event.inputs.editions || 'metrology industrial' }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_SSH_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          command_timeout: 15m
+          command_timeout: 25m
+          envs: EDITIONS
           script: |
             set -e
             cd /home/rene/projects/metro_intelligence
             git fetch origin main
             git reset --hard origin/main
-            docker compose -f docker-compose.vps.yml build frontend backend
-            # Remove any container occupying our target names that this
-            # compose project doesn't already track (e.g. left over from a
-            # manual `docker run`/test outside compose) -- otherwise `up -d`
-            # fails with a name conflict instead of recreating it.
-            docker rm -f metro-intelligence-backend-1 metro-intelligence-frontend-1 2>/dev/null || true
-            docker compose -f docker-compose.vps.yml up -d --remove-orphans
+            for edition in $EDITIONS; do
+              bash scripts/deploy_edition.sh "$edition"
+            done
             docker image prune -f
             echo "✅ Deploy complete"

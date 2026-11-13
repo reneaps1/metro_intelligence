@@ -72,6 +72,8 @@ jobs:
         run: |
           python -m pytest tests/seed_validation -q
           python -m pytest seed/tests -q
+      - name: Check the two-edition VPS deployment (IQ-F9, no Docker needed)
+        run: python -m pytest tests/deploy -q
 
   # backend-ci: (Phase 4) ruff + mypy + pytest (with postgres service) + pip-audit
   # frontend-ci: (Phase 5) eslint + tsc + vitest + npm audit

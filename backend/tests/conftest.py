@@ -124,8 +124,14 @@ def auth_database() -> None:
 
 @pytest.fixture(autouse=True)
 def reset_auth_state() -> None:
+    from app.core.ratelimit import limiter
+
     _reset_login_attempts_for_tests()
     _reset_revocation_store_for_tests()
+    # The slowapi limiter keeps in-memory counters shared by every test app in
+    # the session; without a reset, later test files hit the /auth/login
+    # 30/minute limit just because earlier files logged in.
+    limiter.reset()
     yield
 
 

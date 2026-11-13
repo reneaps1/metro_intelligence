@@ -42,6 +42,15 @@ app.include_router(api_router)
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
+@app.on_event("startup")
+def warm_up_real_dataset() -> None:
+    # IQ-F10/F21: parse the dataset the part selector opens with, off the request path.
+    if settings.app_edition == "industrial":
+        from app.services.dataset_registry import warm_up_in_background
+
+        warm_up_in_background()
+
 @app.on_event("startup")
 def create_demo_admin():
     import os

@@ -1,3 +1,12 @@
+# VPS stack, one compose project per edition (IQ-F9, docs/deployment-editions.md).
+#
+#   metrology : docker compose -p metro-intelligence            --env-file .env            -f docker-compose.vps.yml ...
+#   industrial: docker compose -p metro-intelligence-industrial --env-file .env.industrial -f docker-compose.vps.yml ...
+#
+# Every name that must not collide between editions is derived from INSTANCE.
+# With the defaults (INSTANCE=metro) the names are exactly the ones the
+# metrology deployment already uses, so its volumes and routers are untouched.
+# No container_name anywhere: compose derives names from the project (-p).
 name: metro-intelligence
 
 services:
@@ -35,7 +44,11 @@ services:
       context: ./backend
     restart: unless-stopped
     env_file:
-      - .env
+      - ${APP_ENV_FILE:-.env}
+    volumes:
+      # Private demo JSONs (report summary, model lab) live outside the repo and
+      # the image; mounted read-only. The empty default keeps metrology unchanged.
+      - ${DEMO_PRIVATE_DIR:-./infra/demo-private-empty}:/run/demo-private:ro
     depends_on:
       db:
         condition: service_healthy
@@ -46,12 +59,12 @@ services:
       - net_data
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=metro_net_app"
-      - "traefik.http.routers.metro-api.rule=Host(`metro.onkaizen.com.mx`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.metro-api.priority=100"
-      - "traefik.http.routers.metro-api.entrypoints=websecure"
-      - "traefik.http.routers.metro-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.metro-api.loadbalancer.server.port=8000"
+      - "traefik.docker.network=${APP_NETWORK:-metro_net_app}"
+      - "traefik.http.routers.${INSTANCE:-metro}-api.rule=Host(`${PUBLIC_HOST:-metro.onkaizen.com.mx}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.${INSTANCE:-metro}-api.priority=100"
+      - "traefik.http.routers.${INSTANCE:-metro}-api.entrypoints=websecure"
+      - "traefik.http.routers.${INSTANCE:-metro}-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.${INSTANCE:-metro}-api.loadbalancer.server.port=8000"
 
   frontend:
     build:
@@ -65,24 +78,28 @@ services:
       - net_app
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=metro_net_app"
-      - "traefik.http.routers.metro-web.rule=Host(`metro.onkaizen.com.mx`)"
-      - "traefik.http.routers.metro-web.priority=10"
-      - "traefik.http.routers.metro-web.entrypoints=websecure"
-      - "traefik.http.routers.metro-web.tls.certresolver=letsencrypt"
-      - "traefik.http.services.metro-web.loadbalancer.server.port=8080"
+      - "traefik.docker.network=${APP_NETWORK:-metro_net_app}"
+      - "traefik.http.routers.${INSTANCE:-metro}-web.rule=Host(`${PUBLIC_HOST:-metro.onkaizen.com.mx}`)"
+      - "traefik.http.routers.${INSTANCE:-metro}-web.priority=10"
+      - "traefik.http.routers.${INSTANCE:-metro}-web.entrypoints=websecure"
+      - "traefik.http.routers.${INSTANCE:-metro}-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.${INSTANCE:-metro}-web.loadbalancer.server.port=8080"
 
 networks:
+  # Shared with Traefik and with the other edition (reverse proxy only).
+  # It already exists on the VPS (created by the metrology project); see the runbook.
   net_app:
-    name: metro_net_app
-    driver: bridge
+    name: ${APP_NETWORK:-metro_net_app}
+    external: true
+  # Per edition and internal: one edition's backend can never reach the
+  # other edition's database or object storage.
   net_data:
-    name: metro_net_data
+    name: ${INSTANCE:-metro}_net_data
     driver: bridge
     internal: true
 
 volumes:
   pgdata:
-    name: metro_pgdata
+    name: ${INSTANCE:-metro}_pgdata
   minio-data:
-    name: metro_minio_data
+    name: ${INSTANCE:-metro}_minio_data

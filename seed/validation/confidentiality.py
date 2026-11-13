@@ -150,3 +150,54 @@ def lint_emails(values: list[str]) -> list[Violation]:
     for value in values:
         violations.extend(check_email(value))
     return violations
+
+
+# --------------------------------------------------------------------------- #
+# IQ-F8: private deny-list scan over every tracked file
+# --------------------------------------------------------------------------- #
+# The real customer name (and any other term that must never reach the public
+# repository) cannot be listed here without leaking it. It lives in a private,
+# gitignored file -- `demo-private/forbidden-terms.txt` by default, or the path
+# in `CONFIDENTIAL_TERMS_FILE` -- one term per line, `#` for comments. Where
+# that file does not exist (e.g. CI) the scan has nothing to look for.
+
+PRIVATE_TERMS_ENV = "CONFIDENTIAL_TERMS_FILE"
+DEFAULT_PRIVATE_TERMS_FILE = "demo-private/forbidden-terms.txt"
+MIN_TERM_LENGTH = 3
+MAX_SCANNED_FILE_BYTES = 2 * 1024 * 1024
+
+
+def load_private_terms(path: str) -> list[str]:
+    """Terms from a private deny-list file (missing file -> no terms)."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return []
+    terms = [line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")]
+    return [term for term in terms if len(term) >= MIN_TERM_LENGTH]
+
+
+def find_terms(text: str, terms: list[str]) -> list[str]:
+    """Deny-listed terms present in `text` (case-insensitive)."""
+    lowered = text.lower()
+    return [term for term in terms if term.lower() in lowered]
+
+
+def scan_files(paths: list[str], terms: list[str]) -> list[tuple[str, str]]:
+    """(path, term) for every deny-listed term found in a text file. Binary
+    and very large files are skipped; their names are still checked."""
+    hits: list[tuple[str, str]] = []
+    if not terms:
+        return hits
+    for path in paths:
+        hits.extend((path, term) for term in find_terms(path, terms))
+        try:
+            with open(path, "rb") as handle:
+                content = handle.read(MAX_SCANNED_FILE_BYTES + 1)
+        except OSError:
+            continue
+        if len(content) > MAX_SCANNED_FILE_BYTES or b"\x00" in content[:8192]:
+            continue
+        hits.extend((path, term) for term in find_terms(content.decode("utf-8", "ignore"), terms))
+    return hits
