@@ -154,6 +154,53 @@ class CharacteristicDetail(BaseModel):
     daily: list[CharacteristicDailyPoint]
 
 
+class PositionCell(BaseModel):
+    """One grid cell of the X/Y position map: |dX| in [x0, x1), |dY| in [y0, y1)."""
+
+    ix: int
+    iy: int
+    count: int
+
+
+class PositionStats(BaseModel):
+    """Pin position pairs of one group (whole selection or one nest).
+    Medians and 95th percentiles are robust to the gross outliers stations
+    sometimes log."""
+
+    pieces: int
+    out_of_tolerance: int
+    out_x: int
+    out_y: int
+    machine_nok: int
+    median_x: float | None
+    median_y: float | None
+    p95_x: float | None
+    p95_y: float | None
+
+
+class NestPosition(PositionStats):
+    nest: int
+
+
+class PositionMap(BaseModel):
+    operation: OperationRead
+    range: DateRange
+    pin: int
+    pins: list[int]
+    unit: str | None
+    # Drawing upper limits per axis; None when the axis has no specification.
+    tolerance_x: float | None
+    tolerance_y: float | None
+    # Both axes run from 0 to `extent` in `bins` cells; pairs beyond it are
+    # counted in `beyond_extent` and stay in every other statistic.
+    extent: float
+    bins: int
+    cells: list[PositionCell]
+    beyond_extent: int
+    total: PositionStats
+    nests: list[NestPosition]
+
+
 class TraceValue(BaseModel):
     characteristic_id: uuid.UUID
     code: str

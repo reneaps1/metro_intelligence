@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import require_permission
 from app.models.security import User
-from app.schemas.process import CharacteristicDetail, LineOverview, LineRead, OperationSummary, PieceTrace
+from app.schemas.process import (
+    CharacteristicDetail,
+    LineOverview,
+    LineRead,
+    OperationSummary,
+    PieceTrace,
+    PositionMap,
+)
 from app.services import process_query_service as service
 
 router = APIRouter(prefix="/process", tags=["process"])
@@ -74,6 +81,24 @@ def characteristic_detail(
 ) -> CharacteristicDetail:
     try:
         return service.characteristic_detail(db, operation_id, characteristic_id, start, end, recipe_id, bins)
+    except service.NotFound as exc:
+        raise _not_found(exc) from exc
+
+
+@router.get("/operations/{operation_id}/position-map", response_model=PositionMap)
+def position_map(
+    operation_id: uuid.UUID,
+    pin: int | None = Query(default=None, ge=1, le=99),
+    start: date | None = Query(default=None, alias="from"),
+    end: date | None = Query(default=None, alias="to"),
+    recipe_id: list[uuid.UUID] = Query(default_factory=list),
+    bins: int = Query(default=service.POSITION_BINS_DEFAULT, ge=10, le=80),
+    db: Session = Depends(get_db),
+    _user: User = Depends(READ),
+) -> PositionMap:
+    """X/Y position deviations of one pin against the drawing tolerance."""
+    try:
+        return service.position_map(db, operation_id, pin, start, end, recipe_id, bins)
     except service.NotFound as exc:
         raise _not_found(exc) from exc
 

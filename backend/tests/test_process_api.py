@@ -150,3 +150,39 @@ def test_piece_trace_keeps_both_verdicts(client: TestClient, viewer, line) -> No
 
     assert client.get("/api/v1/process/pieces/900003", headers=viewer).status_code == 404  # out of scope
     assert client.get("/api/v1/process/pieces/not-a-serial", headers=viewer).status_code == 422
+
+
+def test_position_map_pairs_x_and_y_against_the_tolerance(client: TestClient, viewer, line) -> None:
+    ops = {
+        op["code"]: op["id"]
+        for op in client.get("/api/v1/process/lines", headers=viewer).json()[0]["operations"]
+    }
+    url = f"/api/v1/process/operations/{ops['POS-CON']}/position-map"
+    body = client.get(url, params={"pin": 1, "from": DAY, "to": DAY}, headers=viewer).json()
+
+    assert body["pins"] == list(range(1, 9))
+    assert body["tolerance_x"] == 0.3 and body["tolerance_y"] == 0.3
+    assert body["extent"] == 0.6
+    # 900001 sits inside (0.08, 0.04); 900002 is outside in X only (0.35, 0.175).
+    assert body["total"]["pieces"] == 2
+    assert body["total"]["out_of_tolerance"] == 1
+    assert (body["total"]["out_x"], body["total"]["out_y"]) == (1, 0)
+    assert sum(cell["count"] for cell in body["cells"]) == 2 and body["beyond_extent"] == 0
+    assert [nest["nest"] for nest in body["nests"]] == [1, 2]
+    assert body["nests"][1]["out_of_tolerance"] == 1
+
+    recipe_3 = next(
+        r["id"]
+        for r in client.get(
+            f"/api/v1/process/lines/{line.line_id}/overview", params={"from": DAY, "to": DAY}, headers=viewer
+        ).json()["recipes"]
+        if r["code"] == 3
+    )
+    filtered = client.get(
+        url, params={"pin": 1, "from": DAY, "to": DAY, "recipe_id": recipe_3}, headers=viewer
+    ).json()
+    assert filtered["total"]["pieces"] == 1
+
+    no_xy = client.get(f"/api/v1/process/operations/{ops['LEN-CON']}/position-map", headers=viewer)
+    assert no_xy.status_code == 404
+    assert client.get(url).status_code == 401

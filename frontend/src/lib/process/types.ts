@@ -179,3 +179,42 @@ export interface ProcessFilters {
   to?: string;
   recipeIds: string[];
 }
+
+export interface PositionCell {
+  ix: number;
+  iy: number;
+  count: number;
+}
+
+export interface PositionStats {
+  pieces: number;
+  out_of_tolerance: number;
+  out_x: number;
+  out_y: number;
+  machine_nok: number;
+  median_x: number | null;
+  median_y: number | null;
+  p95_x: number | null;
+  p95_y: number | null;
+}
+
+export interface NestPosition extends PositionStats {
+  nest: number;
+}
+
+/** X/Y position deviations of one pin against the drawing tolerance. */
+export interface PositionMap {
+  operation: Operation;
+  range: DateRange;
+  pin: number;
+  pins: number[];
+  unit: string | null;
+  tolerance_x: number | null;
+  tolerance_y: number | null;
+  extent: number;
+  bins: number;
+  cells: PositionCell[];
+  beyond_extent: number;
+  total: PositionStats;
+  nests: NestPosition[];
+}

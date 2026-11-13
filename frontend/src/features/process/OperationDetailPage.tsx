@@ -20,6 +20,7 @@ import { filtersSearch, useProcessFilters } from "../../lib/process/useProcessFi
 import type { BreakdownRow, CharacteristicSummary } from "../../lib/process/types";
 import { ProcessFilterBar } from "./ProcessFilterBar";
 import { DailyMeanChart, DailyPiecesChart, ValueHistogram } from "./charts";
+import { PositionMapCard } from "./PositionMapCard";
 
 export function OperationDetailPage() {
   const { operationId = "" } = useParams();
@@ -44,6 +45,7 @@ export function OperationDetailPage() {
   const nok = hasSpec ? data.spec_nok : data.machine_nok;
   const selectedChar = data.characteristics.find((c) => c.id === selected) ?? null;
   const search = filtersSearch(filters);
+  const hasXyPositions = data.characteristics.some((c) => /-P\d+X$/.test(c.code));
 
   return (
     <div className="space-y-4">
@@ -94,6 +96,8 @@ export function OperationDetailPage() {
         <CardHeader title={hasSpec ? "Pieces per day · drawing verdict" : "Pieces per day · station verdict"} />
         <DailyPiecesChart trend={data.trend} useSpec={hasSpec} />
       </Card>
+
+      {hasXyPositions && <PositionMapCard operationId={operationId} filters={filters} />}
 
       <Card className="overflow-x-auto p-0">
         <div className="p-4 pb-0">
