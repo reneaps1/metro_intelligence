@@ -8,13 +8,13 @@ import { StatusChip } from "../../components/ui/StatusChip";
 import { useAsync } from "../../lib/catalog/hooks";
 import { getCharacteristicDetail, getOperationSummary } from "../../lib/process/api";
 import {
-  STATUS_LABEL,
   formatCount,
   formatLimits,
   formatNumber,
   formatPercent,
   formatRange,
   operationKindLabel,
+  stepStatusLabel,
 } from "../../lib/process/format";
 import { filtersSearch, useProcessFilters } from "../../lib/process/useProcessFilters";
 import type { BreakdownRow, CharacteristicSummary } from "../../lib/process/types";
@@ -62,20 +62,35 @@ export function OperationDetailPage() {
             {operationKindLabel(data.operation)} · {formatRange(data.range.start, data.range.end)}
           </p>
         </div>
-        <StatusChip status={data.status} label={STATUS_LABEL[data.status]} />
+        <StatusChip status={data.status} label={stepStatusLabel(data)} />
       </div>
 
       <ProcessFilterBar filters={filters} onChange={setFilters} range={data.range} recipes={data.recipes} busy={summary.loading} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Pieces (first attempt)" value={formatCount(data.pieces)} />
-        <StatTile label="Station NOK" value={`${formatCount(data.machine_nok)} · ${formatPercent(data.pieces ? data.machine_nok / data.pieces : null)}`} />
         <StatTile
-          label="Out of drawing tolerance"
-          value={hasSpec ? `${formatCount(data.spec_nok)} · ${formatPercent(data.pieces ? data.spec_nok / data.pieces : null)}` : "No spec"}
+          label={hasSpec ? `Out of drawing · ${formatCount(data.spec_nok)} pieces` : "Out of drawing"}
+          value={hasSpec ? formatPercent(data.pieces ? data.spec_nok / data.pieces : null) : "No spec"}
+        />
+        <StatTile
+          label={`Station NOK · ${formatCount(data.machine_nok)} pieces`}
+          value={formatPercent(data.pieces ? data.machine_nok / data.pieces : null)}
         />
         <StatTile label="Repeated attempts" value={formatCount(data.repeat_attempts)} />
       </div>
+
+      {data.partial_logging && (
+        <Card className="flex items-start gap-3">
+          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
+          <p className="text-sm text-text-secondary">
+            <span className="font-medium text-text-primary">
+              This step logged {formatPercent(data.coverage, 1)} of the pieces seen at type check in this range.
+            </span>{" "}
+            Its rates describe that sample, not the line, so it carries no status and stays out of the line totals.
+          </p>
+        </Card>
+      )}
 
       {data.disagreements > 0 && (
         <Card className="flex items-start gap-3 border-status-warning">
@@ -104,6 +119,13 @@ export function OperationDetailPage() {
           <CardHeader title={`Characteristics (${data.characteristics.length})`} />
         </div>
         <CharacteristicTable rows={data.characteristics} selected={selected} onSelect={setSelected} />
+        {data.characteristics.some((c) => c.gross > 0) && (
+          <p className="px-4 pb-3 text-xs text-text-secondary">
+            Mean, standard deviation and capability leave out gross readings: values more than 10 tolerance bands beyond
+            the limit, which are measurement failures rather than process spread. They still count as out of drawing and
+            show in Max.
+          </p>
+        )}
       </Card>
 
       {selectedChar && <CharacteristicPanel operationId={operationId} characteristic={selectedChar} filters={filters} />}
@@ -173,6 +195,7 @@ function CharacteristicTable({
             <td className="p-3 font-mono text-xs">{formatLimits(c.specification, c.unit)}</td>
             <td className="p-3 text-right font-mono">
               {c.cpk === null ? "—" : `${c.capability_kind} ${c.cpk.toFixed(2)}`}
+              {c.gross > 0 && <p className="text-xs text-text-secondary">excl. {formatCount(c.gross)} gross</p>}
             </td>
             <td className={clsx("p-3 text-right font-mono", c.spec_nok > 0 && "text-status-nok")}>
               {c.specification ? formatCount(c.spec_nok) : "—"}
@@ -236,7 +259,10 @@ function BreakdownCard({
   useSpec: boolean;
   nok: number;
 }) {
-  const max = Math.max(1, ...rows.map((r) => (useSpec ? r.spec_nok : r.machine_nok) / Math.max(1, r.pieces)));
+  const rateOf = (r: BreakdownRow) => (r.pieces ? (useSpec ? r.spec_nok : r.machine_nok) / r.pieces : 0);
+  // Worst first, bars relative to the worst row, so the outlier stands out.
+  const sorted = [...rows].sort((a, b) => rateOf(b) - rateOf(a) || b.pieces - a.pieces);
+  const max = Math.max(...rows.map(rateOf), 0);
   return (
     <Card className="overflow-x-auto p-0">
       <div className="p-4 pb-0">
@@ -255,9 +281,9 @@ function BreakdownCard({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {sorted.map((row) => {
             const count = useSpec ? row.spec_nok : row.machine_nok;
-            const rate = row.pieces ? count / row.pieces : 0;
+            const rate = rateOf(row);
             return (
               <tr key={row.key} className="border-b border-border last:border-0">
                 <td className="p-3">{row.label}</td>
@@ -267,7 +293,7 @@ function BreakdownCard({
                 </td>
                 <td className="p-3">
                   <div className="h-2 rounded bg-surface-app" aria-hidden="true">
-                    <div className="h-2 rounded bg-status-nok" style={{ width: `${(rate / max) * 100}%` }} />
+                    <div className="h-2 rounded bg-status-nok" style={{ width: `${max > 0 ? (rate / max) * 100 : 0}%` }} />
                   </div>
                 </td>
               </tr>

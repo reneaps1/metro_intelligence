@@ -52,7 +52,8 @@ export function DailyPiecesChart({ trend, useSpec }: { trend: DailyCount[]; useS
   );
 }
 
-/** NOK rate per day for every step, one series per step in process order. */
+/** NOK rate per day, one series per step in process order. Straight
+ * segments between days: nothing is invented between two measurements. */
 export function StepNokTrendChart({ steps }: { steps: StepOverview[] }) {
   const ordered = [...steps].sort((a, b) => a.operation.sequence - b.operation.sequence);
   const days = new Map<string, Record<string, number | string>>();
@@ -79,7 +80,7 @@ export function StepNokTrendChart({ steps }: { steps: StepOverview[] }) {
         {ordered.map((step, i) => (
           <Line
             key={step.operation.id}
-            type="monotone"
+            type="linear"
             dataKey={step.operation.code}
             name={step.operation.name}
             stroke={SERIES[i % SERIES.length]}

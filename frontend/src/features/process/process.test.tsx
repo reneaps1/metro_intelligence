@@ -37,6 +37,7 @@ function step(operation: Operation, overrides: Partial<StepOverview> = {}): Step
     worst_cpk: null,
     disagreements: 0,
     coverage: 1,
+    partial_logging: false,
     status: "ok",
     trend: [{ day: "2026-03-02", pieces: 1000, machine_nok: 0, spec_nok: 0 }],
     ...overrides,
@@ -52,9 +53,11 @@ const OVERVIEW: LineOverview = {
   ],
   selected_recipe_ids: [],
   reference_pieces: 1000,
+  rolled_yield: 0.975,
+  rolled_yield_steps: 2,
   steps: [
     step(OPERATIONS[0], { has_specification: true, spec_nok: 25, spec_nok_rate: 0.025, status: "critical", disagreements: 12, worst_cpk: 0.91 }),
-    step(OPERATIONS[1], { pieces: 40, coverage: 0.04, status: "neutral" }),
+    step(OPERATIONS[1], { pieces: 40, coverage: 0.04, partial_logging: true, machine_nok_rate: 0.6, status: "neutral" }),
     step(OPERATIONS[2]),
   ],
 };
@@ -80,9 +83,21 @@ describe("ProcessOverviewPage", () => {
       .map((link) => ["Electrical test 1", "Pin length connector", "Type check"].find((n) => link.textContent?.includes(n)));
     expect(names).toEqual(["Electrical test 1", "Pin length connector", "Type check"]);
 
-    expect(within(flow).getAllByText("Action needed").length).toBeGreaterThan(0);
+    expect(within(flow).getByText("Action")).toBeInTheDocument();
+    expect(screen.getAllByText("Action needed").length).toBeGreaterThan(0); // full text in the table
     expect(within(flow).getByText("Logs 4.0% of pieces")).toBeInTheDocument();
-    expect(within(flow).getByText("Station OK, drawing NOK")).toBeInTheDocument();
+    expect(within(flow).getByText(/station OK, drawing NOK/)).toBeInTheDocument();
+    // The electrical test logs 4 % of the pieces: it is a partial record, not a
+    // quality status, and stays out of the line-level tiles.
+    expect(within(flow).getByText("Partial log")).toBeInTheDocument();
+    expect(screen.getByText("Rolled yield · 2 fully logged steps")).toBeInTheDocument();
+    expect(screen.getByText("97.50%")).toBeInTheDocument();
+    expect(screen.getByText("Worst step · Pin length connector")).toBeInTheDocument();
+    expect(screen.getByText("2.50% NOK")).toBeInTheDocument();
+    expect(screen.getByText(/Not drawn, because they log only part of the pieces: Electrical test 1\./)).toBeInTheDocument();
+    // Every card shows the same three rows.
+    expect(within(flow).getAllByText("1st pass")).toHaveLength(3);
+    expect(within(flow).getByText("NOK per drawing")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Results per process step" })).toBeInTheDocument();
     expect(screen.getAllByText("No spec").length).toBeGreaterThan(0);
   });
@@ -137,6 +152,8 @@ const SUMMARY: OperationSummary = {
   spec_nok: 25,
   repeat_attempts: 2,
   disagreements: 12,
+  coverage: 1,
+  partial_logging: false,
   status: "critical",
   characteristics: [
     {
@@ -152,6 +169,7 @@ const SUMMARY: OperationSummary = {
       machine_nok: 0,
       spec_nok: 0,
       machine_ok_spec_nok: 0,
+      gross: 0,
       specification: null,
       cp: null,
       cpk: null,
@@ -170,6 +188,7 @@ const SUMMARY: OperationSummary = {
       machine_nok: 0,
       spec_nok: 25,
       machine_ok_spec_nok: 12,
+      gross: 3,
       specification: { nominal: "5.5", lower_tol: "-0.3", upper_tol: "0.3", lower_limit: "5.2", upper_limit: "5.8" },
       cp: 3.3,
       cpk: 0.91,
@@ -177,7 +196,10 @@ const SUMMARY: OperationSummary = {
     },
   ],
   by_recipe: [{ key: "rec-2", label: "Recipe 2 (variant pending)", pieces: 1000, machine_nok: 0, spec_nok: 25 }],
-  by_nest: [{ key: "1", label: "Nest 1", pieces: 1000, machine_nok: 0, spec_nok: 25 }],
+  by_nest: [
+    { key: "1", label: "Nest 1", pieces: 600, machine_nok: 0, spec_nok: 3 },
+    { key: "2", label: "Nest 2", pieces: 400, machine_nok: 0, spec_nok: 22 },
+  ],
   trend: [{ day: "2026-03-02", pieces: 1000, machine_nok: 0, spec_nok: 25 }],
 };
 
@@ -211,6 +233,17 @@ describe("OperationDetailPage", () => {
     expect(screen.getByText("No specification")).toBeInTheDocument();
     expect(screen.getByText("5.200 – 5.800 mm")).toBeInTheDocument();
     expect(screen.getByText("Cpk 0.91")).toBeInTheDocument();
+    // Tiles: one number each, the count goes in the label.
+    expect(screen.getByText("Out of drawing · 25 pieces")).toBeInTheDocument();
+    expect(screen.getByText("2.50%")).toBeInTheDocument();
+    // Gross readings are named where they were left out.
+    expect(screen.getByText("excl. 3 gross")).toBeInTheDocument();
+    expect(screen.getByText(/leave out gross readings/)).toBeInTheDocument();
+    // Breakdown: worst nest first, its bar full width.
+    const nestRows = within(screen.getByRole("table", { name: "By nest" })).getAllByRole("row").slice(1);
+    expect(nestRows[0]).toHaveTextContent("Nest 2");
+    expect(nestRows[0]).toHaveTextContent("22 · 5.50%");
+    expect(nestRows[1]).toHaveTextContent("Nest 1");
     // The first characteristic with a specification opens by default.
     expect(await screen.findByRole("heading", { name: "Pin 1 length · LEN-CON-P1" })).toBeInTheDocument();
     expect(await screen.findByText(/3 above the shown range/)).toBeInTheDocument();
