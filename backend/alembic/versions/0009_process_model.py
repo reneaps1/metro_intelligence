@@ -202,18 +202,34 @@ def upgrade() -> None:
     op.create_index(
         "ix_measurement_results_measurement_sample_id", "measurement_results", ["measurement_sample_id"]
     )
+    conn = op.get_bind()
     for year in NEW_PARTITION_YEARS:
         for month in range(1, 13):
             next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+            start, end = f"{year}-{month:02d}-01", f"{next_year}-{next_month:02d}-01"
+            # A partition cannot be created while the DEFAULT partition holds
+            # rows of its range (container startup runs this migration, so it
+            # must not fail on an existing database). Such a month keeps
+            # landing in DEFAULT until the data is purged and the month is
+            # added by a later migration.
+            occupied = conn.execute(
+                sa.text(
+                    "SELECT EXISTS (SELECT 1 FROM measurement_results_default "
+                    "WHERE measured_at >= :start AND measured_at < :end)"
+                ),
+                {"start": start, "end": end},
+            ).scalar_one()
+            if occupied:
+                print(f"0009: measurement_results_{year}_{month:02d} not created; DEFAULT holds rows of it")
+                continue
             op.execute(
                 f"""
                 CREATE TABLE measurement_results_{year}_{month:02d}
                 PARTITION OF measurement_results
-                FOR VALUES FROM ('{year}-{month:02d}-01') TO ('{next_year}-{next_month:02d}-01')
+                FOR VALUES FROM ('{start}') TO ('{end}')
                 """
             )
 
-    conn = op.get_bind()
     permission_id = _uuid7()
     op.bulk_insert(
         sa.table(

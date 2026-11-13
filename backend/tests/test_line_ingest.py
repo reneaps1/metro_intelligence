@@ -332,3 +332,20 @@ def test_capability_from_moments_matches_list_based():
     assert abs(cpk_from_moments(moments, upper_only) - cpk(values, upper_only)) < Decimal("1e-20")
     with pytest.raises(ValueError):
         cp_from_moments(moments, upper_only)
+
+
+def test_recipe_index_numeric_and_text_ids():
+    from app.ingest.loader import RecipeIndex
+
+    index = RecipeIndex()
+    index.set("2182702", 3)
+    index.set("2182703", None)
+    index.set("A-77", 2)
+    index.set("0042", 5)  # leading zero: kept as text, not as id 42
+    assert index.lookup("2182702") == (True, 3)
+    assert index.lookup("2182703") == (True, None)
+    assert index.lookup("A-77") == (True, 2)
+    assert index.lookup("0042") == (True, 5)
+    assert index.lookup("42") == (False, None)
+    assert index.lookup("99999999") == (False, None)
+    assert index.count == 4

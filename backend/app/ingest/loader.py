@@ -40,7 +40,7 @@ from app.engines.compliance.evaluate import SpecificationSnapshot, evaluate
 from app.ingest.config import IngestConfig, StationConfig
 from app.ingest.setup import LineCatalog, ensure_characteristic
 from app.ingest.stations import BadRow, StationRow, read_station_file, read_type_check_programs, station_files
-from app.models import ImportedFile, PartInstance, Specification, StepResult
+from app.models import ImportedFile, Specification
 from app.models.base import uuid7
 from app.services.storage_service import ObjectStorage
 
@@ -100,6 +100,53 @@ def _psycopg_url(engine: Engine) -> str:
     return engine.url.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
+class RecipeIndex:
+    """Piece id -> recipe in little memory (the API host may have 512 MB).
+
+    Numeric ids (the stations' sequential counters) live in a bytearray
+    indexed by the id, one byte each; anything else falls back to a dict.
+    Byte 0 = unknown piece, 255 = known piece without a recipe number.
+    """
+
+    _MAX_NUMERIC = 100_000_000
+    _NO_RECIPE = 255
+
+    def __init__(self) -> None:
+        self._codes = bytearray()
+        self._other: dict[str, int | None] = {}
+        self.count = 0
+
+    def _numeric(self, serial: str) -> int | None:
+        if serial.isdigit() and not (len(serial) > 1 and serial[0] == "0"):
+            value = int(serial)
+            if value < self._MAX_NUMERIC:
+                return value
+        return None
+
+    def set(self, serial: str, recipe: int | None) -> None:
+        index = self._numeric(serial)
+        if index is None or (recipe is not None and not 0 <= recipe < self._NO_RECIPE - 1):
+            if serial not in self._other:
+                self.count += 1
+            self._other[serial] = recipe
+            return
+        if index >= len(self._codes):
+            self._codes.extend(bytes(max(index + 1 - len(self._codes), len(self._codes) // 2)))
+        if self._codes[index] == 0:
+            self.count += 1
+        self._codes[index] = self._NO_RECIPE if recipe is None else recipe + 1
+
+    def lookup(self, serial: str) -> tuple[bool, int | None]:
+        """(known, recipe)."""
+        index = self._numeric(serial)
+        if index is None or serial in self._other:
+            return serial in self._other, self._other.get(serial)
+        code = self._codes[index] if index < len(self._codes) else 0
+        if code == 0:
+            return False, None
+        return True, None if code == self._NO_RECIPE else code - 1
+
+
 class LineLoader:
     def __init__(
         self,
@@ -118,10 +165,7 @@ class LineLoader:
         self.storage = storage
         self.raw_bucket = raw_bucket
         self.progress = progress or (lambda message: logger.info(message))
-        self.recipe_by_serial: dict[str, int | None] = {}
-        self.instance_by_serial: dict[str, uuid.UUID] = {}
-        self.seen_by_operation: dict[uuid.UUID, set[str]] = {}
-        self.extra_attempts: dict[tuple[str, uuid.UUID], int] = {}
+        self.recipes = RecipeIndex()
         self.loaded_hashes: set[str] = set()
         self.specs: dict[uuid.UUID, list[SpecVersion]] = {}
 
@@ -131,11 +175,12 @@ class LineLoader:
         station = self.config.type_check
         for path in station_files(self.data_dir, station):
             for serial, program in read_type_check_programs(path):
-                self.recipe_by_serial[serial] = program
-        return len(self.recipe_by_serial)
+                self.recipes.set(serial, program)
+        return self.recipes.count
 
     def load_state(self) -> None:
-        """Resume: already-loaded files, existing pieces and attempts, specs."""
+        """Resume: files already loaded and the specification versions.
+        Pieces and attempts are looked up per file, so memory stays flat."""
         with Session(self.engine) as session:
             self.loaded_hashes = set(
                 session.execute(
@@ -145,23 +190,6 @@ class LineLoader:
                     )
                 ).scalars()
             )
-            for serial, instance_id in session.execute(
-                select(PartInstance.serial_number, PartInstance.id).where(
-                    PartInstance.line_id == self.catalog.line_id
-                )
-            ):
-                self.instance_by_serial[serial] = instance_id
-            serial_by_instance = {v: k for k, v in self.instance_by_serial.items()}
-            for instance_id, operation_id, attempts in session.execute(
-                select(StepResult.part_instance_id, StepResult.operation_id, StepResult.attempt_no).where(
-                    StepResult.operation_id.in_([s.operation_id for s in self.catalog.stations.values()])
-                )
-            ):
-                serial = serial_by_instance[instance_id]
-                self.seen_by_operation.setdefault(operation_id, set()).add(serial)
-                if attempts > 1:
-                    key = (serial, operation_id)
-                    self.extra_attempts[key] = max(self.extra_attempts.get(key, 0), attempts - 1)
             self.specs = load_spec_versions(session, list(self.catalog.characteristics.values()))
 
     def _spec_for(self, characteristic_id: uuid.UUID, measured_at: datetime) -> SpecVersion | None:
@@ -186,8 +214,7 @@ class LineLoader:
         if station.programs is not None and row.program not in station.programs:
             outcome.excluded_program += 1
             return False, None
-        known = row.serial in self.recipe_by_serial
-        recipe = self.recipe_by_serial.get(row.serial)
+        known, recipe = self.recipes.lookup(row.serial)
         if known and recipe not in in_scope:
             outcome.excluded_recipe += 1
             return False, None
@@ -205,7 +232,7 @@ class LineLoader:
             return program in station.programs
         values = list(bad.raw.values())  # the piece id is the second column
         serial = values[1].strip() if len(values) > 1 else ""
-        return self.recipe_by_serial.get(serial) in self.config.recipes_in_scope
+        return self.recipes.lookup(serial)[1] in self.config.recipes_in_scope
 
     # ------------------------------------------------------------------ files
     def load(
@@ -244,7 +271,6 @@ class LineLoader:
 
         ids = self.catalog.stations[station.code]
         operation_id = ids.operation_id
-        seen = self.seen_by_operation.setdefault(operation_id, set())
         recipe_ids = self.catalog.recipes
 
         new_instances: list[tuple[Any, ...]] = []
@@ -252,14 +278,11 @@ class LineLoader:
         steps: list[tuple[Any, ...]] = []
         results: list[tuple[Any, ...]] = []
         quarantined: list[tuple[Any, ...]] = []
-        pending_instances: dict[str, uuid.UUID] = {}
-        pending_seen: set[str] = set()
-        pending_attempts: dict[tuple[str, uuid.UUID], int] = {}
         file_id = uuid7()
         run_id = uuid7()
         run_at: datetime | None = None
-        sequence = 0
 
+        kept: list[tuple[StationRow, int | None]] = []
         for item in read_station_file(path, station, self.config.pins, self.config.timezone):
             outcome.rows_read += 1
             if isinstance(item, BadRow):
@@ -271,31 +294,27 @@ class LineLoader:
                 else:
                     outcome.excluded_program += 1
                 continue
-
             keep, recipe = self._scope(station, item, outcome)
-            if not keep:
-                continue
+            if keep:
+                kept.append((item, recipe))
+
+        instances, attempts = self._existing(operation_id, {row.serial for row, _ in kept})
+        for sequence, (item, recipe) in enumerate(kept, start=1):
             serial = item.serial
-            instance_id = self.instance_by_serial.get(serial) or pending_instances.get(serial)
+            instance_id = instances.get(serial)
             if instance_id is None:
                 instance_id = uuid7()
-                pending_instances[serial] = instance_id
+                instances[serial] = instance_id
                 recipe_id = recipe_ids.get(recipe) if recipe is not None else None
                 if recipe_id is None:
                     outcome.pieces_without_recipe += 1
                 new_instances.append((instance_id, self.catalog.line_id, serial, recipe_id, item.recorded_at))
 
-            if serial in seen or serial in pending_seen:
-                key = (serial, operation_id)
-                extra = pending_attempts.get(key, self.extra_attempts.get(key, 0)) + 1
-                pending_attempts[key] = extra
-                attempt = extra + 1
+            attempt = attempts.get(serial, 0) + 1
+            attempts[serial] = attempt
+            if attempt > 1:
                 outcome.repeat_attempts += 1
-            else:
-                pending_seen.add(serial)
-                attempt = 1
 
-            sequence += 1
             sample_id = uuid7()
             run_at = item.recorded_at if run_at is None else min(run_at, item.recorded_at)
             samples.append((sample_id, run_id, sequence, serial))
@@ -421,12 +440,37 @@ class LineLoader:
                 ),
             )
 
-        # Committed: promote this file's state.
         self.loaded_hashes.add(sha256)
-        self.instance_by_serial.update(pending_instances)
-        seen.update(pending_seen)
-        self.extra_attempts.update(pending_attempts)
         return outcome
+
+    def _existing(
+        self, operation_id: uuid.UUID, serials: set[str]
+    ) -> tuple[dict[str, uuid.UUID], dict[str, int]]:
+        """Pieces already stored among `serials`, and their highest attempt
+        at this operation (both indexed lookups)."""
+        if not serials:
+            return {}, {}
+        with psycopg.connect(_psycopg_url(self.engine)) as conn:
+            instances: dict[str, uuid.UUID] = dict(
+                conn.execute(
+                    "SELECT serial_number, id FROM process_part_instances "
+                    "WHERE line_id = %s AND serial_number = ANY(%s)",
+                    (self.catalog.line_id, list(serials)),
+                ).fetchall()
+            )
+            attempts: dict[str, int] = (
+                dict(
+                    conn.execute(
+                        "SELECT pi.serial_number, max(sr.attempt_no) FROM process_step_results sr "
+                        "JOIN process_part_instances pi ON pi.id = sr.part_instance_id "
+                        "WHERE sr.operation_id = %s AND pi.id = ANY(%s) GROUP BY pi.serial_number",
+                        (operation_id, list(instances.values())),
+                    ).fetchall()
+                )
+                if instances
+                else {}
+            )
+        return instances, attempts
 
 
 def _copy(conn: psycopg.Connection[Any], target: str, rows: list[tuple[Any, ...]]) -> None:
