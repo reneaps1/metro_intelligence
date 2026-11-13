@@ -29,9 +29,13 @@ from app.schemas.process import (
     HistogramBin,
     LineOverview,
     LineRead,
+    NestPosition,
     OperationRead,
     OperationSummary,
     PieceTrace,
+    PositionCell,
+    PositionMap,
+    PositionStats,
     RecipeRead,
     SpecLimits,
     StepOverview,
@@ -520,6 +524,19 @@ def characteristic_detail(
     )
 
 
+def _line_timezone(db: Session, line_id: uuid.UUID) -> str:
+    return (
+        db.execute(
+            text(
+                "SELECT s.timezone FROM org_sites s JOIN org_areas a ON a.site_id = s.id "
+                "JOIN org_lines l ON l.area_id = a.id WHERE l.id = :line"
+            ),
+            {"line": line_id},
+        ).scalar_one_or_none()
+        or "UTC"
+    )
+
+
 def _histogram(
     db: Session,
     op: Operation,
@@ -531,16 +548,7 @@ def _histogram(
     """Histogram of raw values, partition-pruned by date. The range is the
     0.5th-99.5th percentile widened to the specification limits, so a few
     gross outliers do not flatten the distribution."""
-    tz = (
-        db.execute(
-            text(
-                "SELECT s.timezone FROM org_sites s JOIN org_areas a ON a.site_id = s.id "
-                "JOIN org_lines l ON l.area_id = a.id WHERE l.id = :line"
-            ),
-            {"line": op.line_id},
-        ).scalar_one_or_none()
-        or "UTC"
-    )
+    tz = _line_timezone(db, op.line_id)
     recipe = "" if not filters.recipe_ids else " AND pi.recipe_id = ANY(:recipe_ids)"
     source = f"""
         FROM measurement_results r
@@ -583,6 +591,187 @@ def _histogram(
     ]
     # width_bucket puts the exact upper bound in bin n+1; count it in the last bin.
     return out, int(counts.get(0, 0)), int(counts.get(bins + 1, 0))
+
+
+POSITION_BINS_DEFAULT = 40
+# Without a specification the map spans this percentile of the larger axis.
+POSITION_EXTENT_PERCENTILE = 0.995
+
+
+def _xy_pins(db: Session, op: Operation) -> dict[int, tuple[uuid.UUID, uuid.UUID]]:
+    """Pins with both an X and a Y characteristic recorded at this step."""
+    rows = db.execute(
+        text(
+            "SELECT c.id, c.balloon_number FROM catalog_characteristics c "
+            "WHERE c.id IN (SELECT DISTINCT characteristic_id FROM process_characteristic_daily "
+            "WHERE operation_id = :op)"
+        ),
+        {"op": op.id},
+    ).all()
+    axes: dict[int, dict[str, uuid.UUID]] = defaultdict(dict)
+    for char_id, balloon in rows:
+        measure = balloon.rsplit("-", 1)[-1]
+        if measure.startswith("P") and measure[-1] in "XY" and measure[1:-1].isdigit():
+            axes[int(measure[1:-1])][measure[-1]] = char_id
+    return {pin: (ids["X"], ids["Y"]) for pin, ids in sorted(axes.items()) if {"X", "Y"} <= ids.keys()}
+
+
+def _upper(spec: Specification | None) -> float | None:
+    limits = _spec_limits(spec)
+    return float(limits.upper_limit) if limits and limits.upper_limit is not None else None
+
+
+def position_map(
+    db: Session,
+    operation_id: uuid.UUID,
+    pin: int | None,
+    start: date | None,
+    end: date | None,
+    recipe_ids: list[uuid.UUID],
+    bins: int = POSITION_BINS_DEFAULT,
+) -> PositionMap:
+    """Where the X/Y position deviations of one pin concentrate relative to
+    the drawing tolerance: a density grid plus per-nest groups. Reads raw
+    results, partition-pruned by date; X and Y are paired by sample."""
+    op = db.get(Operation, operation_id)
+    if op is None:
+        raise NotFound("Operation not found.")
+    pins = _xy_pins(db, op)
+    if not pins:
+        raise NotFound("This step records no X/Y position values.")
+    pin = pin if pin in pins else next(iter(pins))
+    char_x, char_y = pins[pin]
+    date_range = resolve_range(db, [op.id], start, end)
+    filters = Filters(date_range.start, date_range.end, recipe_ids)
+    specs = _active_specs(db, [char_x, char_y])
+    tol_x, tol_y = _upper(specs.get(char_x)), _upper(specs.get(char_y))
+    unit = db.execute(select(Characteristic.unit).where(Characteristic.id == char_x)).scalar_one()
+
+    window = (
+        "r.measured_at >= (CAST(:start AS date)::timestamp AT TIME ZONE :tz) "
+        "AND r.measured_at < ((CAST(:end AS date) + 1)::timestamp AT TIME ZONE :tz)"
+    )
+    # Pair X with Y once per request into a temporary table; the statistics
+    # and the grid then read that small table instead of the results twice.
+    recipe_join = (
+        ""
+        if not recipe_ids
+        else (
+            " JOIN process_part_instances pi"
+            " ON pi.id = sr.part_instance_id AND pi.recipe_id = ANY(:recipe_ids)"
+        )
+    )
+    pairs = f"""
+        WITH x AS (
+            SELECT r.measurement_sample_id AS sid, r.value::float8 AS v FROM measurement_results r
+            WHERE r.characteristic_id = :cx AND {window}
+        ), y AS (
+            SELECT r.measurement_sample_id AS sid, r.value::float8 AS v FROM measurement_results r
+            WHERE r.characteristic_id = :cy AND {window}
+        )
+        SELECT x.v AS x, y.v AS y, sr.nest, sr.machine_ok
+        FROM x JOIN y ON y.sid = x.sid
+        JOIN process_step_results sr
+          ON sr.measurement_sample_id = x.sid AND sr.operation_id = :op{recipe_join}
+    """
+    params: dict[str, Any] = {
+        "cx": char_x,
+        "cy": char_y,
+        "op": op.id,
+        "tz": _line_timezone(db, op.line_id),
+        # An axis without a specification never counts as out of tolerance.
+        "tx": tol_x if tol_x is not None else float("inf"),
+        "ty": tol_y if tol_y is not None else float("inf"),
+        **filters.params(),
+    }
+    db.execute(text("DROP TABLE IF EXISTS position_pairs"))
+    db.execute(text(f"CREATE TEMP TABLE position_pairs ON COMMIT DROP AS {pairs}"), params)
+
+    if tol_x is not None or tol_y is not None:
+        extent = 2 * max(t for t in (tol_x, tol_y) if t is not None)
+    else:
+        extent = (
+            db.execute(
+                text("SELECT percentile_cont(:q) WITHIN GROUP (ORDER BY greatest(x, y)) FROM position_pairs"),
+                {**params, "q": POSITION_EXTENT_PERCENTILE},
+            ).scalar_one()
+            or 1.0
+        )
+    extent = max(float(extent), 1e-6)
+
+    groups = db.execute(
+        text(
+            """
+            SELECT nest, count(*) AS pieces,
+                   count(*) FILTER (WHERE x > :tx OR y > :ty) AS out_tol,
+                   count(*) FILTER (WHERE x > :tx) AS out_x,
+                   count(*) FILTER (WHERE y > :ty) AS out_y,
+                   count(*) FILTER (WHERE machine_ok IS FALSE) AS machine_nok,
+                   count(*) FILTER (WHERE x > :ext OR y > :ext) AS beyond,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY x) AS median_x,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY y) AS median_y,
+                   percentile_cont(0.95) WITHIN GROUP (ORDER BY x) AS p95_x,
+                   percentile_cont(0.95) WITHIN GROUP (ORDER BY y) AS p95_y,
+                   GROUPING(nest) AS is_total
+            FROM position_pairs GROUP BY GROUPING SETS ((nest), ())
+            """
+        ),
+        {**params, "ext": extent},
+    ).all()
+
+    def stats(row: Any) -> dict[str, Any]:
+        return {
+            "pieces": int(row.pieces),
+            "out_of_tolerance": int(row.out_tol),
+            "out_x": int(row.out_x),
+            "out_y": int(row.out_y),
+            "machine_nok": int(row.machine_nok),
+            "median_x": row.median_x,
+            "median_y": row.median_y,
+            "p95_x": row.p95_x,
+            "p95_y": row.p95_y,
+        }
+
+    total_row = next((row for row in groups if row.is_total), None)
+    if total_row is None or not total_row.pieces:
+        raise NotFound("No position values for this pin in the selected range.")
+    nests = sorted(
+        (
+            NestPosition(nest=row.nest, **stats(row))
+            for row in groups
+            if not row.is_total and row.nest is not None
+        ),
+        key=lambda n: n.nest,
+    )
+
+    cells = [
+        PositionCell(ix=int(ix) - 1, iy=int(iy) - 1, count=int(count))
+        for ix, iy, count in db.execute(
+            text(
+                """
+                SELECT least(width_bucket(x, 0, :ext, :bins), :bins) AS ix,
+                       least(width_bucket(y, 0, :ext, :bins), :bins) AS iy, count(*)
+                FROM position_pairs WHERE x >= 0 AND y >= 0 AND x <= :ext AND y <= :ext GROUP BY 1, 2
+                """
+            ),
+            {**params, "ext": extent, "bins": bins},
+        ).all()
+    ]
+    return PositionMap(
+        operation=_operation_read(op),
+        range=date_range,
+        pin=pin,
+        pins=list(pins),
+        unit=unit,
+        tolerance_x=tol_x,
+        tolerance_y=tol_y,
+        extent=extent,
+        bins=bins,
+        cells=cells,
+        beyond_extent=int(total_row.beyond),
+        total=PositionStats(**stats(total_row)),
+        nests=nests,
+    )
 
 
 def piece_trace(db: Session, serial_number: str) -> PieceTrace:

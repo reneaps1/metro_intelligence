@@ -6,6 +6,7 @@ import type {
   LineOverview,
   OperationSummary,
   PieceTrace,
+  PositionMap,
   ProcessFilters,
 } from "./types";
 
@@ -38,6 +39,11 @@ export function getCharacteristicDetail(
   return apiFetch(
     `/process/operations/${operationId}/characteristics/${characteristicId}${query(filters, { bins: "30" })}`,
   );
+}
+
+export function getPositionMap(operationId: string, pin: number | null, filters: ProcessFilters): Promise<PositionMap> {
+  const extra: Record<string, string> = pin === null ? {} : { pin: String(pin) };
+  return apiFetch(`/process/operations/${operationId}/position-map${query(filters, extra)}`);
 }
 
 export function getPieceTrace(serialNumber: string): Promise<PieceTrace> {

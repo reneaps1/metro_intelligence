@@ -261,3 +261,60 @@ describe("PieceTracePage", () => {
     expect(await screen.findByText("No piece 123 in the loaded data.")).toBeInTheDocument();
   });
 });
+
+describe("PositionMapCard", () => {
+  it("shows the density map, the tolerance and the nests ranked by share out of tolerance", async () => {
+    const posCon = op(6, "POS-CON", "Pin position connector", "pin_position", "connector");
+    const xChar = { ...SUMMARY.characteristics[1], id: "char-x", code: "POS-CON-P1X", name: "Pin 1 X deviation", specification: null, cpk: null, cp: null, capability_kind: null };
+    const pins: number[] = [];
+    server.use(
+      http.get(`${API}/process/operations/op-POS-CON/summary`, () =>
+        HttpResponse.json({ ...SUMMARY, operation: posCon, characteristics: [xChar] }),
+      ),
+      http.get(`${API}/process/operations/op-POS-CON/characteristics/:cid`, () => HttpResponse.json({ detail: "none" }, { status: 404 })),
+      http.get(`${API}/process/operations/op-POS-CON/position-map`, ({ request }) => {
+        const pin = Number(new URL(request.url).searchParams.get("pin") ?? 1);
+        pins.push(pin);
+        const stats = { out_x: 1, out_y: 30, machine_nok: 2, median_x: 0.07, median_y: 0.12, p95_x: 0.17, p95_y: 0.27 };
+        return HttpResponse.json({
+          operation: posCon,
+          range: RANGE,
+          pin,
+          pins: [1, 2],
+          unit: "mm",
+          tolerance_x: 0.3,
+          tolerance_y: 0.3,
+          extent: 0.6,
+          bins: 40,
+          cells: [
+            { ix: 4, iy: 8, count: 900 },
+            { ix: 30, iy: 32, count: 3 },
+          ],
+          beyond_extent: 5,
+          total: { pieces: 1000, out_of_tolerance: 31, ...stats },
+          nests: [
+            { nest: 1, pieces: 600, out_of_tolerance: 1, ...stats },
+            { nest: 9, pieces: 400, out_of_tolerance: 30, ...stats, median_y: 0.22 },
+          ],
+        });
+      }),
+    );
+    renderAuthed(
+      <Routes>
+        <Route path="/process/operations/:operationId" element={<OperationDetailPage />} />
+      </Routes>,
+      { email: VALID_EMAIL, password: VALID_PASSWORD, route: "/process/operations/op-POS-CON" },
+    );
+
+    expect(await screen.findByRole("heading", { name: "Pin position map · |ΔX| vs |ΔY|" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /Density of pin 1 position deviations; 1,000 pieces/ })).toBeInTheDocument();
+    expect(screen.getByText("96.90%")).toBeInTheDocument(); // inside tolerance
+    expect(screen.getByText("Drawing tolerance 0.30")).toBeInTheDocument();
+    const nestRows = within(screen.getByRole("table", { name: /Pin position by nest/ })).getAllByRole("row").slice(1);
+    expect(nestRows[0]).toHaveTextContent("N9"); // highest share out of tolerance first
+    expect(nestRows[0]).toHaveTextContent("30 · 7.50%");
+
+    await userEvent.click(screen.getByRole("button", { name: "Pin 2" }));
+    await waitFor(() => expect(pins).toContain(2));
+  });
+});
