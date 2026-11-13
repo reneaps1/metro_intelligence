@@ -75,3 +75,49 @@ def cpk(values: list[Decimal], spec: ToleranceSpec) -> Decimal:
         candidates.append((mean - lsl) / (3 * stdev))
 
     return min(candidates)
+
+
+@dataclass(frozen=True)
+class Moments:
+    """Sufficient statistics of a sample: count, sum and sum of squares.
+
+    Daily aggregates store these so capability over any date range is
+    computed without loading individual values (ADR-005)."""
+
+    n: int
+    total: Decimal
+    total_sq: Decimal
+
+    @classmethod
+    def of(cls, values: list[Decimal]) -> Moments:
+        return cls(len(values), sum(values, start=Decimal(0)), sum((v * v for v in values), start=Decimal(0)))
+
+
+def _moments_mean_stdev(moments: Moments) -> tuple[Decimal, Decimal]:
+    if moments.n < 2:
+        raise ValueError("Capability requires at least 2 values to estimate a standard deviation.")
+    mean = moments.total / moments.n
+    variance = (moments.total_sq - moments.total * moments.total / moments.n) / (moments.n - 1)
+    if variance <= 0:
+        raise ValueError("Capability is undefined when the sample standard deviation is zero.")
+    return mean, variance.sqrt()
+
+
+def cp_from_moments(moments: Moments, spec: ToleranceSpec) -> Decimal:
+    """Cp from moments; same definition as cp()."""
+    if spec.lower_tol is None or spec.upper_tol is None:
+        raise ValueError("Cp is undefined for a unilateral tolerance -- use cpk() instead.")
+    _mean_value, stdev = _moments_mean_stdev(moments)
+    return (spec.upper_tol - spec.lower_tol) / (6 * stdev)
+
+
+def cpk_from_moments(moments: Moments, spec: ToleranceSpec) -> Decimal:
+    """Cpk from moments; same definition as cpk(). With only an upper
+    tolerance this is Cpu, with only a lower one Cpl."""
+    mean, stdev = _moments_mean_stdev(moments)
+    candidates: list[Decimal] = []
+    if spec.upper_tol is not None:
+        candidates.append((spec.nominal + spec.upper_tol - mean) / (3 * stdev))
+    if spec.lower_tol is not None:
+        candidates.append((mean - spec.nominal - spec.lower_tol) / (3 * stdev))
+    return min(candidates)

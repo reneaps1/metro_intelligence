@@ -13,7 +13,7 @@ CLAUDE.md §7, §16 and §20 require every demo, seed, fixture and document to u
    - the specification file passed to `import_specifications`;
    - the data directory (`LINE_DATA_DIR`), mounted read-only.
    The repository ships only `backend/app/ingest/config.example.yaml` and `backend/app/ingest/specs.example.yaml` with `MI-DEMO-*` values.
-4. Tests use synthetic files generated in the same file format (`backend/tests/fixtures/line_csv_factory.py`), with fictitious ids and values.
+4. Tests use synthetic files generated in the same file format (`backend/tests/line_csv_factory.py`), with fictitious ids and values.
 5. Raw source files are retained in MinIO and linked to the results they produced (§6). Database dumps and the raw bucket are treated as customer confidential: access limited to the owner's administrators, backups encrypted at rest.
 
 ## Consequences
