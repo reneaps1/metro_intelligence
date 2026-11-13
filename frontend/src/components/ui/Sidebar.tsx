@@ -10,10 +10,12 @@ import {
   Radio,
   ShieldAlert,
   UploadCloud,
+  Workflow,
 } from "lucide-react";
 import clsx from "clsx";
 
 const NAV_ITEMS = [
+  { to: "/process", label: "Process", icon: Workflow },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/imports", label: "Import File", icon: UploadCloud },
   { to: "/catalog", label: "Parts & Catalog", icon: Box },

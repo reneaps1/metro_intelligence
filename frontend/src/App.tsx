@@ -12,6 +12,9 @@ import { RiskPage } from "./features/risk/RiskPage";
 import { DashboardPage } from "./features/dashboards/DashboardPage";
 import { RecommendationsInboxPage } from "./features/recommendations/RecommendationsInboxPage";
 import { RequireAuth } from "./lib/auth/guards";
+import { ProcessOverviewPage } from "./features/process/ProcessOverviewPage";
+import { OperationDetailPage } from "./features/process/OperationDetailPage";
+import { PieceTracePage } from "./features/process/PieceTracePage";
 
 export function App() {
   return (
@@ -24,7 +27,11 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/process" replace />} />
+        <Route path="/process" element={<ProcessOverviewPage />} />
+        <Route path="/process/operations/:operationId" element={<OperationDetailPage />} />
+        <Route path="/process/pieces" element={<PieceTracePage />} />
+        <Route path="/process/pieces/:serial" element={<PieceTracePage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/imports" element={<ImportPage />} />
         <Route path="/catalog" element={<CatalogListPage />} />
@@ -36,7 +43,7 @@ export function App() {
         <Route path="/risk" element={<RiskPage />} />
         <Route path="/recommendations" element={<RecommendationsInboxPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/process" replace />} />
     </Routes>
   );
 }
