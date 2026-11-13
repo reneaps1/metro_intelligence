@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { renderAuthed } from "../../test/renderAuthed";
@@ -71,7 +71,7 @@ describe("DemoShell walkthrough", () => {
     const user = userEvent.setup();
     renderDemo();
 
-    await user.click(await screen.findByRole("button", { name: /iniciar demo/i }));
+    await user.click(await screen.findByRole("button", { name: "Iniciar recorrido" }));
     expect(await screen.findByRole("heading", { name: "Diagnóstico de calidad" })).toBeInTheDocument();
     expect(within(screen.getByRole("group", { name: "Recorrido" })).getByText("1 / 3")).toBeInTheDocument();
     // Step 1 is lazy-loaded (IQ-F8): the first import can take a while under a parallel run.
@@ -98,7 +98,7 @@ describe("DemoShell walkthrough", () => {
       "/demo/industrial-quality/panel-linea",
     );
     expect(within(tree).queryByText(/Activos/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /panel de calidad en línea/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Panel en línea" })).toBeInTheDocument();
     // the simulated process scenario and its alarms are gone with the process steps
     expect(screen.queryByRole("button", { name: /^escenario/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^alarmas/i })).not.toBeInTheDocument();
@@ -107,13 +107,33 @@ describe("DemoShell walkthrough", () => {
   it.each(["context", "iiot", "correlation", "integration"])("the removed %s step falls back to the demo home", async (stepId) => {
     server.use(industrialMetaHandler());
     renderDemo(`/demo/industrial-quality/${stepId}`);
-    expect(await screen.findByRole("button", { name: /iniciar demo/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Iniciar recorrido" })).toBeInTheDocument();
+  });
+
+  it("home shows the selected part's figures and the walkthrough table, each linked to its step", async () => {
+    server.use(industrialMetaHandler());
+    renderDemo();
+    const strip = await screen.findByRole("region", { name: "Indicadores de la pieza" });
+    const pieces = await within(strip).findByRole("link", { name: /piezas medidas/i });
+    await waitFor(() => expect(pieces).not.toHaveTextContent("…"));
+    expect(pieces).toHaveAttribute("href", "/demo/industrial-quality/quality");
+    expect(within(strip).getByRole("link", { name: /variable con más nok/i })).toHaveAttribute(
+      "href",
+      "/demo/industrial-quality/dimensional",
+    );
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("row")).toHaveLength(1 + 3 + 1);
+    expect(within(table).getByRole("link", { name: "IA predictiva y oleadas NOK" })).toBeInTheDocument();
+    expect(within(table).getAllByTitle(/simulador de proceso/i)[0]).toHaveTextContent("Simulado");
+    // no marketing copy, quick-access cards or origin legend on the home
+    expect(screen.queryByText(/accesos rápidos/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cómo leer el origen/i)).not.toBeInTheDocument();
   });
 
   it("unknown step falls back to the demo home", async () => {
     server.use(industrialMetaHandler());
     renderDemo("/demo/industrial-quality/nope");
-    expect(await screen.findByRole("button", { name: /iniciar demo/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Iniciar recorrido" })).toBeInTheDocument();
   });
 });
 

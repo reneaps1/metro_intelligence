@@ -91,6 +91,11 @@
    graphite (IQ-F16), not pure black. Status colors are re-tuned to keep >= 4.5:1
    on these surfaces; the rest of the platform keeps the tokens above. */
 .wb-root {
+  /* OnKaizen green for the demo's primary action, links and selection
+     (2026-11-12); the rest of the platform keeps its brand blue. */
+  --brand-primary: #357a2b;
+  --brand-primary-hover: #2b6423;
+  --brand-accent: #4a9b3a;
   --bg-app: #dde1e5;
   --bg-surface: #f5f6f8;
   --bg-surface-raised: #ffffff;
@@ -99,7 +104,7 @@
   --status-warning: #8f4a06;
   --wb-chrome: #e3e7eb;
   --wb-pane-header: #eceef1;
-  --wb-selected: rgba(14, 124, 134, 0.14);
+  --wb-selected: rgba(74, 155, 58, 0.14);
   --wb-status: #e3e7eb;
   --wb-status-text: #344054;
   /* Data marks for the whole workbench (design-system.md §4.3, IQ-F16): neutral
@@ -127,8 +132,10 @@
 }
 
 :root[data-theme="dark"] .wb-root {
-  --brand-primary: #8fb3e8;
-  --brand-primary-hover: #a9c4ee;
+  --brand-primary: #6abf56;
+  --brand-primary-hover: #82cc70;
+  --brand-accent: #6abf56;
+  --text-on-brand: #0f1f0b;
   --bg-app: #1b1e22;
   --bg-surface: #212529;
   --bg-surface-raised: #292e33;
@@ -143,7 +150,7 @@
   --wb-chrome: #131518;
   --wb-chrome-text: #b6bfc9;
   --wb-pane-header: #272c31;
-  --wb-selected: rgba(63, 176, 186, 0.2);
+  --wb-selected: rgba(106, 191, 86, 0.18);
   --wb-status: #131518;
   --wb-status-text: #b6bfc9;
   --wb-bar: #8f99a4;
