@@ -347,6 +347,40 @@ def test_daily_stats_match_raw_results_and_follow_spec_versions(engine, tmp_path
     assert _scalar(engine, "SELECT count(*) FROM catalog_specifications WHERE valid_to IS NOT NULL") == 8
 
 
+def test_gross_readings_stay_out_of_the_moments_but_count_as_nok(engine, tmp_path):
+    config, catalog = _setup(engine)
+    # 100002 reads 0.35 (out of the 0.30 drawing limit, plausible). 100005 reads
+    # 8.0 in X and 4.0 in Y: both beyond 0.30 + 10 x 0.30 = 3.3, a lost pin.
+    pieces = [*_pieces(), Piece("100005", recipe=2, nest=4, second=50, pos_con=8.0)]
+    LineFiles(day=DAY, pieces=pieces).write(tmp_path)
+    _load(engine, config, catalog, tmp_path)
+    build_daily_stats(engine, catalog.line_id, config.timezone.key)
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            sa.text(
+                "SELECT sum(d.n), sum(d.n_gross), sum(d.n_spec_nok), sum(d.sum_value), max(d.max_value) "
+                "FROM process_characteristic_daily d JOIN catalog_characteristics c ON c.id = d.characteristic_id "
+                "WHERE c.balloon_number = 'POS-CON-P1X'"
+            )
+        ).one()
+    n, gross, spec_nok, total, maximum = row
+    # 100001 and 100004 ok, 100002 NOK, 100005 NOK and gross (100003 is out of scope)
+    assert (n, gross, spec_nok) == (4, 1, 2)
+    assert total == pytest.approx(0.08 + 0.35 + 0.08)  # the gross 8.0 is not in the sum
+    assert maximum == pytest.approx(8.0)  # but stays visible as the maximum
+
+    # Lengths in tolerance and values without a specification are never gross.
+    assert (
+        _scalar(
+            engine,
+            "SELECT COALESCE(sum(d.n_gross), 0) FROM process_characteristic_daily d "
+            "JOIN process_operations o ON o.id = d.operation_id WHERE o.code <> 'POS-CON'",
+        )
+        == 0
+    )
+
+
 def test_specification_import_is_idempotent(engine):
     config, catalog = _setup(engine, with_specs=False)
     with Session(engine) as session:

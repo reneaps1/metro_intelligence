@@ -43,7 +43,7 @@ from app.schemas.process import (
     TraceStep,
     TraceValue,
 )
-from app.services.process_status import step_status
+from app.services.process_status import is_partial, rolled_yield, step_status
 
 DEFAULT_RANGE_DAYS = 30
 NO_RECIPE_KEY = "none"
@@ -190,7 +190,8 @@ def _characteristic_moments(db: Session, filters: Filters, operation_ids: list[u
                 SELECT d.operation_id, d.characteristic_id, sum(d.n) AS n,
                        sum(d.n_machine_nok) AS machine_nok,
                        sum(d.n_evaluated) AS evaluated, sum(d.n_spec_nok) AS spec_nok,
-                       sum(d.n_machine_ok_spec_nok) AS disagreements, sum(d.sum_value) AS total,
+                       sum(d.n_machine_ok_spec_nok) AS disagreements, sum(d.n_gross) AS gross,
+                       sum(d.sum_value) AS total,
                        sum(d.sum_sq_value) AS total_sq, min(d.min_value) AS min_value,
                        max(d.max_value) AS max_value
                 FROM process_characteristic_daily d
@@ -261,7 +262,9 @@ def line_overview(
         disagreements[row.operation_id] += int(row.disagreements)
         if row.evaluated:
             has_spec[row.operation_id] = True
-        _cp, cpk, _kind = _capability(int(row.n), row.total, row.total_sq, specs.get(row.characteristic_id))
+        _cp, cpk, _kind = _capability(
+            int(row.n) - int(row.gross), row.total, row.total_sq, specs.get(row.characteristic_id)
+        )
         if cpk is not None:
             worst_cpk[row.operation_id] = min(cpk, worst_cpk.get(row.operation_id, cpk))
 
@@ -279,6 +282,7 @@ def line_overview(
     reference = int(totals[type_check.id].pieces) if type_check and type_check.id in totals else 0
 
     steps = []
+    full_rates: list[float] = []
     for op in line_read.operations:
         step_row = totals.get(op.id)
         pieces = int(step_row.pieces) if step_row else 0
@@ -286,6 +290,11 @@ def line_overview(
         spec_nok = int(step_row.spec_nok) if step_row else 0
         spec_rate = _rate(spec_nok, pieces) if has_spec[op.id] else None
         machine_rate = _rate(machine_nok, pieces)
+        nok_rate = spec_rate if has_spec[op.id] else machine_rate
+        coverage = _rate(pieces, reference)
+        partial = pieces > 0 and is_partial(coverage)
+        if pieces > 0 and not partial and nok_rate is not None:
+            full_rates.append(nok_rate)
         steps.append(
             StepOverview(
                 operation=op,
@@ -299,10 +308,9 @@ def line_overview(
                 has_specification=has_spec[op.id],
                 worst_cpk=worst_cpk.get(op.id),
                 disagreements=disagreements[op.id],
-                coverage=_rate(pieces, reference),
-                status=step_status(
-                    pieces, spec_rate if has_spec[op.id] else machine_rate, worst_cpk.get(op.id)
-                ),
+                coverage=coverage,
+                partial_logging=partial,
+                status="neutral" if partial else step_status(pieces, nok_rate, worst_cpk.get(op.id)),
                 trend=trends.get(op.id, []),
                 last_day=last_days.get(op.id),
             )
@@ -313,6 +321,8 @@ def line_overview(
         recipes=recipe_reads(db, line_id),
         selected_recipe_ids=recipe_ids,
         reference_pieces=reference,
+        rolled_yield=rolled_yield(full_rates),
+        rolled_yield_steps=len(full_rates),
         steps=steps,
     )
 
@@ -330,10 +340,12 @@ def _summaries(
     for row in rows:
         char = characteristics[row.characteristic_id]
         n = int(row.n)
-        mean = row.total / n if n else None
-        variance = (row.total_sq - row.total * row.total / n) / (n - 1) if n > 1 else None
+        gross = int(row.gross)
+        used = n - gross  # values behind the moments
+        mean = row.total / used if used else None
+        variance = (row.total_sq - row.total * row.total / used) / (used - 1) if used > 1 else None
         spec = specs.get(char.id)
-        cp_value, cpk, kind = _capability(n, row.total, row.total_sq, spec)
+        cp_value, cpk, kind = _capability(used, row.total, row.total_sq, spec)
         summaries.append(
             CharacteristicSummary(
                 id=char.id,
@@ -348,6 +360,7 @@ def _summaries(
                 machine_nok=int(row.machine_nok),
                 spec_nok=int(row.spec_nok),
                 machine_ok_spec_nok=int(row.disagreements),
+                gross=gross,
                 specification=_spec_limits(spec),
                 cp=cp_value,
                 cpk=cpk,
@@ -365,6 +378,23 @@ def _measure_order(code: str) -> tuple[int, int, str]:
     if measure.startswith("P") and measure[1:].rstrip("XY").isdigit():
         return (1, int(measure[1:].rstrip("XY")), measure[-1])
     return (2, 0, code)
+
+
+def _reference_pieces(db: Session, line_id: uuid.UUID, filters: Filters) -> int:
+    """Pieces seen at the line's type check in the range: the reference a
+    step's coverage is measured against. 0 when the line has no type check."""
+    return int(
+        db.execute(
+            text(
+                f"""
+                SELECT coalesce(sum(d.pieces), 0) FROM process_step_daily d
+                JOIN process_operations o ON o.id = d.operation_id
+                WHERE o.line_id = :line AND o.operation_kind = 'type_check' AND {filters.sql()}
+                """
+            ),
+            {"line": line_id, **filters.params()},
+        ).scalar_one()
+    )
 
 
 def operation_summary(
@@ -454,6 +484,8 @@ def operation_summary(
     ]
     has_spec = any(c.specification is not None for c in characteristics)
     cpks = [c.cpk for c in characteristics if c.cpk is not None]
+    coverage = _rate(int(total.pieces), _reference_pieces(db, op.line_id, filters))
+    partial = int(total.pieces) > 0 and is_partial(coverage)
     pieces = int(total.pieces)
     nok = int(total.spec_nok) if has_spec else int(total.machine_nok)
     return OperationSummary(
@@ -465,7 +497,9 @@ def operation_summary(
         spec_nok=int(total.spec_nok),
         repeat_attempts=int(total.repeats),
         disagreements=sum(c.machine_ok_spec_nok for c in characteristics),
-        status=step_status(pieces, _rate(nok, pieces), min(cpks) if cpks else None),
+        coverage=coverage,
+        partial_logging=partial,
+        status="neutral" if partial else step_status(pieces, _rate(nok, pieces), min(cpks) if cpks else None),
         characteristics=characteristics,
         by_recipe=by_recipe,
         by_nest=by_nest,
@@ -503,7 +537,8 @@ def characteristic_detail(
             f"""
             SELECT d.day, sum(d.n) AS n, sum(d.sum_value) AS total, sum(d.sum_sq_value) AS total_sq,
                    min(d.min_value) AS min_value, max(d.max_value) AS max_value,
-                   sum(d.n_spec_nok) AS spec_nok, sum(d.n_machine_nok) AS machine_nok
+                   sum(d.n_spec_nok) AS spec_nok, sum(d.n_machine_nok) AS machine_nok,
+                   sum(d.n_gross) AS gross
             FROM process_characteristic_daily d
             WHERE d.operation_id = :op AND d.characteristic_id = :cid AND {filters.sql()}
             GROUP BY d.day ORDER BY d.day
@@ -512,12 +547,15 @@ def characteristic_detail(
         {"op": op.id, "cid": characteristic_id, **filters.params()},
     ):
         n = int(row.n)
-        _cp, cpk, _kind = _capability(n, row.total, row.total_sq, spec)
+        used = n - int(row.gross)
+        if used == 0:
+            continue  # only gross readings that day: no mean to draw
+        _cp, cpk, _kind = _capability(used, row.total, row.total_sq, spec)
         daily.append(
             CharacteristicDailyPoint(
                 day=row.day,
                 n=n,
-                mean=row.total / n,
+                mean=row.total / used,
                 min=row.min_value,
                 max=row.max_value,
                 spec_nok=int(row.spec_nok),

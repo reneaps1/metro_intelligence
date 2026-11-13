@@ -18,7 +18,12 @@ from sqlalchemy import Connection, Engine, text
 from app.models.base import uuid7
 
 ENGINE_NAME = "process_daily_stats"
-ENGINE_VERSION = "v1"
+ENGINE_VERSION = "v2"
+# A value further than this many tolerance bands beyond its limit is a gross
+# reading: a measurement failure (lost pin, wrong edge), not process spread.
+# It still counts as a value and as NOK, but stays out of the moments, so
+# mean, standard deviation and capability describe the process.
+GROSS_BAND_FACTOR = 10
 
 _SPEC_JOIN = """
     LEFT JOIN catalog_specifications s
@@ -31,10 +36,17 @@ _SPEC_NOK = (
     "AND (s.upper_tol IS NULL OR r.value - s.nominal <= s.upper_tol)))"
 )
 
+_BAND = "(COALESCE(s.upper_tol, 0) - COALESCE(s.lower_tol, 0))"
+_GROSS = (
+    f"(s.id IS NOT NULL AND {_BAND} > 0 AND ("
+    f"(s.upper_tol IS NOT NULL AND r.value - s.nominal > s.upper_tol + :gross * {_BAND}) OR "
+    f"(s.lower_tol IS NOT NULL AND r.value - s.nominal < s.lower_tol - :gross * {_BAND})))"
+)
+
 _INSERT_CHAR = f"""
 INSERT INTO process_characteristic_daily (
     day, operation_id, recipe_id, nest, characteristic_id, specification_id,
-    n, n_machine_nok, n_evaluated, n_spec_nok, n_machine_ok_spec_nok,
+    n, n_machine_nok, n_evaluated, n_spec_nok, n_machine_ok_spec_nok, n_gross,
     sum_value, sum_sq_value, min_value, max_value)
 SELECT (r.measured_at AT TIME ZONE :tz)::date, sr.operation_id, pi.recipe_id, sr.nest,
        r.characteristic_id, s.id,
@@ -43,7 +55,9 @@ SELECT (r.measured_at AT TIME ZONE :tz)::date, sr.operation_id, pi.recipe_id, sr
        count(s.id),
        count(*) FILTER (WHERE {_SPEC_NOK}),
        count(*) FILTER (WHERE r.machine_ok IS TRUE AND {_SPEC_NOK}),
-       sum(r.value::float8), sum(r.value::float8 * r.value::float8),
+       count(*) FILTER (WHERE {_GROSS}),
+       COALESCE(sum(r.value::float8) FILTER (WHERE NOT {_GROSS}), 0),
+       COALESCE(sum(r.value::float8 * r.value::float8) FILTER (WHERE NOT {_GROSS}), 0),
        min(r.value::float8), max(r.value::float8)
 FROM measurement_results r
 JOIN process_step_results sr ON sr.measurement_sample_id = r.measurement_sample_id
@@ -143,7 +157,14 @@ def build_daily_stats(engine: Engine, line_id: uuid.UUID, tz: str) -> dict[str, 
                 "line": line_id,
                 "name": ENGINE_NAME,
                 "version": ENGINE_VERSION,
-                "details": json.dumps({"timezone": tz, "specification_ids": sorted(specs), **counts}),
+                "details": json.dumps(
+                    {
+                        "timezone": tz,
+                        "specification_ids": sorted(specs),
+                        "gross_band_factor": GROSS_BAND_FACTOR,
+                        **counts,
+                    }
+                ),
             },
         )
     return counts
@@ -151,5 +172,5 @@ def build_daily_stats(engine: Engine, line_id: uuid.UUID, tz: str) -> dict[str, 
 
 def _build_window(conn: Connection, ops: list[uuid.UUID], tz: str, t0: datetime, t1: datetime) -> None:
     params = {"ops": ops, "tz": tz, "t0": t0, "t1": t1}
-    conn.execute(text(_INSERT_CHAR), params)
+    conn.execute(text(_INSERT_CHAR), {**params, "gross": GROSS_BAND_FACTOR})
     conn.execute(text(_INSERT_STEP), params)
