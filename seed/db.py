@@ -43,14 +43,13 @@ def get_session(engine: Engine) -> Session:
 
 
 def reset_database(engine: Engine) -> None:
-    """Wipes every table the app models declare, in one statement so
-    TRUNCATE ... CASCADE handles FK ordering automatically. Row-level
-    BEFORE DELETE triggers (the insert-only guards on measurement_results,
-    intelligence_decisions, intelligence_action_taken, security_audit_log)
-    do NOT fire on TRUNCATE in PostgreSQL, so this cleanly wipes append-only
-    tables too — this is a full environment reset, not an application code path."""
-    from app.models import Base
+    """Empty every domain table, keeping users, roles, permissions and the
+    audit log (ADR-004). Roles and permissions come from migrations, so
+    wiping them broke the demo users generator; the shared purge in
+    app.services.domain_purge keeps them. Row-level BEFORE DELETE triggers do
+    not fire on TRUNCATE, so append-only domain tables are emptied too; this
+    is an environment reset, not an application code path."""
+    from app.services.domain_purge import truncate_domain_tables
 
-    table_names = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
     with engine.begin() as connection:
-        connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
+        truncate_domain_tables(connection)

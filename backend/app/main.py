@@ -57,10 +57,16 @@ def create_demo_admin():
     engine = create_engine(settings.database_url)
 
     with Session(engine) as session:
-        existing = session.scalar(
-            select(User).where(User.email == "luis.torres@demo.local")
+        # Only bootstrap an admin on an install that has none yet; existing
+        # accounts are never touched (ADR-004: users survive data purges).
+        any_admin = session.scalar(
+            select(User.id)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(Role.name == "admin")
+            .limit(1)
         )
-        if existing:
+        if any_admin is not None:
             return
 
         role = session.scalar(
