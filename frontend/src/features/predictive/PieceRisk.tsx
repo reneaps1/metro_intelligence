@@ -83,8 +83,8 @@ export function PieceRisk({ source }: { source: PredictiveSource }) {
             ) : (
               <>
                 <strong>El modelo no supera a una regla simple.</strong> La tasa reciente de la cavidad ya ordena casi igual de bien:
-                con estos datos la información útil está en la historia de la cavidad. Para anticipar mejor hacen falta señales de
-                proceso vinculadas a cada pieza.
+                con estos datos la información útil está en la historia de la cavidad. Para anticipar mejor hace falta más
+                información por pieza que su historial de NOK.
               </>
             )}
           </Callout>

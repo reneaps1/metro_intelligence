@@ -1,13 +1,16 @@
 import type { DataOrigin } from "./origin";
 
-// IQ-F1: the 7-step commercial walkthrough. Route paths are generic on
-// purpose -- the customer name never appears in a URL.
+// IQ-F1: the commercial walkthrough, trimmed to piece characteristics
+// (2026-11-12): quality and a piece-only predictive step. The context, IIoT
+// lab, process-quality and real-integration steps keep their components in
+// steps/ but are out of the walkthrough. Route paths are
+// generic on purpose -- the customer name never appears in a URL.
 export const DEMO_BASE_PATH = "/demo/industrial-quality";
 /** IQ-F15: full-screen line quality panel, outside the walkthrough steps. */
 export const LINE_PANEL_PATH = `${DEMO_BASE_PATH}/panel-linea`;
 
 /** Groups of the project tree (design-system.md §4.1). */
-export type DemoStepGroup = "Recorrido" | "Calidad" | "Proceso" | "Predictivo" | "Planta";
+export type DemoStepGroup = "Calidad" | "Predictivo";
 
 export interface DemoStep {
   id: string;
@@ -24,17 +27,8 @@ export interface DemoStep {
 
 export const DEMO_STEPS: DemoStep[] = [
   {
-    id: "context",
-    number: 1,
-    title: "Contexto industrial",
-    short: "Contexto",
-    group: "Recorrido",
-    summary: "Del disparo de inyección al veredicto OK/NOK, y qué fuentes de datos hay detrás.",
-    origins: ["HISTORICAL", "SIMULATED", "PRECOMPUTED"],
-  },
-  {
     id: "quality",
-    number: 2,
+    number: 1,
     title: "Diagnóstico de calidad",
     short: "Diagnóstico",
     group: "Calidad",
@@ -43,7 +37,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     id: "dimensional",
-    number: 3,
+    number: 2,
     title: "Exploración dimensional",
     short: "Dimensional",
     group: "Calidad",
@@ -51,43 +45,14 @@ export const DEMO_STEPS: DemoStep[] = [
     origins: ["SIMULATED"],
   },
   {
-    id: "iiot",
-    number: 4,
-    title: "Laboratorio IIoT",
-    short: "Laboratorio IIoT",
-    group: "Proceso",
-    summary: "Árbol de señales de máquina, curvas superpuestas, eventos y reproducción.",
-    origins: ["SIMULATED"],
-    usesScenario: true,
-  },
-  {
-    id: "correlation",
-    number: 5,
-    title: "Relación proceso–calidad",
-    short: "Proceso–calidad",
-    group: "Proceso",
-    summary: "Dispersión, correlación y regresión con desfase temporal; hipótesis, no causalidad.",
-    origins: ["SIMULATED", "EXPERIMENTAL"],
-    usesScenario: true,
-  },
-  {
     id: "ai",
-    number: 6,
+    number: 3,
     title: "IA predictiva y oleadas NOK",
     short: "IA predictiva",
     group: "Predictivo",
     summary:
-      "Resultados ML/DL históricos, falsas alarmas, oleadas NOK, CUSUM, what-if y predicción experimental de fallas.",
+      "Resultados ML/DL históricos, oleadas NOK, CUSUM y riesgo por pieza a partir de las características medidas.",
     origins: ["PRECOMPUTED", "SIMULATED", "EXPERIMENTAL"],
-  },
-  {
-    id: "integration",
-    number: 7,
-    title: "Integración real",
-    short: "Integración real",
-    group: "Planta",
-    summary: "Qué haría falta para validar causalidad y predicción en planta.",
-    origins: [],
   },
 ];
 

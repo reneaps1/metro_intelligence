@@ -1,4 +1,5 @@
-// IQ-F8: views of demo step 6. Shared by the step (its tab strip) and the
+// IQ-F8: views of the predictive demo step. Piece characteristics only
+// (2026-11-12): the process-driven What-if and machine-failure views are out. Shared by the step (its tab strip) and the
 // workbench ribbon ("IA" tab), and kept in the URL (?vista=) so a view
 // survives a reload and can be linked directly.
 
@@ -12,8 +13,6 @@ export const AI_VIEWS = [
   { id: "cusum", label: "CUSUM", realOnly: false },
   { id: "alarmas", label: "Alarma por cavidad", realOnly: true },
   { id: "riesgo", label: "Riesgo por pieza", realOnly: true },
-  { id: "what-if", label: "What-if", realOnly: false },
-  { id: "fallas", label: "Fallas de máquina", realOnly: false },
 ] as const;
 
 export type AiViewId = (typeof AI_VIEWS)[number]["id"];

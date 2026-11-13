@@ -10,14 +10,12 @@ import { SYNTHETIC_SOURCE, type PredictiveSource } from "../../../lib/predictive
 import { fetchCatalog, fetchDatasets } from "../../../lib/quality-analytics/api";
 import { CavityAlarms } from "../../predictive/CavityAlarms";
 import { CusumPanel } from "../../predictive/CusumPanel";
-import { FailurePrediction } from "../../predictive/FailurePrediction";
 import { ModelLab } from "../../predictive/ModelLab";
 import { NokWaves } from "../../predictive/NokWaves";
 import { PieceRisk } from "../../predictive/PieceRisk";
-import { WhatIfPanel } from "../../predictive/WhatIfPanel";
 
-// IQ-F7/F8: demo step 6 -- historical ML/DL results, NOK waves, CUSUM,
-// what-if and the experimental failure-prediction study, one view each. The
+// IQ-F7/F8: predictive demo step -- historical ML/DL results, NOK waves,
+// CUSUM and the piece-based studies, one view each (no process signals). The
 // open view lives in the URL (?vista=) so the workbench ribbon can switch it
 // and a link opens it directly. Tabs are styled as tabs (accent underline),
 // not as buttons, so "Siguiente" stays the only primary action on screen.
@@ -33,8 +31,6 @@ const PANELS: Record<AiViewId, ComponentType<{ source: PredictiveSource }>> = {
   cusum: CusumPanel,
   alarmas: CavityAlarms,
   riesgo: PieceRisk,
-  "what-if": WhatIfPanel,
-  fallas: FailurePrediction,
 };
 
 export function AiStep() {
@@ -101,7 +97,7 @@ export function AiStep() {
           {real ? real.name : "Dataset de demostración (inyección simulada)"}
         </span>
         <span className="text-xs text-text-secondary">
-          Se cambia con «Pieza» en la barra. Modelos ML/DL, What-if y Fallas de máquina no dependen de ella.
+          Se cambia con «Pieza» en la barra. Modelos ML/DL no depende de ella.
         </span>
       </div>
       <div role="tablist" aria-label="Laboratorio predictivo" onKeyDown={onKeyDown} className="wb-seg lg">
@@ -132,8 +128,8 @@ export function AiStep() {
         </Card>
       </div>
       <p className="text-xs text-text-secondary">
-        Lenguaje de este paso: indicio, asociación, hipótesis. Nada aquí actúa sobre producción; todo requiere validación
-        en planta con señales reales vinculadas a cada ciclo/pieza.
+        Lenguaje de este paso: indicio, asociación, hipótesis. Todo se calcula con las características medidas de cada
+        pieza; nada aquí actúa sobre producción y todo requiere validación en planta.
       </p>
     </div>
   );
