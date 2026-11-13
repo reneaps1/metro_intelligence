@@ -23,6 +23,7 @@ import { AndonView } from "./views/AndonView";
 import { GuidedResponseView } from "./views/GuidedResponseView";
 import { ProcessMapView } from "./views/ProcessMapView";
 import { initialPartId } from "../../lib/demo/part";
+import { PartViewIcon } from "../../components/brand/PartViewLogo";
 import "./linePanel.css";
 
 // IQ-F15: full-screen line quality panel (docs/design/line-quality-panel.md).
@@ -294,10 +295,10 @@ export function LinePanelPage() {
       <div className="lp-stage" style={{ ["--lp-k" as string]: scale }} aria-live="polite">
         <header className="lp-top">
           <div className="lp-brand">
-            <span className="lp-mark">MI</span>
+            <span className="flex"><PartViewIcon size={34} /></span>
             <div>
               <div className="t1">Calidad en línea</div>
-              <div className="t2">Metro Intelligence · Edición industrial</div>
+              <div className="t2">PartView · Edición industrial</div>
             </div>
           </div>
           <div className="lp-ctx">

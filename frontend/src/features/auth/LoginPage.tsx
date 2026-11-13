@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { ApiError } from "../../lib/api";
 import { Card } from "../../components/ui/Card";
+import { PartViewLogo } from "../../components/brand/PartViewLogo";
 import { Button } from "../../components/ui/Button";
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,8 +63,10 @@ export function LoginPage() {
       <span className="text-[11px] text-text-secondary">Deploy test: 2026-07-18</span>
       <Card raised className="w-full max-w-md">
         <div className="mb-6 text-center">
-          <h1 className="text-xl font-semibold text-text-primary">Metro Intelligence</h1>
-          <p className="mt-1 text-sm text-text-secondary">Sign in with your Metro Intelligence account.</p>
+          <h1 className="flex justify-center text-2xl">
+            <PartViewLogo size={36} />
+          </h1>
+          <p className="mt-2 text-sm text-text-secondary">Sign in with your PartView account.</p>
         </div>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div>

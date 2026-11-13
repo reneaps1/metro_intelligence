@@ -20,7 +20,7 @@ function Ribbon() {
 function OwnerPill() {
   return (
     <div className="pointer-events-none fixed bottom-2 left-2 z-toast max-w-[calc(100vw-140px)] truncate rounded-full border border-border bg-surface-raised px-3 py-1 text-[11px] font-medium text-text-secondary shadow-md backdrop-blur">
-      <span className="font-bold text-brand-primary">DEMO</span> · Metro Intelligence · Propiedad de {OWNER} ·
+      <span className="font-bold text-brand-primary">DEMO</span> · PartView · Propiedad de {OWNER} ·
       Confidencial
     </div>
   );

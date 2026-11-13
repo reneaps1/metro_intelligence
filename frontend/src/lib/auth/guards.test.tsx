@@ -43,7 +43,7 @@ describe("RequireRole", () => {
     renderGuardedApp();
 
     // /admin requires auth first -- no session yet, so we land on /login.
-    expect(screen.getByRole("heading", { name: /metro intelligence/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /partview/i })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/email/i), VALID_EMAIL);
     await user.type(screen.getByLabelText(/password/i), VALID_PASSWORD);

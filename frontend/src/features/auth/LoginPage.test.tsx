@@ -78,7 +78,7 @@ describe("LoginPage", () => {
 
   it("redirects an unauthenticated visit to a protected route back to /login", () => {
     renderApp(["/dashboard"]);
-    expect(screen.getByRole("heading", { name: /metro intelligence/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /partview/i })).toBeInTheDocument();
     expect(screen.queryByText("Dashboard Home")).not.toBeInTheDocument();
   });
 });

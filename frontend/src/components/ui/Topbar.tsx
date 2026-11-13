@@ -21,7 +21,7 @@ export function Topbar() {
   const pendingCount = recommendations.filter((r) => r.state === "pending").length;
 
   const section = location.pathname.split("/")[1] || "dashboard";
-  const label = SECTION_LABELS[section] ?? "Metro Intelligence";
+  const label = SECTION_LABELS[section] ?? "PartView";
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4">
