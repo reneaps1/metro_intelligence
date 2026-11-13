@@ -78,6 +78,29 @@ docker compose -f docker-compose.yml -f docker-compose.ingest.yml run --rm backe
 Do not merge to the deploy branch while a load runs: the deploy restarts
 the backend. A restarted load resumes from the first file not yet loaded.
 
+## Unattended run (scheduled job)
+
+`python -m app.cli.load_line_bundle` runs steps 1–6 with no shell. Use it on a
+platform that can run a scheduled job next to the database, for example a
+Render cron job. It takes three environment variables, set on the job and
+never committed:
+
+- `LINE_BUNDLE_URL`: HTTPS URL of a zip with one folder per station.
+- `LINE_INGEST_CONFIG_YAML`: the ingest config. Station `folder` values are
+  the folder names inside the zip.
+- `LINE_SPECS_YAML`: the specification file.
+
+What the job does on each run:
+
+- Downloads the zip, with a size cap.
+- Extracts only the CSV files that sit directly in a configured station
+  folder.
+- Purges demo data only before the first load.
+- Writes a `line_bundle_loaded` audit entry when it finishes.
+
+A rerun with the same inputs exits at once. A run that died resumes where it
+stopped. Without the three variables, a run does nothing.
+
 ## Run from a platform shell (Render)
 
 Use the shell of the API service, which already has `DATABASE_URL`.
