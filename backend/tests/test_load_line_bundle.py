@@ -126,9 +126,11 @@ def test_full_run_loads_once_and_then_skips(tmp_path, monkeypatch):
 
         # Another load holding the lock: a new bundle waits its turn untouched.
         monkeypatch.setenv("LINE_BUNDLE_URL", "https://example.invalid/other.zip")
+        monkeypatch.setattr(load_line_bundle, "LOCK_POLL_SECONDS", 0.2)
+        monkeypatch.setenv("LINE_BUNDLE_LOCK_WAIT_SECONDS", "0.5")
         with engine.connect() as holder:
             holder.execute(sa.text("SELECT pg_advisory_lock(:k)"), {"k": load_line_bundle.ADVISORY_LOCK_KEY})
-            assert load_line_bundle.main([]) == 0
+            assert load_line_bundle.main([]) == 0  # waited, then gave up
             holder.execute(
                 sa.text("SELECT pg_advisory_unlock(:k)"), {"k": load_line_bundle.ADVISORY_LOCK_KEY}
             )
@@ -144,7 +146,18 @@ def test_api_starts_the_load_only_when_opted_in(monkeypatch):
     from app.services import line_bundle_job
 
     started = []
-    monkeypatch.setattr(line_bundle_job.subprocess, "Popen", lambda args: started.append(args))
+
+    class FakeProcess:
+        pid = 1
+
+        def wait(self) -> None:
+            return None
+
+    def fake_popen(args, env):
+        started.append((args, env))
+        return FakeProcess()
+
+    monkeypatch.setattr(line_bundle_job.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(
         line_bundle_job.threading, "Thread", lambda **kw: type("T", (), {"start": lambda self: None})()
     )
@@ -156,3 +169,7 @@ def test_api_starts_the_load_only_when_opted_in(monkeypatch):
     monkeypatch.delenv("LINE_BUNDLE_URL")
     assert line_bundle_job.start_if_configured() is None
     assert started == []
+
+    monkeypatch.setenv("LINE_BUNDLE_URL", "https://example.invalid/bundle.zip")
+    line_bundle_job.start_if_configured()
+    assert started and started[0][1]["LINE_BUNDLE_LOCK_WAIT_SECONDS"] == "1800"

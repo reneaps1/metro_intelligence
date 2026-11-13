@@ -25,6 +25,7 @@ import hashlib
 import os
 import shutil
 import sys
+import time
 import unicodedata
 import urllib.request
 import zipfile
@@ -45,6 +46,7 @@ DEFAULT_MAX_EXTRACTED_BYTES = 8 * 1024**3
 CHUNK = 1 << 20
 # pg advisory lock key: one bundle load at a time per database.
 ADVISORY_LOCK_KEY = 7_212_023_001
+LOCK_POLL_SECONDS = 15
 
 
 class BundleError(RuntimeError):
@@ -153,11 +155,19 @@ def main(argv: list[str] | None = None) -> int:
         print("This line bundle is already loaded; nothing to do.")
         return 0
 
+    # During a deploy the old instance can still hold the lock for a while:
+    # wait for it (LINE_BUNDLE_LOCK_WAIT_SECONDS) instead of giving up.
+    wait = float(os.getenv("LINE_BUNDLE_LOCK_WAIT_SECONDS", "0") or 0)
+    deadline = time.monotonic() + wait
     with engine.connect() as lock_conn:
-        locked = lock_conn.execute(
-            text("SELECT pg_try_advisory_lock(:key)"), {"key": ADVISORY_LOCK_KEY}
-        ).scalar_one()
-        lock_conn.commit()  # session-level lock: no transaction stays open during the load
+        while True:
+            locked = lock_conn.execute(
+                text("SELECT pg_try_advisory_lock(:key)"), {"key": ADVISORY_LOCK_KEY}
+            ).scalar_one()
+            lock_conn.commit()  # session-level lock: no transaction stays open during the load
+            if locked or time.monotonic() >= deadline:
+                break
+            time.sleep(min(LOCK_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
         if not locked:
             print("Another line bundle load is running; nothing to do.")
             return 0
