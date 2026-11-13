@@ -14,6 +14,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -198,6 +199,7 @@ class MeasurementResult(Base):
     __tablename__ = "measurement_results"
     __table_args__ = (
         Index("ix_measurement_results_characteristic_id_measured_at", "characteristic_id", "measured_at"),
+        Index("ix_measurement_results_measurement_sample_id", "measurement_sample_id"),
         {"postgresql_partition_by": "RANGE (measured_at)"},
     )
 
@@ -209,12 +211,18 @@ class MeasurementResult(Base):
     characteristic_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("catalog_characteristics.id", ondelete="RESTRICT"), nullable=False
     )
-    specification_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("catalog_specifications.id", ondelete="RESTRICT"), nullable=False
+    # NULL when no specification applies (reference and electrical values,
+    # ADR-005); is_ok/deviation are then NULL too.
+    specification_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catalog_specifications.id", ondelete="RESTRICT"), nullable=True
     )
-    value: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
-    deviation: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    value: Mapped[Decimal] = mapped_column(Numeric(20, 9), nullable=False)
+    deviation: Mapped[Decimal | None] = mapped_column(Numeric(20, 9), nullable=True)
     is_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # The station's own verdict and code, kept as evidence next to the
+    # compliance verdict (ADR-005).
+    machine_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    machine_code: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     supersedes_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
