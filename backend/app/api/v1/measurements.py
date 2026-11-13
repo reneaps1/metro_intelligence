@@ -153,7 +153,14 @@ def get_measurement_run(
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Measurement run not found.")
 
-    spec_ids = {result.specification_id for sample in run.samples for result in sample.results}
+    # Results without a specification (reference/electrical values, ADR-005)
+    # have no compliance snapshot to show here; the process views cover them.
+    spec_ids = {
+        result.specification_id
+        for sample in run.samples
+        for result in sample.results
+        if result.specification_id is not None
+    }
     specs = {
         spec.id: spec
         for spec in db.execute(select(Specification).where(Specification.id.in_(spec_ids))).scalars().all()
@@ -164,7 +171,11 @@ def get_measurement_run(
             id=sample.id,
             sample_sequence=sample.sample_sequence,
             serial_number=sample.serial_number,
-            results=[_result_read(result, specs[result.specification_id]) for result in sample.results],
+            results=[
+                _result_read(result, specs[result.specification_id])
+                for result in sample.results
+                if result.specification_id is not None
+            ],
         )
         for sample in sorted(run.samples, key=lambda s: s.sample_sequence)
     ]

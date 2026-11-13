@@ -96,7 +96,7 @@ function DemoLayout() {
       id: "archivo",
       label: "Archivo",
       entries: [
-        { label: "Volver a la plataforma", onSelect: () => navigate("/dashboard") },
+        { label: "Volver a la plataforma", onSelect: () => navigate("/process") },
         { label: "Cerrar sesión", onSelect: logout },
       ],
     },

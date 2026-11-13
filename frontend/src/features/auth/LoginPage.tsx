@@ -45,7 +45,7 @@ export function LoginPage() {
     setFormError(null);
     try {
       await login(email, password);
-      const redirectTo = (location.state as LocationState | null)?.from ?? "/dashboard";
+      const redirectTo = (location.state as LocationState | null)?.from ?? "/process";
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Unable to sign in. Please try again.");

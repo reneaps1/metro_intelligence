@@ -16,3 +16,5 @@ email-validator==2.2.0
 # F4.5 (MI-25) file import pipeline
 minio==7.2.9
 openpyxl==3.1.5
+# Line ingestion config files (ADR-004)
+PyYAML==6.0.3

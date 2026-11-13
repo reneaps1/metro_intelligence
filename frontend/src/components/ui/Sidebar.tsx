@@ -1,16 +1,12 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
-  Activity,
   Box,
-  CheckSquare,
   ChevronLeft,
   ChevronRight,
   Factory,
-  LayoutDashboard,
-  Radio,
-  ShieldAlert,
   UploadCloud,
+  Workflow,
 } from "lucide-react";
 import clsx from "clsx";
 import { useEdition } from "../../lib/edition/EditionProvider";
@@ -18,15 +14,14 @@ import type { Edition } from "../../lib/edition/api";
 import { DEMO_BASE_PATH } from "../../lib/demo/steps";
 
 // IQ-F1: items with an `edition` only render in that edition.
+// ADR-004: the platform runs on the real line data; screens that only show
+// generated demo data (dashboard, measurements, live monitor, risk,
+// recommendations) are out of the navigation until they read the real API.
 const NAV_ITEMS: { to: string; label: string; icon: typeof Box; edition?: Edition }[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/process", label: "Process", icon: Workflow },
   { to: DEMO_BASE_PATH, label: "Demo industrial", icon: Factory, edition: "industrial" },
   { to: "/imports", label: "Import File", icon: UploadCloud },
   { to: "/catalog", label: "Parts & Catalog", icon: Box },
-  { to: "/measurements", label: "Measurements", icon: Activity },
-  { to: "/live-monitor", label: "Live Monitor", icon: Radio },
-  { to: "/risk", label: "Risk", icon: ShieldAlert },
-  { to: "/recommendations", label: "Recommendations", icon: CheckSquare },
 ];
 
 export function Sidebar() {

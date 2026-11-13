@@ -20,7 +20,7 @@ function renderDemo(route = "/demo/industrial-quality") {
   return renderAuthed(
     <EditionProvider>
       <Routes>
-        <Route path="/dashboard" element={<p>Dashboard original</p>} />
+        <Route path="/process" element={<p>Process home</p>} />
         <Route
           path="/demo/industrial-quality"
           element={
@@ -46,11 +46,11 @@ describe("edition gating", () => {
       </EditionProvider>,
       CREDS,
     );
-    expect(await screen.findByText("Live Monitor")).toBeInTheDocument();
+    expect(await screen.findByText("Process")).toBeInTheDocument();
     expect(screen.queryByText("Demo industrial")).not.toBeInTheDocument();
 
     renderDemo();
-    expect(await screen.findByText("Dashboard original")).toBeInTheDocument();
+    expect(await screen.findByText("Process home")).toBeInTheDocument();
   });
 
   it("industrial edition shows the demo entry in the sidebar", async () => {

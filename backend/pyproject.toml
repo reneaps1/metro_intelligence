@@ -16,6 +16,7 @@ dev = [
     "ruff==0.6.9",
     "mypy==1.11.2",
     "types-openpyxl==3.1.5.20260518",
+    "types-PyYAML==6.0.12.20250915",
 ]
 
 [tool.ruff]
@@ -48,6 +49,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # depend on it the same way.
 "app/services/audit_service.py" = ["B008"]
 "tests/test_audit_service.py" = ["B008"]
+# Line ingest tests assert on SQL; long inline queries read better unwrapped.
+"tests/test_line_ingest.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -14,10 +14,10 @@ function renderApp(initialEntries: string[] = ["/login"]) {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route
-            path="/dashboard"
+            path="/process"
             element={
               <RequireAuth>
-                <div>Dashboard Home</div>
+                <div>Process Home</div>
               </RequireAuth>
             }
           />
@@ -28,7 +28,7 @@ function renderApp(initialEntries: string[] = ["/login"]) {
 }
 
 describe("LoginPage", () => {
-  it("logs in with valid credentials and lands on the dashboard", async () => {
+  it("logs in with valid credentials and lands on the process view", async () => {
     const user = userEvent.setup();
     renderApp();
 
@@ -36,7 +36,7 @@ describe("LoginPage", () => {
     await user.type(screen.getByLabelText(/password/i), VALID_PASSWORD);
     await user.click(screen.getByRole("button", { name: /sign in/i }));
 
-    expect(await screen.findByText("Dashboard Home")).toBeInTheDocument();
+    expect(await screen.findByText("Process Home")).toBeInTheDocument();
   });
 
   it("shows the backend's clean error message on invalid credentials and does not navigate", async () => {
@@ -48,7 +48,7 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid email or password.");
-    expect(screen.queryByText("Dashboard Home")).not.toBeInTheDocument();
+    expect(screen.queryByText("Process Home")).not.toBeInTheDocument();
   });
 
   it("validates required fields on blur before allowing submit", async () => {
@@ -59,7 +59,7 @@ describe("LoginPage", () => {
     await user.tab();
 
     expect(await screen.findByText(/email is required/i)).toBeInTheDocument();
-    expect(screen.queryByText("Dashboard Home")).not.toBeInTheDocument();
+    expect(screen.queryByText("Process Home")).not.toBeInTheDocument();
   });
 
   it("never writes any token to localStorage", async () => {
@@ -70,15 +70,15 @@ describe("LoginPage", () => {
     await user.type(screen.getByLabelText(/email/i), VALID_EMAIL);
     await user.type(screen.getByLabelText(/password/i), VALID_PASSWORD);
     await user.click(screen.getByRole("button", { name: /sign in/i }));
-    await screen.findByText("Dashboard Home");
+    await screen.findByText("Process Home");
 
     expect(setItemSpy).not.toHaveBeenCalled();
     setItemSpy.mockRestore();
   });
 
   it("redirects an unauthenticated visit to a protected route back to /login", () => {
-    renderApp(["/dashboard"]);
+    renderApp(["/process"]);
     expect(screen.getByRole("heading", { name: /metro intelligence/i })).toBeInTheDocument();
-    expect(screen.queryByText("Dashboard Home")).not.toBeInTheDocument();
+    expect(screen.queryByText("Process Home")).not.toBeInTheDocument();
   });
 });

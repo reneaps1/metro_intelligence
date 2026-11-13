@@ -54,7 +54,7 @@ export function RequireEdition({ edition, children }: { edition: Edition; childr
     return <p className="text-sm text-text-secondary">Cargando…</p>;
   }
   if (current !== edition) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/process" replace />;
   }
   return <>{children}</>;
 }

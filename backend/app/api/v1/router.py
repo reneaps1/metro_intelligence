@@ -17,6 +17,7 @@ from app.api.v1.measurements import router as measurements_router
 from app.api.v1.meta import router as meta_router
 from app.api.v1.predictive import router as predictive_router
 from app.api.v1.private_datasets import router as private_datasets_router
+from app.api.v1.process import router as process_router
 from app.api.v1.process_events import router as process_events_router
 from app.api.v1.quality_analytics import router as quality_analytics_router
 from app.api.v1.quality_imports import router as quality_imports_router
@@ -41,3 +42,4 @@ api_router.include_router(predictive_router)
 api_router.include_router(line_panel_router)
 # IQ-F30: 404 unless this is an authorized private host with uploads enabled.
 api_router.include_router(private_datasets_router)
+api_router.include_router(process_router)

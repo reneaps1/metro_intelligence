@@ -194,20 +194,21 @@ def test_measurement_migration_partitioning_and_immutability() -> None:
                     },
                 )
 
-            # specification_id is mandatory.
+            # specification_id is optional since 0009 (ADR-005): reference and
+            # electrical values have no specification, and their compliance
+            # fields stay NULL instead of using an invented limit.
             savepoint = connection.begin_nested()
-            with pytest.raises(sa.exc.DBAPIError):
-                connection.execute(
-                    sa.text(
-                        """
-                        INSERT INTO measurement_results (
-                            id, measured_at, measurement_sample_id, characteristic_id, value
-                        )
-                        VALUES (:id, now(), :sample_id, :characteristic_id, 10.0)
-                        """
-                    ),
-                    {"id": uuid.uuid4(), "sample_id": sample_id, "characteristic_id": characteristic_id},
-                )
+            connection.execute(
+                sa.text(
+                    """
+                    INSERT INTO measurement_results (
+                        id, measured_at, measurement_sample_id, characteristic_id, value
+                    )
+                    VALUES (:id, now(), :sample_id, :characteristic_id, 10.0)
+                    """
+                ),
+                {"id": uuid.uuid4(), "sample_id": sample_id, "characteristic_id": characteristic_id},
+            )
             savepoint.rollback()
 
             # partitioning is functional: each row lives in its month's partition.

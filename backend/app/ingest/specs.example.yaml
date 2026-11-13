@@ -1,0 +1,25 @@
+# Example specification file for `python -m app.cli.import_specifications`.
+#
+# Real tolerances come from the customer drawing and stay OUTSIDE the repo
+# (ADR-004). All values below are fictitious.
+#
+# `station` is a station code from the ingest config; `measure` selects the
+# characteristics of that station the spec applies to:
+#   pin        every pin value of a pin_length station, or the radial value
+#              of a pcb pin_position station
+#   pin_x/pin_y the X / Y deviation of a connector pin_position station
+#   ref        the reference measurement of a pin_length station
+# Use `pins: [1, 2]` to restrict a spec to some pins (default: all).
+#
+# One-sided limits (ADR-005):
+#   position tolerance  -> nominal: 0, upper_tol: <tolerance>
+#   "max X" length       -> nominal: X, upper_tol: 0   (no lower_tol)
+
+source: "MI-DEMO drawing rev A"
+valid_from: "2025-01-01T00:00:00Z"
+specifications:
+  - {station: LEN-CON, measure: pin, nominal: 5.0, lower_tol: -0.2, upper_tol: 0.2}
+  - {station: LEN-PCB, measure: pin, nominal: 9.0, upper_tol: 0.0}
+  - {station: POS-PCB, measure: pin, nominal: 0.0, upper_tol: 0.25}
+  - {station: POS-CON, measure: pin_x, nominal: 0.0, upper_tol: 0.2}
+  - {station: POS-CON, measure: pin_y, nominal: 0.0, upper_tol: 0.2}

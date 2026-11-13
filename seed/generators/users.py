@@ -78,9 +78,13 @@ def generate_demo_users(context: SeedContext) -> None:
                 f"Role {role_code!r} not found — expected migration 0001 to have seeded it. "
                 "Run `alembic upgrade head` before seeding demo users."
             )
-        user = User(email=email, display_name=display_name, password_hash=demo_password_hash)
-        user.roles.append(UserRole(role=role))
-        session.add(user)
+        # Users survive `--reset` (seed.db.reset_database keeps identities),
+        # so a rerun reuses the existing account instead of duplicating it.
+        user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if user is None:
+            user = User(email=email, display_name=display_name, password_hash=demo_password_hash)
+            user.roles.append(UserRole(role=role))
+            session.add(user)
         users_by_role[role_code] = user
 
     session.flush()  # populate ids for F3.4's decision-history generator

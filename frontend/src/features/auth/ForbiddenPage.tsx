@@ -17,10 +17,10 @@ export function ForbiddenPage() {
           is a mistake.
         </p>
         <Link
-          to="/dashboard"
+          to="/process"
           className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded bg-brand-primary px-4 text-sm font-medium text-text-on-brand transition-colors duration-150 hover:bg-brand-primary-hover"
         >
-          Back to dashboard
+          Back to process
         </Link>
       </Card>
     </div>

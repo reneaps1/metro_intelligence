@@ -67,3 +67,11 @@ mlruns/
 
 # Docker
 docker-compose.override.yml
+
+# Real line data and customer-specific ingest config (ADR-004) — never commit
+line-data/
+ingest-data/
+ingest*.yaml
+specs*.yaml
+!backend/app/ingest/config.example.yaml
+!backend/app/ingest/specs.example.yaml

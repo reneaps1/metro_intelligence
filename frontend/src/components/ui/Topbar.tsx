@@ -6,6 +6,7 @@ import { useAuth } from "../../lib/auth/AuthProvider";
 import { useDemoData } from "../../lib/mock/DataProvider";
 
 const SECTION_LABELS: Record<string, string> = {
+  process: "Process",
   dashboard: "Dashboard",
   imports: "Import File",
   catalog: "Parts & Catalog",
@@ -20,7 +21,7 @@ export function Topbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const pendingCount = recommendations.filter((r) => r.state === "pending").length;
 
-  const section = location.pathname.split("/")[1] || "dashboard";
+  const section = location.pathname.split("/")[1] || "process";
   const label = SECTION_LABELS[section] ?? "Metro Intelligence";
 
   return (
