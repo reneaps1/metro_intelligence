@@ -136,6 +136,15 @@ def test_operation_summary_and_characteristic_detail(client: TestClient, viewer,
     assert p1x["specification"]["upper_limit"] == "0.300000"
     assert p1x["capability_kind"] == "Cpu" and p1x["machine_ok_spec_nok"] == 1
     assert sum(row["pieces"] for row in summary["by_nest"]) == summary["pieces"] == 2
+    # The step page offers the line's recipes and filters by the chosen one.
+    assert [r["code"] for r in summary["recipes"]] == [2, 3]
+    recipe_3 = next(r["id"] for r in summary["recipes"] if r["code"] == 3)
+    only_3 = client.get(
+        f"/api/v1/process/operations/{operation_id}/summary",
+        params={"from": DAY, "to": DAY, "recipe_id": recipe_3},
+        headers=viewer,
+    ).json()
+    assert only_3["pieces"] == 1 and [row["pieces"] for row in only_3["by_recipe"]] == [1]
 
     detail = client.get(
         f"/api/v1/process/operations/{operation_id}/characteristics/{p1x['id']}",

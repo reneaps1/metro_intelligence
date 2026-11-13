@@ -108,6 +108,7 @@ export interface BreakdownRow {
 export interface OperationSummary {
   operation: Operation;
   range: DateRange;
+  recipes: Recipe[];
   pieces: number;
   machine_nok: number;
   spec_nok: number;

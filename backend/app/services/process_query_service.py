@@ -459,6 +459,7 @@ def operation_summary(
     return OperationSummary(
         operation=_operation_read(op),
         range=date_range,
+        recipes=recipe_reads(db, op.line_id),
         pieces=pieces,
         machine_nok=int(total.machine_nok),
         spec_nok=int(total.spec_nok),
