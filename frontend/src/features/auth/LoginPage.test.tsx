@@ -51,6 +51,25 @@ describe("LoginPage", () => {
     expect(screen.queryByText("Process Home")).not.toBeInTheDocument();
   });
 
+  it("tells a rejected visitor that earlier demo accesses expired, and lets them dismiss it", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument(); // not before a rejected sign-in
+
+    await user.type(screen.getByLabelText(/correo/i), VALID_EMAIL);
+    await user.type(screen.getByLabelText(/contraseña/i), "wrong-password");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    const notice = await screen.findByRole("status");
+    expect(notice).toHaveTextContent("¿Tu acceso demo dejó de funcionar?");
+    expect(notice).toHaveTextContent(
+      "Los accesos demo anteriores ya expiraron. Para solicitar uno nuevo, ponte en contacto con nosotros.",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cerrar aviso" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("validates required fields on blur before allowing submit", async () => {
     const user = userEvent.setup();
     renderApp();

@@ -95,6 +95,36 @@ def create_demo_admin():
 
 
 @app.on_event("startup")
+def reset_demo_passwords() -> None:
+    """Operator action on a demo host (app/services/demo_admin.py): with
+    SEED_DEMO_USERS_RESET_ALL=true, every user gets SEED_DEMO_USER_PASSWORD."""
+    import logging
+    import os
+
+    if os.getenv("SEED_DEMO_USERS_RESET_ALL", "").lower() != "true" or settings.app_env == "production":
+        return
+    logger = logging.getLogger(__name__)
+    password = os.getenv("SEED_DEMO_USER_PASSWORD")
+    if not password:
+        logger.error("SEED_DEMO_USERS_RESET_ALL is set but SEED_DEMO_USER_PASSWORD is not; nothing changed.")
+        return
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.services.demo_admin import reset_all_demo_passwords
+
+    try:
+        with Session(create_engine(settings.database_url)) as session:
+            changed = reset_all_demo_passwords(session, password)
+    except ValueError as exc:
+        # A password that breaks the policy must not take the service down.
+        logger.error("Demo passwords not reset: %s", exc)
+        return
+    logger.info("Demo passwords reset for %s users. Unset SEED_DEMO_USERS_RESET_ALL.", changed)
+
+
+@app.on_event("startup")
 def start_line_bundle_load() -> None:
     """ADR-004 opt-in load next to the API (app/services/line_bundle_job.py)."""
     from app.services.line_bundle_job import start_if_configured

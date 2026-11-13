@@ -5,6 +5,12 @@ set a new password and reactivate the demo administrator by setting
 ``SEED_DEMO_USER_RESET=true`` together with ``SEED_DEMO_USER_PASSWORD`` and
 restarting; the reset runs once per start, never in production, and is
 written to the audit log (no password material). Unset the flag afterwards.
+
+``SEED_DEMO_USERS_RESET_ALL=true`` does the same for every user at once, to
+end a round of demo credentials: all accounts get the new password, nobody is
+reactivated or deactivated, and each change is audited. Sessions opened
+before the reset keep working until their tokens expire; rotate ``JWT_SECRET``
+to end them at once.
 """
 
 from __future__ import annotations
@@ -40,3 +46,24 @@ def reset_demo_admin(session: Session, email: str, password: str) -> bool:
     )
     session.commit()
     return True
+
+
+def reset_all_demo_passwords(session: Session, password: str) -> int:
+    """Set ``password`` on every user, leaving ``is_active`` untouched.
+    Returns how many accounts changed; one audit entry per account."""
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"demo password must have at least {MIN_PASSWORD_LENGTH} characters")
+    users = session.scalars(select(User).order_by(User.email)).all()
+    password_hash = hash_password(password)
+    for user in users:
+        user.password_hash = password_hash
+        write_audit_log(
+            session,
+            action="demo_password_reset",
+            entity_type="security.user",
+            actor_identifier="system:startup",
+            entity_id=user.id,
+            after_state={"password_changed": True, "scope": "all_users"},
+        )
+    session.commit()
+    return len(users)

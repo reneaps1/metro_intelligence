@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Info, X } from "lucide-react";
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { ApiError } from "../../lib/api";
 import { Card } from "../../components/ui/Card";
@@ -19,6 +20,9 @@ function validatePassword(value: string): string | null {
   return null;
 }
 
+// Optional contact address for the expired-access notice, fixed at build time.
+const CONTACT_EMAIL: string | undefined = import.meta.env.VITE_CONTACT_EMAIL || undefined;
+
 interface LocationState {
   from?: string;
 }
@@ -33,6 +37,9 @@ export function LoginPage() {
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Shown after a rejected sign-in: demo credentials are rotated, so an
+  // access that used to work may simply have expired.
+  const [expiredNotice, setExpiredNotice] = useState(false);
 
   const emailError = touched.email ? validateEmail(email) : null;
   const passwordError = touched.password ? validatePassword(password) : null;
@@ -49,8 +56,10 @@ export function LoginPage() {
       const redirectTo = (location.state as LocationState | null)?.from ?? "/process";
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setFormError("Correo o contraseña incorrectos.");
-      else if (err instanceof ApiError && err.status === 429) setFormError("Demasiados intentos. Esperar un minuto y reintentar.");
+      if (err instanceof ApiError && err.status === 401) {
+        setFormError("Correo o contraseña incorrectos.");
+        setExpiredNotice(true);
+      } else if (err instanceof ApiError && err.status === 429) setFormError("Demasiados intentos. Esperar un minuto y reintentar.");
       else setFormError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor. Reintentar en unos segundos.");
     } finally {
       setSubmitting(false);
@@ -59,6 +68,38 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-surface-app p-6">
+      {expiredNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-x-4 top-4 z-toast mx-auto flex max-w-md items-start gap-3 rounded border border-border bg-surface-raised p-4 shadow-md sm:inset-x-auto sm:right-4 sm:mx-0"
+        >
+          <Info size={20} className="mt-0.5 shrink-0 text-status-info" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-text-primary">¿Tu acceso demo dejó de funcionar?</p>
+            <p className="mt-1 text-sm text-text-secondary">
+              Los accesos demo anteriores ya expiraron. Para solicitar uno nuevo, ponte en contacto con nosotros
+              {CONTACT_EMAIL ? (
+                <>
+                  {" en "}
+                  <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-brand-primary hover:underline">
+                    {CONTACT_EMAIL}
+                  </a>
+                </>
+              ) : null}
+              .
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpiredNotice(false)}
+            aria-label="Cerrar aviso"
+            className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-surface-app hover:text-text-primary"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+      )}
       <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
         Powered by OnKaizen
       </span>
