@@ -6,12 +6,16 @@
 # reference and admin password are entered at approval time (sync: false). Parts are
 # uploaded afterwards by an administrator over HTTPS (PUT /api/v1/private-datasets/<slug>).
 # Withdrawal: DELETE each part, then delete these three resources.
+#
+# ADR-004: the line's station exports are loaded into metro-private-db from the API
+# service shell with the ingest CLIs (backend/app/ingest/README.md). About 13 GB per
+# million pieces with indexes, hence 30 GB of disk (Render disks grow, never shrink).
 databases:
   - name: metro-private-db
     plan: basic-256mb
     region: oregon
     postgresMajorVersion: "16"
-    diskSizeGB: 1
+    diskSizeGB: 30
     ipAllowList: []
 
 services:
