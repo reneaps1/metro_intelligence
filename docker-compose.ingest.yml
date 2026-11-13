@@ -1,0 +1,18 @@
+# Overlay for loading a line's station exports (ADR-004, ADR-005).
+#
+# The station folders and the ingest/specification YAML live OUTSIDE the
+# repo. This overlay mounts them read-only into the backend container; the
+# runbook is backend/app/ingest/README.md.
+#
+#   LINE_DATA_HOST_DIR=/srv/line-data INGEST_CONFIG_HOST_DIR=/srv/ingest-config \
+#     docker compose -f docker-compose.yml -f docker-compose.ingest.yml \
+#     run --rm backend python -m app.cli.ingest_line --dry-run
+
+services:
+  backend:
+    environment:
+      INGEST_CONFIG_PATH: /ingest-config/ingest.yaml
+      LINE_DATA_DIR: /line-data
+    volumes:
+      - ${LINE_DATA_HOST_DIR:?set LINE_DATA_HOST_DIR to the folder holding one subfolder per station}:/line-data:ro
+      - ${INGEST_CONFIG_HOST_DIR:?set INGEST_CONFIG_HOST_DIR to the folder holding ingest.yaml and the spec files}:/ingest-config:ro
