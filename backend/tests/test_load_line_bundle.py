@@ -123,8 +123,36 @@ def test_full_run_loads_once_and_then_skips(tmp_path, monkeypatch):
         # Same inputs again: exits before downloading anything.
         assert load_line_bundle.main([]) == 0
         assert len(downloads) == 1
+
+        # Another load holding the lock: a new bundle waits its turn untouched.
+        monkeypatch.setenv("LINE_BUNDLE_URL", "https://example.invalid/other.zip")
+        with engine.connect() as holder:
+            holder.execute(sa.text("SELECT pg_advisory_lock(:k)"), {"k": load_line_bundle.ADVISORY_LOCK_KEY})
+            assert load_line_bundle.main([]) == 0
+            holder.execute(
+                sa.text("SELECT pg_advisory_unlock(:k)"), {"k": load_line_bundle.ADVISORY_LOCK_KEY}
+            )
+        assert len(downloads) == 1
     finally:
         with engine.begin() as conn:
             truncate_domain_tables(conn)
         engine.dispose()
         alembic_command.downgrade(cfg, "base")
+
+
+def test_api_starts_the_load_only_when_opted_in(monkeypatch):
+    from app.services import line_bundle_job
+
+    started = []
+    monkeypatch.setattr(line_bundle_job.subprocess, "Popen", lambda args: started.append(args))
+    monkeypatch.setattr(
+        line_bundle_job.threading, "Thread", lambda **kw: type("T", (), {"start": lambda self: None})()
+    )
+    monkeypatch.setenv("LINE_BUNDLE_URL", "https://example.invalid/bundle.zip")
+    monkeypatch.delenv("LINE_BUNDLE_RUN_IN_API", raising=False)
+    assert line_bundle_job.start_if_configured() is None
+
+    monkeypatch.setenv("LINE_BUNDLE_RUN_IN_API", "true")
+    monkeypatch.delenv("LINE_BUNDLE_URL")
+    assert line_bundle_job.start_if_configured() is None
+    assert started == []

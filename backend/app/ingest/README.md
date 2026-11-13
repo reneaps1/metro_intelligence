@@ -101,6 +101,13 @@ What the job does on each run:
 A rerun with the same inputs exits at once. A run that died resumes where it
 stopped. Without the three variables, a run does nothing.
 
+A Postgres advisory lock keeps two runs from loading at the same time.
+
+When the API service is the only compute, set `LINE_BUNDLE_RUN_IN_API=true`
+on it as well. At startup the API then launches the job as a separate
+process, and requests keep being served. A restart resumes the load. Unset
+the variable once the `line_bundle_loaded` entry exists.
+
 ## Run from a platform shell (Render)
 
 Use the shell of the API service, which already has `DATABASE_URL`.

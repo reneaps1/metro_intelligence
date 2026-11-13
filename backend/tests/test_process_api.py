@@ -12,6 +12,7 @@ from app.ingest.loader import LineLoader
 from app.ingest.setup import ensure_catalog
 from app.ingest.specs import import_specifications, parse_spec_file
 from app.ingest.stats import build_daily_stats
+from app.services.domain_purge import truncate_domain_tables
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -33,6 +34,9 @@ SPECS = {
 
 @pytest.fixture(scope="module")
 def line(auth_database: None, tmp_path_factory: pytest.TempPathFactory):
+    # The auth DB is shared across test modules: start from empty domain tables.
+    with app_engine.begin() as conn:
+        truncate_domain_tables(conn)
     config = make_config()
     data_dir = tmp_path_factory.mktemp("line")
     LineFiles(

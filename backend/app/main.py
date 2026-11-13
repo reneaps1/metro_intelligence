@@ -92,3 +92,11 @@ def create_demo_admin():
         user.roles.append(UserRole(role=role))
         session.add(user)
         session.commit()
+
+
+@app.on_event("startup")
+def start_line_bundle_load() -> None:
+    """ADR-004 opt-in load next to the API (app/services/line_bundle_job.py)."""
+    from app.services.line_bundle_job import start_if_configured
+
+    start_if_configured()

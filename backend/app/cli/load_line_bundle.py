@@ -43,6 +43,8 @@ DEFAULT_WORK_DIR = "/tmp/line-bundle"
 DEFAULT_MAX_DOWNLOAD_BYTES = 2 * 1024**3
 DEFAULT_MAX_EXTRACTED_BYTES = 8 * 1024**3
 CHUNK = 1 << 20
+# pg advisory lock key: one bundle load at a time per database.
+ADVISORY_LOCK_KEY = 7_212_023_001
 
 
 class BundleError(RuntimeError):
@@ -144,12 +146,33 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    from app.cli import build_daily_stats, import_specifications, ingest_line, ingest_report
-    from app.cli.purge_domain_data import purge
     from app.core.database import engine
 
     key = bundle_key(url, config_text, specs_text)
     if _already_loaded(engine, key):
+        print("This line bundle is already loaded; nothing to do.")
+        return 0
+
+    with engine.connect() as lock_conn:
+        locked = lock_conn.execute(
+            text("SELECT pg_try_advisory_lock(:key)"), {"key": ADVISORY_LOCK_KEY}
+        ).scalar_one()
+        lock_conn.commit()  # session-level lock: no transaction stays open during the load
+        if not locked:
+            print("Another line bundle load is running; nothing to do.")
+            return 0
+        try:
+            return _load(engine, key, url, config_text, specs_text)
+        finally:
+            lock_conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": ADVISORY_LOCK_KEY})
+            lock_conn.commit()
+
+
+def _load(engine: Engine, key: str, url: str, config_text: str, specs_text: str) -> int:
+    from app.cli import build_daily_stats, import_specifications, ingest_line, ingest_report
+    from app.cli.purge_domain_data import purge
+
+    if _already_loaded(engine, key):  # finished by another run while we waited
         print("This line bundle is already loaded; nothing to do.")
         return 0
 
