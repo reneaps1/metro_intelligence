@@ -65,6 +65,9 @@ class StepOverview(BaseModel):
     coverage: float | None
     status: StepStatus
     trend: list[DailyCount]
+    # Last day with data for this step in any range: tells "no data in this
+    # range" apart from "never loaded".
+    last_day: date | None = None
 
 
 class LineOverview(BaseModel):
@@ -162,6 +165,14 @@ class PositionCell(BaseModel):
     count: int
 
 
+class PositionPoint(BaseModel):
+    """One sampled pin: its |dX|, |dY| and nest."""
+
+    x: float
+    y: float
+    nest: int | None
+
+
 class PositionStats(BaseModel):
     """Pin position pairs of one group (whole selection or one nest).
     Medians and 95th percentiles are robust to the gross outliers stations
@@ -171,6 +182,8 @@ class PositionStats(BaseModel):
     out_of_tolerance: int
     out_x: int
     out_y: int
+    # Radial deviation sqrt(dX^2 + dY^2) beyond the tolerance (the circle).
+    out_radial: int
     machine_nok: int
     median_x: float | None
     median_y: float | None
@@ -197,6 +210,9 @@ class PositionMap(BaseModel):
     bins: int
     cells: list[PositionCell]
     beyond_extent: int
+    # Uniform random sample of the pairs inside the extent, for the point cloud.
+    points: list[PositionPoint]
+    sampled_from: int
     total: PositionStats
     nests: list[NestPosition]
 

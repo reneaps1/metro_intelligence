@@ -87,6 +87,23 @@ describe("ProcessOverviewPage", () => {
     expect(screen.getAllByText("No spec").length).toBeGreaterThan(0);
   });
 
+  it("says when a step has no data in the range and when it last had some", async () => {
+    server.use(
+      http.get(`${API}/process/lines`, () => HttpResponse.json([OVERVIEW.line])),
+      http.get(`${API}/process/lines/line-1/overview`, () =>
+        HttpResponse.json({
+          ...OVERVIEW,
+          steps: [step(OPERATIONS[0], { pieces: 0, coverage: 0, status: "neutral", trend: [], last_day: "2026-06-30" })],
+        }),
+      ),
+    );
+    renderAuthed(<ProcessOverviewPage />, { email: VALID_EMAIL, password: VALID_PASSWORD, route: "/process" });
+    const flow = await screen.findByRole("list", { name: "Process steps in order" });
+    expect(within(flow).getByText(/No data in this range/)).toBeInTheDocument();
+    expect(within(flow).getByText("Jun 30, 2026")).toBeInTheDocument();
+    expect(within(flow).queryByText(/Logs/)).not.toBeInTheDocument();
+  });
+
   it("sends the recipe filter to the API and keeps it in the step links", async () => {
     const seen: string[] = [];
     server.use(...overviewHandlers((url) => seen.push(url.searchParams.getAll("recipe_id").join(","))));
@@ -275,7 +292,7 @@ describe("PositionMapCard", () => {
       http.get(`${API}/process/operations/op-POS-CON/position-map`, ({ request }) => {
         const pin = Number(new URL(request.url).searchParams.get("pin") ?? 1);
         pins.push(pin);
-        const stats = { out_x: 1, out_y: 30, machine_nok: 2, median_x: 0.07, median_y: 0.12, p95_x: 0.17, p95_y: 0.27 };
+        const stats = { out_x: 1, out_y: 30, out_radial: 12, machine_nok: 2, median_x: 0.07, median_y: 0.12, p95_x: 0.17, p95_y: 0.27 };
         return HttpResponse.json({
           operation: posCon,
           range: RANGE,
@@ -291,6 +308,11 @@ describe("PositionMapCard", () => {
             { ix: 30, iy: 32, count: 3 },
           ],
           beyond_extent: 5,
+          points: [
+            { x: 0.08, y: 0.1, nest: 1 },
+            { x: 0.3, y: 0.25, nest: 9 },
+          ],
+          sampled_from: 903,
           total: { pieces: 1000, out_of_tolerance: 31, ...stats },
           nests: [
             { nest: 1, pieces: 600, out_of_tolerance: 1, ...stats },
@@ -307,7 +329,11 @@ describe("PositionMapCard", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Pin position map · |ΔX| vs |ΔY|" })).toBeInTheDocument();
-    expect(await screen.findByRole("img", { name: /Density of pin 1 position deviations; 1,000 pieces/ })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /Point cloud of pin 1 position deviations; 1,000 pieces/ })).toBeInTheDocument();
+    expect(screen.getByText("Outside the circle (r 0.30)")).toBeInTheDocument();
+    expect(screen.getByText(/2 pins sampled at random from 903/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Density" }));
+    expect(screen.getByRole("img", { name: /Density of pin 1/ })).toBeInTheDocument();
     expect(screen.getByText("96.90%")).toBeInTheDocument(); // inside tolerance
     expect(screen.getByText("Drawing tolerance 0.30")).toBeInTheDocument();
     const nestRows = within(screen.getByRole("table", { name: /Pin position by nest/ })).getAllByRole("row").slice(1);

@@ -99,6 +99,15 @@ def test_overview_counts_and_recipe_filter(client: TestClient, viewer, line) -> 
     steps = {step["operation"]["code"]: step for step in body["steps"]}
     assert body["reference_pieces"] == 2  # recipe 1 is out of scope
     assert steps["TYPE"]["pieces"] == 2 and steps["TYPE"]["has_specification"] is False
+    assert steps["TYPE"]["last_day"] == DAY
+
+    # A range without data still says when the step last had data.
+    empty = client.get(
+        f"/api/v1/process/lines/{line.line_id}/overview",
+        params={"from": "2026-04-01", "to": "2026-04-02"},
+        headers=viewer,
+    ).json()
+    assert all(step["pieces"] == 0 and step["last_day"] == DAY for step in empty["steps"] if step["last_day"])
     assert steps["POS-CON"]["disagreements"] == 8  # machine OK at 0.35, drawing limit 0.30
     assert steps["POS-CON"]["spec_nok"] == 1 and steps["POS-CON"]["status"] == "critical"
     assert steps["LEN-CON"]["status"] in ("ok", "warning")
@@ -168,6 +177,10 @@ def test_position_map_pairs_x_and_y_against_the_tolerance(client: TestClient, vi
     assert body["total"]["out_of_tolerance"] == 1
     assert (body["total"]["out_x"], body["total"]["out_y"]) == (1, 0)
     assert sum(cell["count"] for cell in body["cells"]) == 2 and body["beyond_extent"] == 0
+    # Radial: 900002 at sqrt(0.35^2 + 0.175^2) = 0.39 is outside the 0.30 circle.
+    assert body["total"]["out_radial"] == 1
+    assert body["sampled_from"] == 2 and len(body["points"]) == 2
+    assert {round(p["x"], 3) for p in body["points"]} == {0.08, 0.35}
     assert [nest["nest"] for nest in body["nests"]] == [1, 2]
     assert body["nests"][1]["out_of_tolerance"] == 1
 
