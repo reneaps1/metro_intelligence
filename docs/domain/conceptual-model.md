@@ -7,7 +7,8 @@ Design before DDL: this document defines entities, relationships and rules. Phys
 | Module | Entities | Demo |
 |---|---|---|
 | `org` | Organization, Site, Area, Line, Cell | ✅ (minimal: one org/site/line) |
-| `assets` | Machine, Process, Operation, Tooling, Fixture | ✅ Machine only; rest post-demo |
+| `assets` | Machine, Process, Operation, Tooling, Fixture | ✅ Machine and Operation (ADR-005); rest post-demo |
+| `process` | Operation, Recipe, PartInstance, StepResult | ✅ (ADR-005) |
 | `catalog` | ProductFamily, PartNumber, Characteristic, CharacteristicClassification, Specification (nominal+tolerances, versioned), MeasurementProgram, InspectionPlan, InspectionFrequency | ✅ core |
 | `measurement` | MeasurementRun, MeasurementResult, MeasurementSample, ImportedFile, DataSource, Connector | ✅ (file import path) |
 | `context` | ProcessEvent, ProcessParameter, Batch/Lot, Order, Material, Shift, Operator | ✅ ProcessEvent only |
@@ -69,6 +70,14 @@ erDiagram
 - **MeasurementResult**: one measured value for one characteristic of one sample. Immutable; corrections create a superseding row (`supersedes_id`). Stores value, evaluated OK/NOK, deviation, spec version used.
 - **ImportedFile**: original artifact (MinIO object ref, hash for dedup, parse status, error detail).
 - **DataSource/Connector**: registry of where data comes from and by which mechanism (manual upload, watched folder, API…), enabling the decoupled connector layer.
+
+### process (ADR-005)
+- **Operation**: one step of a line, in `sequence` order, with a kind (electrical, pin length, pin position, type check), an optional side (PCB/connector) and the Machine that runs it.
+- **Recipe**: the station program that identifies the product variant. The variant part number and label are nullable and can be set later without reloading data.
+- **PartInstance**: one physical piece on a line, identified by its serial (the station piece id), with its recipe. Links the results of all steps for that piece.
+- **StepResult**: one station row for one piece (time, nest, machine verdict, attempt number). Linked 1:1 to the MeasurementSample holding its values. Repeats are new rows with a higher attempt number.
+- Results keep the station's own verdict (`machine_ok`) next to the compliance verdict against the specification in force; without a specification the compliance fields stay empty.
+- Daily per-step statistics are derived, rebuildable tables, not measurement history.
 
 ### context
 - **ProcessEvent**: timestamped event (tool change, maintenance, material lot change, machine adjustment, shift change…) with free metadata (JSONB) and links to line/machine/part. Used by Risk/Recommendation engines for correlation, and by Adaptive Inspection for post-event validation.

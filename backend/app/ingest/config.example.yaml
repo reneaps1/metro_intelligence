@@ -1,0 +1,46 @@
+# Example ingest config for `python -m app.cli.ingest_line` (ADR-004).
+#
+# The real config describes a customer's line and stays OUTSIDE the repo:
+# pass it with --config or INGEST_CONFIG_PATH. Every value below is
+# fictitious (MI-DEMO-*), as required by CLAUDE.md §20.
+
+plant:
+  organization: {code: MI-DEMO-ORG, name: "OnKaizen Demo Manufacturing"}
+  site: {code: MI-DEMO-SITE, name: "Plant Demo Norte"}
+  area: {code: MI-DEMO-AREA-1, name: "Assembly Area 1"}
+  line: {code: MI-DEMO-LINE-01, name: "Demo Line 01"}
+  cell: {code: MI-DEMO-CELL-01, name: "Inspection cell"}
+  # IANA timezone of the station clocks (timestamps in the files carry none).
+  timezone: America/Mexico_City
+
+product:
+  family: {code: MI-DEMO-FAM-CONN, name: "Connector housings (Demo)"}
+  part_number: {code: MI-DEMO-2001, name: "Housing 8-pin (Demo)"}
+  # Number of real pins of the product. Positions above this in the station
+  # files are filler and are not loaded.
+  pins: 8
+
+# Type-check program numbers (recipes) that belong to this product. Rows of
+# any other recipe are counted as out of scope and never written.
+recipes:
+  in_scope: [2, 3, 4, 5]
+
+# Stations in process order. `folder` is the station folder name inside the
+# data directory; `file_prefix` the daily file name prefix
+# (<prefix>YYYY.MM.DD.csv). `programs` lists the station program numbers that
+# belong to this product (omit for stations without a program column).
+stations:
+  - {sequence: 1, code: ET1, name: "Electrical test 1", kind: electrical,
+     folder: "01_electrical_1", file_prefix: "Log_ET1_", programs: [21]}
+  - {sequence: 2, code: ET2, name: "Electrical test 2", kind: electrical,
+     folder: "02_electrical_2", file_prefix: "Log_ET2_", programs: [22]}
+  - {sequence: 3, code: LEN-PCB, name: "Pin length PCB", kind: pin_length, side: pcb,
+     folder: "03_length_pcb", file_prefix: "Log_LEN_PCB_"}
+  - {sequence: 4, code: LEN-CON, name: "Pin length connector", kind: pin_length, side: connector,
+     folder: "04_length_connector", file_prefix: "Log_LEN_CON_"}
+  - {sequence: 5, code: POS-PCB, name: "Pin position PCB", kind: pin_position, side: pcb,
+     folder: "05_position_pcb", file_prefix: "Log_POS_PCB_", programs: [2]}
+  - {sequence: 6, code: POS-CON, name: "Pin position connector", kind: pin_position, side: connector,
+     folder: "06_position_connector", file_prefix: "Log_POS_CON_", programs: [2]}
+  - {sequence: 7, code: TYPE, name: "Type check", kind: type_check,
+     folder: "07_type_check", file_prefix: "Log_TYPE_"}
