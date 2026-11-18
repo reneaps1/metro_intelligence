@@ -8,10 +8,13 @@ import { PartViewLogo } from "../../components/brand/PartViewLogo";
 import { Button } from "../../components/ui/Button";
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// A demo host may accept a short login name instead of the email (SEED_DEMO_USER_LOGIN_ALIAS).
+const LOGIN_NAME_SHAPE = /^[A-Za-z0-9._-]{3,}$/;
 
 function validateEmail(value: string): string | null {
-  if (!value.trim()) return "Falta el correo.";
-  if (!EMAIL_SHAPE.test(value)) return "El correo no tiene un formato válido.";
+  const trimmed = value.trim();
+  if (!trimmed) return "Falta el correo o usuario.";
+  if (!EMAIL_SHAPE.test(trimmed) && !LOGIN_NAME_SHAPE.test(trimmed)) return "El correo no tiene un formato válido.";
   return null;
 }
 
@@ -52,13 +55,13 @@ export function LoginPage() {
     setSubmitting(true);
     setFormError(null);
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       const redirectTo = (location.state as LocationState | null)?.from ?? "/process";
       navigate(redirectTo, { replace: true });
     } catch (err) {
       const status = err instanceof ApiError ? err.status : null;
       if (status === 401) {
-        setFormError("Correo o contraseña incorrectos.");
+        setFormError("Usuario o contraseña incorrectos.");
         setExpiredNotice(true);
       } else if (status === 429) {
         // Locked after repeated rejected sign-ins: the same visitor the notice is for.
@@ -119,12 +122,15 @@ export function LoginPage() {
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-text-primary">
-              Correo
+              Correo o usuario
             </label>
             <input
               id="email"
               name="email"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              spellCheck={false}
               autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

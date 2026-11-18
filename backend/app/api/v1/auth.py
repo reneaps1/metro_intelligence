@@ -36,6 +36,7 @@ from app.core.security import (
 from app.models.security import User
 from app.schemas.auth import RefreshRequest, TokenResponse, UserMe
 from app.services.audit_service import write_audit_log
+from app.services.demo_admin import resolve_login_alias
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -56,7 +57,8 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ) -> TokenResponse:
-    email = form_data.username
+    # A demo host may accept a short login name for its administrator (services/demo_admin.py).
+    email = resolve_login_alias(form_data.username)
     ip = _client_ip(request)
 
     if _login_attempts.is_locked(email):

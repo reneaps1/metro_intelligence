@@ -67,3 +67,37 @@ def test_reset_all_changes_every_password_keeps_activation_and_audits(auth_datab
             for user in session.scalars(select(User)).all():
                 user.password_hash, user.is_active = originals[user.id]
             session.commit()
+
+
+def test_login_alias_signs_in_the_demo_administrator(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.demo_admin as demo_admin
+
+    from conftest import KNOWN_PASSWORD
+
+    def login(username: str, password: str):
+        return client.post("/auth/login", data={"username": username, "password": password})
+
+    monkeypatch.setattr(demo_admin, "DEMO_ADMIN_EMAIL", DEMO_USERS["admin"])
+
+    # Not configured: the short name is just an unknown user.
+    monkeypatch.delenv("SEED_DEMO_USER_LOGIN_ALIAS", raising=False)
+    assert login("admin", KNOWN_PASSWORD).status_code == 401
+
+    monkeypatch.setenv("SEED_DEMO_USER_LOGIN_ALIAS", "admin")
+    response = login(" Admin ", KNOWN_PASSWORD)
+    assert response.status_code == 200
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {response.json()['access_token']}"})
+    assert me.json()["email"] == DEMO_USERS["admin"]
+    # Same account, so the same password check and the email still work.
+    assert login("admin", "wrong").status_code == 401
+    assert login(DEMO_USERS["admin"], KNOWN_PASSWORD).status_code == 200
+
+
+def test_login_alias_is_ignored_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.demo_admin as demo_admin
+
+    monkeypatch.setenv("SEED_DEMO_USER_LOGIN_ALIAS", "admin")
+    assert demo_admin.resolve_login_alias("admin") == demo_admin.DEMO_ADMIN_EMAIL
+    assert demo_admin.resolve_login_alias("otro@demo.local") == "otro@demo.local"
+    monkeypatch.setattr(demo_admin, "get_settings", lambda: type("S", (), {"app_env": "production"})())
+    assert demo_admin.resolve_login_alias("admin") == "admin"

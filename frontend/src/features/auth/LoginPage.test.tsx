@@ -40,6 +40,25 @@ describe("LoginPage", () => {
     expect(await screen.findByText("Process Home")).toBeInTheDocument();
   });
 
+  it("accepts a short login name in place of the email", async () => {
+    let sentUsername: string | null = null;
+    server.use(
+      http.post("*/auth/login", async ({ request }) => {
+        sentUsername = new URLSearchParams(await request.text()).get("username");
+        return HttpResponse.json({ detail: "Invalid email or password." }, { status: 401 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText(/correo o usuario/i), "admin");
+    await user.type(screen.getByLabelText(/contraseña/i), "whatever-password");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Usuario o contraseña incorrectos.");
+    expect(sentUsername).toBe("admin");
+  });
+
   it("shows the backend's clean error message on invalid credentials and does not navigate", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -48,7 +67,7 @@ describe("LoginPage", () => {
     await user.type(screen.getByLabelText(/contraseña/i), "wrong-password");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Correo o contraseña incorrectos.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Usuario o contraseña incorrectos.");
     expect(screen.queryByText("Process Home")).not.toBeInTheDocument();
   });
 

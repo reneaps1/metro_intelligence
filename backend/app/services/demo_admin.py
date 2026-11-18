@@ -11,18 +11,35 @@ end a round of demo credentials: all accounts get the new password, nobody is
 reactivated or deactivated, and each change is audited. Sessions opened
 before the reset keep working until their tokens expire; rotate ``JWT_SECRET``
 to end them at once.
+
+``SEED_DEMO_USER_LOGIN_ALIAS`` (for example ``admin``) is a short login name
+accepted in place of the demo administrator's email. It names the same
+account: no second user, same password, same lockout and audit trail. Never
+honoured in production.
 """
 
 from __future__ import annotations
 
+import os
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.password import hash_password
 from app.models import User
 from app.services.audit_service import write_audit_log
 
 MIN_PASSWORD_LENGTH = 12
+DEMO_ADMIN_EMAIL = "luis.torres@demo.local"
+
+
+def resolve_login_alias(identifier: str) -> str:
+    """Return the demo administrator's email when ``identifier`` is its configured alias."""
+    alias = os.getenv("SEED_DEMO_USER_LOGIN_ALIAS", "").strip().lower()
+    if alias and get_settings().app_env != "production" and identifier.strip().lower() == alias:
+        return DEMO_ADMIN_EMAIL
+    return identifier
 
 
 def reset_demo_admin(session: Session, email: str, password: str) -> bool:
